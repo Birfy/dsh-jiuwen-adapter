@@ -66,7 +66,10 @@ export function apply(ctx, config = {}) {
   const AdapterClass = createJiuwenAdapter(LlmAdapter, {
     interact,
     mcpBridge,
-    hasUserQuestions: () => Boolean(service('userQuestions')?.ask),
+    // `auto` needs a live answerer, not just the service: headless dsh loads ctx.userQuestions but no
+    // client listens on `user-questions/request`, so enabling it there only adds Jiuwen's ask_user
+    // tool (~920 input tokens/turn) for questions that are always NO_PROVIDER.
+    hasUserQuestions: () => Boolean(service('userQuestions')?.ask) && hasQuestionAnswerer(ctx),
     config: readConfig,
     sessions,
     logger,
@@ -224,3 +227,14 @@ function loadLlmAdapter(logger, cfg = {}, env = process.env) {
 }
 
 export default apply
+
+/** True when some client listens on the `user-questions/request` waterfall (TUI/web remotes);
+ *  unknown host internals → true (keep the documented `auto` behaviour). */
+export function hasQuestionAnswerer(ctx) {
+  try {
+    const hooks = ctx.root?.events?._hooks
+    if (!hooks || typeof hooks !== 'object') return true
+    const h = hooks['user-questions/request']
+    return Array.isArray(h) ? h.length > 0 : Boolean(h && (h.size ?? Object.keys(h).length))
+  } catch { return true }
+}
