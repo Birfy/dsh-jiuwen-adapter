@@ -1,0 +1,333 @@
+{
+  "date": "2026-10-29",
+  "commit": "e18176c",
+  "model": "doubao-seed-2.0-mini",
+  "perf": {
+    "A": {
+      "n": 8,
+      "ok": 8,
+      "totalMed": 4729,
+      "totalAvg": 4757,
+      "blockTtftMed": 4678,
+      "tokTtftMed": 3982,
+      "startupMed": 1133,
+      "inTokMed": 23084,
+      "outTokMed": 36,
+      "totals": [
+        4729,
+        4256,
+        4900,
+        4256,
+        4509,
+        6358,
+        4892,
+        4154
+      ],
+      "ttfts": [
+        3982,
+        3721,
+        4266,
+        3922,
+        3975,
+        5485,
+        4325,
+        3336
+      ],
+      "startups": [
+        1121,
+        1132,
+        1122,
+        1133,
+        1126,
+        1142,
+        1229,
+        1157
+      ],
+      "mtOk": true,
+      "mtTurnMed": [
+        5666,
+        5548,
+        5174,
+        4756
+      ],
+      "cancel": {
+        "cancelMs": 184,
+        "exitAfter": 8189,
+        "cont": "3/3",
+        "contMed": 16461
+      },
+      "conc": {
+        "wall": 7536,
+        "ok": 5,
+        "med": 5912
+      },
+      "ux": [
+        {
+          "name": "lang-zh",
+          "ok": true,
+          "ms": 5828
+        },
+        {
+          "name": "lang-en",
+          "ok": true,
+          "ms": 7655
+        },
+        {
+          "name": "tool-bash",
+          "ok": true,
+          "ms": 10533
+        },
+        {
+          "name": "tool-file",
+          "ok": true,
+          "ms": 15504
+        },
+        {
+          "name": "identity",
+          "ok": true,
+          "ms": 5968
+        },
+        {
+          "name": "exact-json",
+          "ok": true,
+          "ms": 8370
+        }
+      ]
+    },
+    "B": {
+      "n": 8,
+      "ok": 8,
+      "totalMed": 4177,
+      "totalAvg": 4626,
+      "blockTtftMed": 3418,
+      "tokTtftMed": null,
+      "startupMed": null,
+      "inTokMed": 5869,
+      "outTokMed": 70,
+      "totals": [
+        5038,
+        5858,
+        3895,
+        6544,
+        4177,
+        3918,
+        3609,
+        3972
+      ],
+      "ttfts": [
+        3503,
+        5163,
+        3199,
+        5407,
+        3418,
+        3201,
+        3083,
+        3338
+      ],
+      "startups": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "mtOk": true,
+      "mtTurnMed": [
+        4617,
+        3898,
+        6335,
+        3676
+      ],
+      "cancel": {
+        "cancelMs": 42,
+        "exitAfter": 8046,
+        "cont": "2/3",
+        "contMed": 4968
+      },
+      "conc": {
+        "wall": 5430,
+        "ok": 5,
+        "med": 4100
+      },
+      "ux": [
+        {
+          "name": "lang-zh",
+          "ok": true,
+          "ms": 14050
+        },
+        {
+          "name": "lang-en",
+          "ok": true,
+          "ms": 7002
+        },
+        {
+          "name": "tool-bash",
+          "ok": true,
+          "ms": 7583
+        },
+        {
+          "name": "tool-file",
+          "ok": true,
+          "ms": 9138
+        },
+        {
+          "name": "identity",
+          "ok": true,
+          "ms": 6554
+        },
+        {
+          "name": "exact-json",
+          "ok": true,
+          "ms": 5386
+        }
+      ]
+    },
+    "C": {
+      "n": 8,
+      "ok": 8,
+      "totalMed": 4442,
+      "totalAvg": 5549,
+      "blockTtftMed": 3310,
+      "tokTtftMed": 3310,
+      "startupMed": 0,
+      "inTokMed": 23084,
+      "outTokMed": 42,
+      "totals": [
+        13230,
+        4442,
+        4011,
+        3924,
+        5120,
+        4437,
+        3890,
+        5336
+      ],
+      "ttfts": [
+        12030.240044000035,
+        3252.559048999974,
+        2751.69627700001,
+        2814.8600569999544,
+        3862.623850999982,
+        3310.472425999993,
+        2701.569537000032,
+        4078.3203569999896
+      ],
+      "startups": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "mtOk": true,
+      "mtTurnMed": [
+        4216,
+        4677,
+        3983,
+        3898
+      ],
+      "cancel": {
+        "cancelMs": 4,
+        "exitAfter": 8007,
+        "cont": "0/3",
+        "contMed": null
+      },
+      "conc": {
+        "wall": 7158,
+        "ok": 5,
+        "med": 5578
+      },
+      "ux": [
+        {
+          "name": "lang-zh",
+          "ok": true,
+          "ms": 4516
+        },
+        {
+          "name": "lang-en",
+          "ok": true,
+          "ms": 12624
+        },
+        {
+          "name": "tool-bash",
+          "ok": true,
+          "ms": 7973
+        },
+        {
+          "name": "tool-file",
+          "ok": true,
+          "ms": 12736
+        },
+        {
+          "name": "identity",
+          "ok": true,
+          "ms": 8362
+        },
+        {
+          "name": "exact-json",
+          "ok": true,
+          "ms": 5121
+        }
+      ]
+    }
+  },
+  "stages": {
+    "A": {
+      "apply": 680,
+      "turnStart": 1151,
+      "wsAck": 14,
+      "sendToFirstFrame": 3,
+      "sendToToken": 3659,
+      "tokenToTerminal": 476,
+      "terminalToFinish": 101,
+      "finishToStdoutFinal": 13,
+      "stdoutFinalToExit": 42,
+      "total": 5563
+    },
+    "C": {
+      "wsAck": 4,
+      "sendToToken": 3452,
+      "tokenToTerminal": 402,
+      "terminalToComplete": 703,
+      "total": 4525
+    }
+  },
+  "gsm": {
+    "A": {
+      "n": 10,
+      "correct": 9,
+      "latMed": 9352,
+      "wrong": [
+        "gsm8k-test-306:5/10"
+      ]
+    },
+    "B": {
+      "n": 10,
+      "correct": 9,
+      "latMed": 6782,
+      "wrong": [
+        "gsm8k-test-306:5/10"
+      ]
+    },
+    "C": {
+      "n": 10,
+      "correct": 9,
+      "latMed": 9135,
+      "wrong": [
+        "gsm8k-test-306:5/10"
+      ]
+    }
+  },
+  "overhead": {
+    "A_minus_C_total": 287,
+    "A_startup": 1133,
+    "A_exit_from_stages": 42,
+    "note": "A remaining fixed cost ≈ dsh startup (~1.15s) + ~0.1s terminal grace; Jiuwen TTFT noise dominates residual"
+  }
+}

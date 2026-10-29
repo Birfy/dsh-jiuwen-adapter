@@ -197,7 +197,7 @@ if (SUITES.includes('perf')) for (const P of PATHS.filter(p => !results.perf[p]?
 // ---------- GSM8K ----------
 const numOf = s => { const m = String(s).replace(/,/g, '').match(/answer\s*[:：]\s*\$?\s*(-?\d+(?:\.\d+)?)/i); if (m) return m[1]; const all = String(s).replace(/,/g, '').match(/-?\d+(?:\.\d+)?/g); return all ? all.at(-1) : null }
 if (SUITES.includes('gsm8k')) {
-  const data = readFileSync(join(root, 'bench/data/gsm8k-test-seed42-n30.jsonl'), 'utf8').trim().split('\n').map(JSON.parse)
+  const data = readFileSync(join(root, process.env.BENCH_GSM_FILE || 'bench/data/gsm8k-test-seed42-n30.jsonl'), 'utf8').trim().split('\n').map(JSON.parse)
   for (const P of PATHS) {
     await scored('gsm8k', P, data, async q => {
       const x = await run(P, `Solve this math word problem. Think briefly, do not use any tools, and end with a final line in the form "Answer: <number>".\n\n${q.question}`)
