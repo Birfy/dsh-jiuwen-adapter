@@ -178,3 +178,48 @@ test('host attachments service: content-addressed image is hydrated to base64Dat
   const p = Object.values(st.last).find(x => x.media_items?.[0]?.filename === 't.png')
   assert.equal(p.media_items[0].base64Data, `data:image/png;base64,${Buffer.from('PNGDATA').toString('base64')}`)
 })
+
+test('cancel-then-continue: next send on the session waits out the post-cancel settle (JiuwenSwarm race)', async () => {
+  const mappingPath = join(dir, `settle-${Math.random()}.json`)
+  const run1 = host({ mappingPath })
+  const ac = new AbortController()
+  setTimeout(() => ac.abort(), 500)
+  const c1 = await run1.run({ sessionId: 'race', signal: ac.signal, messages: user('slow ' + 'y'.repeat(200)) })
+  assert.equal(c1.at(-1).reason.kind, 'aborted')
+  const t0 = Date.now()
+  const c2 = await run1.run({ sessionId: 'race', messages: user('ping') })
+  assert.equal(txt(c2), 'pong-from-gateway-mock')
+  assert.ok(Date.now() - t0 >= 500, 'waited for settle window')
+
+  // cross-process: a fresh host on the same mapping file still honours the persisted lastCancelAt
+  const ac2 = new AbortController()
+  setTimeout(() => ac2.abort(), 500)
+  await run1.run({ sessionId: 'race', signal: ac2.signal, messages: user('slow ' + 'z'.repeat(200)) })
+  const run2 = host({ mappingPath })
+  assert.equal(txt(await run2.run({ sessionId: 'race', messages: user('ping') })), 'pong-from-gateway-mock')
+})
+
+test('cancel-then-continue without settle reproduces the hang (guards the mock emulation)', async () => {
+  const h = host({ postCancelSettleMs: 0, requestTimeoutMs: 1500 })
+  const ac = new AbortController()
+  setTimeout(() => ac.abort(), 500)
+  await h.run({ sessionId: 'race0', signal: ac.signal, messages: user('slow ' + 'w'.repeat(200)) })
+  const c = await h.run({ sessionId: 'race0', messages: user('ping') })
+  assert.notEqual(txt(c), 'pong-from-gateway-mock')
+  assert.equal(c.at(-1).reason.kind, 'error')
+})
+
+test('turn ends on the terminal (empty, request-scoped) chat.final without waiting for a late processing_status', async () => {
+  const h = host({ finalGraceMs: 5000 })
+  const t0 = Date.now()
+  const cs = await h.run({ sessionId: 'late', messages: user('ping late-status') })
+  const ms = Date.now() - t0
+  assert.equal(txt(cs), 'pong-from-gateway-mock')
+  assert.equal(cs.at(-1).reason.kind, 'stop')
+  assert.ok(cs.some(c => c.type === 'usage'), 'usage (sent before terminal final) is kept')
+  assert.ok(ms < 2000, `ended early (${ms} ms)`)
+  const slow = host({ finalGraceMs: 5000, terminalFinalGraceMs: -1 })
+  const t1 = Date.now()
+  await slow.run({ sessionId: 'late2', messages: user('ping late-status') })
+  assert.ok(Date.now() - t1 >= 2900, 'disabled: waits for processing_status')
+})

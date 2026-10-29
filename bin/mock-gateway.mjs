@@ -11,6 +11,7 @@ console.log(`[mock-gateway] listening on ws://127.0.0.1:${PORT}/ws`)
 
 const HISTORY = new Map() // session_id -> turns[]
 const LAST_PARAMS = new Map()
+const CANCEL_AT = new Map()
 const CANCELLED = new Set()
 const INTERRUPTS = []
 
@@ -55,6 +56,9 @@ wss.on('connection', (ws, req) => {
 
       ws.send(JSON.stringify({ type: 'res', id: rid, ok: true, payload: { accepted: true } }))
       ev('chat.processing_status', { event_type: 'chat.processing_status', is_processing: true, is_complete: false })
+      // Real JiuwenSwarm race: a send that lands within ~300 ms of chat.interrupt on the same session is
+      // accepted but never runs. Emulated so the adapter's post-cancel settle stays covered.
+      if (Date.now() - (CANCEL_AT.get(sessionId) || 0) < Number(process.env.MOCK_CANCEL_RACE_MS ?? 300)) return
 
       if (/ask me/i.test(query)) {
         ev('chat.ask_user_question', { event_type: 'chat.ask_user_question', questions: [{ question: 'Which color?', options: [{ label: 'red' }, { label: 'blue' }] }] })
@@ -77,7 +81,9 @@ wss.on('connection', (ws, req) => {
         ev('chat.final', { content: reply, final_mode: 'patch_segment' })
         ev('chat.usage_summary', { event_type: 'chat.usage_summary', usage: { input_tokens: 11, output_tokens: 7, total_tokens: 18 }, model: 'mock' })
         ev('chat.final', { content: '' })
-        ev('chat.processing_status', { event_type: 'chat.processing_status', is_processing: false, is_complete: true })
+        // Real JiuwenSwarm emits processing_status{is_complete} ~0.7 s after the terminal final.
+        const done = () => ev('chat.processing_status', { event_type: 'chat.processing_status', is_processing: false, is_complete: true })
+        if (/late-status/.test(query)) setTimeout(done, 3000); else done()
         if (process.env.MOCK_STREAM_END === '1') ws.send(JSON.stringify({ type: 'event', event: 'stream.end', id: rid }))
       }
       const step = () => {
@@ -95,6 +101,7 @@ wss.on('connection', (ws, req) => {
     }
     if (method === 'chat.interrupt') {
       CANCELLED.add(String(params.session_id || ''))
+      CANCEL_AT.set(String(params.session_id || ''), Date.now())
       INTERRUPTS.push(params)
       return ws.send(JSON.stringify({ type: 'res', id: frame.id, ok: true, payload: { accepted: true, intent: params.intent } }))
     }

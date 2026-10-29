@@ -43,6 +43,16 @@ export class GatewayTransport {
     this.emitUsage = opts.emitUsage !== false
     this.interruptOnAbort = opts.interruptOnAbort !== false
     this.finalGraceMs = Number.isFinite(opts.finalGraceMs) ? opts.finalGraceMs : 1500
+    /** Idle grace after the terminal (empty, request-scoped) chat.final. Negative disables the early end. */
+    this.terminalFinalGraceMs = Number.isFinite(opts.terminalFinalGraceMs) && opts.terminalFinalGraceMs >= 0 ? opts.terminalFinalGraceMs : (opts.terminalFinalGraceMs < 0 ? this.finalGraceMs : 250)
+    /**
+     * JiuwenSwarm accepts a chat.send issued within a few hundred ms of a chat.interrupt on the same
+     * session but never runs it (the request hangs until another one arrives). Delay the next send on a
+     * recently-cancelled session until this many ms after the cancel. 0 disables.
+     */
+    this.postCancelSettleMs = Number.isFinite(opts.postCancelSettleMs) ? opts.postCancelSettleMs : 1000
+    /** @type {Map<string, number>} */
+    this.recentCancels = new Map()
     this.WebSocketImpl = opts.WebSocketImpl ?? globalThis.WebSocket
     this.auth = resolveAuthMaterials({
       userId: opts.userId || 'dsh-adapter',
@@ -77,6 +87,7 @@ export class GatewayTransport {
 
     let ws
     try {
+      await this._settleAfterCancel(mapping, signal)
       ws = await this._connect(url, signal)
       await this._awaitAck(ws, Math.min(15_000, this.requestTimeoutMs), signal)
 
@@ -122,6 +133,26 @@ export class GatewayTransport {
     }
   }
 
+  /** Remember that a session was cancelled (in-process map + mapping.lastCancelAt for persistence). */
+  noteCancel(sessionId, mapping) {
+    const now = Date.now()
+    if (sessionId) this.recentCancels.set(sessionId, now)
+    if (mapping) mapping.lastCancelAt = now
+  }
+
+  /** Wait out the post-cancel settle window for this session, if any. */
+  async _settleAfterCancel(mapping, signal) {
+    if (!(this.postCancelSettleMs > 0)) return
+    const sid = mapping?.jiuwenSessionId
+    const at = Math.max(this.recentCancels.get(sid) || 0, Number(mapping?.lastCancelAt) || 0)
+    const wait = at + this.postCancelSettleMs - Date.now()
+    if (wait <= 0) return
+    await new Promise((resolve) => {
+      const t = setTimeout(resolve, wait)
+      signal?.addEventListener?.('abort', () => { clearTimeout(t); resolve() }, { once: true })
+    })
+  }
+
   /** Unary E2A RPC helper (opens a short-lived connection). */
   async rpc(method, params = {}, { timeoutMs } = {}) {
     if (!this.WebSocketImpl) throw Object.assign(new Error('WebSocket unavailable'), { code: 'TRANSPORT' })
@@ -164,6 +195,7 @@ export class GatewayTransport {
     return this.rpc(MEDIA.PERSIST, { session_id: sessionId, ...extra })
   }
   chatCancel(sessionId, extra = {}) {
+    this.noteCancel(sessionId)
     return this.rpc(CHAT.CANCEL, { session_id: sessionId, ...extra })
   }
   swarmflowPause(sessionId, extra = {}) {
@@ -173,6 +205,7 @@ export class GatewayTransport {
     return this.rpc(SWARM.RESUME, { session_id: sessionId, ...extra })
   }
   chatInterrupt(sessionId, intent = 'cancel', extra = {}) {
+    if (intent === 'cancel') this.noteCancel(sessionId)
     return this.rpc(CHAT.CANCEL, { session_id: sessionId, intent, ...extra })
   }
   userAnswer(sessionId, answers, extra = {}) {
@@ -282,6 +315,7 @@ export class GatewayTransport {
     const reasoning = { index: 1, started: false, body: '' }
     let nextIndex = 2
     let finalSeen = false
+    let terminalFinal = false
     let lastActivity = Date.now()
     let usage
     let pendingQuestion = null
@@ -339,7 +373,8 @@ export class GatewayTransport {
           throw Object.assign(new Error(`Jiuwen Gateway turn timed out after ${this.requestTimeoutMs}ms`), { code: 'TIMEOUT' })
         }
         if (queue.length === 0) {
-          const waitMs = finalSeen ? Math.max(1, this.finalGraceMs - (Date.now() - lastActivity)) : 1000
+          const grace = terminalFinal ? this.terminalFinalGraceMs : this.finalGraceMs
+          const waitMs = finalSeen ? Math.max(1, grace - (Date.now() - lastActivity)) : 1000
           await new Promise((resolve) => {
             wake = resolve
             setTimeout(resolve, Math.min(waitMs, Math.max(1, deadline - Date.now())))
@@ -347,7 +382,7 @@ export class GatewayTransport {
           wake = undefined
           if (queue.length === 0) {
             if (signal?.aborted) queue.push({ ok: false, abort: true })
-            else if (finalSeen && Date.now() - lastActivity >= this.finalGraceMs) {
+            else if (finalSeen && Date.now() - lastActivity >= (terminalFinal ? this.terminalFinalGraceMs : this.finalGraceMs)) {
               yield *finish({ kind: 'stop' }); return
             } else continue
           }
@@ -360,6 +395,7 @@ export class GatewayTransport {
                 type: 'req', id: `cancel-${randomUUID()}`, method: CHAT.CANCEL,
                 params: { session_id: ctx.mapping?.jiuwenSessionId, intent: 'cancel', request_id: requestId },
               }))
+              this.noteCancel(ctx.mapping?.jiuwenSessionId, ctx.mapping)
               emitEvent({ type: 'interrupt', intent: 'cancel' })
               await new Promise(r => setTimeout(r, 150))
             } catch { /* ignore */ }
@@ -491,6 +527,9 @@ export class GatewayTransport {
               if (!text.body) yield *textDelta(content)
               else if (content.startsWith(text.body) && content.length > text.body.length) yield *textDelta(content.slice(text.body.length))
             }
+            // JiuwenSwarm closes a turn with an empty, request-scoped chat.final (no final_mode) ~0.7 s
+            // before processing_status{is_complete}; end on it after a short idle grace.
+            if (content === '' && !payload.final_mode && payload.request_id === requestId && (finalSeen || text.body)) terminalFinal = true
             finalSeen = true
             continue
           }

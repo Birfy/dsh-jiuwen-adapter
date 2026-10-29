@@ -121,6 +121,7 @@ export class SessionStore {
           ...(entry.jiuwenAgentId ? { jiuwenAgentId: String(entry.jiuwenAgentId) } : {}),
           ...(entry.botId ? { botId: String(entry.botId) } : {}),
           ...(Number.isFinite(entry.turns) ? { turns: entry.turns } : {}),
+          ...(Number.isFinite(entry.lastCancelAt) ? { lastCancelAt: entry.lastCancelAt } : {}),
           ...(entry.lastRequestId ? { lastRequestId: String(entry.lastRequestId) } : {}),
           ...(entry.pendingQuestion ? { pendingQuestion: entry.pendingQuestion } : {}),
           updatedAt: String(entry.updatedAt || new Date().toISOString()),
