@@ -171,6 +171,7 @@ export function createJiuwenAdapter(LlmAdapterBase, deps) {
           )
           options = await hydrateAttachments(options, deps.attachments?.(), deps.logger)
           const overrides = turnOverrides(cfg, options)
+          if (!overrides.modelName && mapping.modelName) overrides.modelName = mapping.modelName // /jiuwen model <name>
           if (overrides.supportsUserInteraction === 'auto') overrides.supportsUserInteraction = Boolean(deps.hasUserQuestions?.())
           // Auxiliary calls (compaction, jiuwen titles) use a throwaway Jiuwen session + full transcript.
           const aux = Boolean(options.purpose)

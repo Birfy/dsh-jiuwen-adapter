@@ -153,6 +153,8 @@ export function resolveConfig(raw = {}, opts = {}) {
     toolApproval: pickEnum(env.JIUWEN_TOOL_APPROVAL || raw.toolApproval, ['dsh', 'none'], 'dsh'),
     toolCallTimeoutMs: Number(raw.toolCallTimeoutMs ?? env.JIUWEN_TOOL_CALL_TIMEOUT_MS ?? 120_000),
     mcpServerName: String(raw.mcpServerName || env.JIUWEN_MCP_SERVER_NAME || 'dsh-tools'),
+    /** Register the `/jiuwen` slash command on ctx.commands when available. */
+    registerCommands: raw.registerCommands !== false && env.JIUWEN_REGISTER_COMMANDS !== '0',
     /** Reply sent to Jiuwen when it asked but no dsh answerer exists. */
     noUiAnswer: String(raw.noUiAnswer || 'No interactive user is available. Proceed with your best judgment and state your assumptions.'),
     /** Cancel in-flight Jiuwen turn (chat.interrupt intent=cancel) when the host aborts. */

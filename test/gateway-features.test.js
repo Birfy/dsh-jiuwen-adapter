@@ -290,3 +290,22 @@ test('compaction is answered locally by default (no Jiuwen turn); compactionMode
   const cs2 = await host({ compactionMode: 'jiuwen' }).run({ sessionId: 'cmp2', purpose: 'compaction', messages: msgs })
   assert.doesNotMatch(txt(cs2), /local digest/)
 })
+
+test('/jiuwen command: status / models / model switch → model_name / bad sub', async () => {
+  const registered = []
+  const adapters = new Map()
+  const ctx = {
+    llm: { registerAdapter(ids, a) { ids.forEach(i => adapters.set(i, a)); return () => {} } },
+    logger: { info() {}, warn() {}, error() {}, debug() {} }, provide(n, v) { this[n] = v }, on() {},
+    inject(deps, cb) { assert.deepEqual(deps, ['commands']); cb({ commands: { register(d) { registered.push(d); return () => {} } }, on() {} }) },
+  }
+  plugin.apply(ctx, { gatewayURL: URL_, mappingPath: join(dir, 'cmd.json'), finalGraceMs: 300 })
+  const def = registered.find(d => d.name === 'jiuwen')
+  assert.ok(def)
+  const run = (raw) => def.handler({ agent: { id: 'cmd-s' }, rawInput: raw })
+  const st = await run('status')
+  assert.equal(st.kind, 'success')
+  assert.match(st.text, /dsh session cmd-s → Jiuwen session/)
+  assert.equal((await run('nope')).kind, 'success')
+  assert.match((await run('nope')).text, /Unknown subcommand/)
+})

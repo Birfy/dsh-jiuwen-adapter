@@ -59,6 +59,16 @@ export class SessionStore {
     return mapping
   }
 
+  /** Patch persisted per-session options (e.g. modelName); undefined deletes a key. */
+  update(dshSessionId, patch = {}) {
+    const mapping = this.ensure(dshSessionId)
+    for (const [k, v] of Object.entries(patch)) { if (v === undefined) delete mapping[k]; else mapping[k] = v }
+    mapping.updatedAt = new Date().toISOString()
+    this._put(mapping)
+    this._save()
+    return mapping
+  }
+
   /**
    * Record an agent id after Gateway creates/binds one.
    * @param {string} dshSessionId
@@ -124,6 +134,7 @@ export class SessionStore {
           ...(Number.isFinite(entry.lastCancelAt) ? { lastCancelAt: entry.lastCancelAt } : {}),
           ...(entry.lastRequestId ? { lastRequestId: String(entry.lastRequestId) } : {}),
           ...(entry.pendingQuestion ? { pendingQuestion: entry.pendingQuestion } : {}),
+          ...(entry.modelName ? { modelName: String(entry.modelName) } : {}),
           updatedAt: String(entry.updatedAt || new Date().toISOString()),
         })
       }

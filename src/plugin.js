@@ -11,6 +11,7 @@ import { createToolBridge } from './tool-bridge.js'
 import { GatewayTransport } from './gateway-transport.js'
 import { createInteractor } from './interaction.js'
 import { createMcpBridge } from './mcp-bridge.js'
+import { createJiuwenCommand } from './commands.js'
 
 export { Config }
 export const name = 'llm-jiuwen'
@@ -136,6 +137,21 @@ export function apply(ctx, config = {}) {
     },
   }
   exposeService(ctx, cfg.serviceName, api, logger)
+
+  // `/jiuwen <sub>` slash command when the host has a command registry (dsh-commands).
+  const command = createJiuwenCommand({ sessions, gateway: gatewayFor, config: readConfig })
+  api.command = command.run
+  if (cfg.registerCommands !== false && typeof ctx.inject === 'function') {
+    try {
+      ctx.inject(['commands'], (c) => {
+        const dispose = c.commands.register(command.definition)
+        if (typeof c.effect === 'function') c.effect(function* () { yield dispose }, 'llm-jiuwen command')
+        else c.on?.('dispose', dispose)
+      })
+    } catch (error) {
+      logger.debug?.(`[dsh-jiuwen] commands registry unavailable: ${error?.message || error}`)
+    }
+  }
 
   if (typeof ctx.effect === 'function') {
     ctx.effect(function* () {

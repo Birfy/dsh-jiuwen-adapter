@@ -57,3 +57,22 @@ Verified first: dsh `dsh-compaction-basic` calls `ctx.llm.stream({ purpose: 'com
 - `jiuwen`: legacy throwaway-session turn.
 
 中文：dsh 压缩默认本地生成摘要，不再为压缩起一个 Jiuwen 回合；`local+jiuwen` 额外让 Jiuwen 压缩自己的会话。
+
+## 5. `/jiuwen` slash command (dsh command registry)
+
+When the host provides `ctx.commands` (`@deepseek-ai/dsh-commands`; web UI, ACP and other command-capable surfaces), the adapter registers one namespaced command — it does not shadow dsh's own `/compact`, `/goal`, `/plan`, …:
+
+| Command | Jiuwen RPC |
+|---|---|
+| `/jiuwen status` | `models.list` (active model) + `session.get_metadata`; shows dsh → Jiuwen session mapping and turns |
+| `/jiuwen models` | `models.list` (★ = Jiuwen default) |
+| `/jiuwen model <name\|default>` | validated against `models.list`; persists a per-session `model_name` override for following `chat.send` |
+| `/jiuwen compact` | `command.compact` on the mapped Jiuwen session |
+| `/jiuwen interrupt` | `chat.interrupt {intent:'cancel'}` |
+| `/jiuwen sessions` / `skills` / `agents` / `mcp` | `session.list` / `skills.list` / `agents.list` / `mcp.list` |
+
+`registerCommands: false` (`JIUWEN_REGISTER_COMMANDS=0`) disables it; the same handler is available as `ctx.jiuwenAdapter.command(sessionId, 'models')`. dsh headless has no command parser (a `/…` task is sent as text), so use the web UI / ACP there.
+
+Live (dsh 0.2.1-rc.2, via `ctx.commands.execute(agent, …)` inside headless): registry lists `compact, feedback, goal, jiuwen, permission, plan`; `/jiuwen status`, `models`, `model doubao-seed-2.0-mini`, `model nosuch` (rejected with the available list) and `skills` all returned from the live gateway.
+
+中文：在 dsh 命令注册表上注册 `/jiuwen <子命令>`，映射到 Jiuwen 的 status / models / 模型切换 / compact / interrupt / sessions / skills / agents / mcp。
