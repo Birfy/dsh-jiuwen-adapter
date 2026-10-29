@@ -29,7 +29,7 @@ const results = []
 const check = (name, ok, detail = '') => { results.push(ok); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? ` — ${detail}` : ''}`) }
 const sid = `live-${Date.now()}`
 try {
-  plugin.apply(ctx, { compat: 'none', gatewayURL: url.href, mappingPath: join(dir, 'm.json'), requestTimeoutMs: 180_000 })
+  plugin.apply(ctx, { gatewayURL: url.href, mappingPath: join(dir, 'm.json'), requestTimeoutMs: 180_000 })
   const a = adapters.get('jiuwen')
   const events = []
   ctx.jiuwenAdapter.onEvent(e => events.push(e))

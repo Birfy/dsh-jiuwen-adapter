@@ -9,14 +9,17 @@ import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { pathToFileURL } from 'node:url'
-import { flybotPaths } from '../src/compat/flybot.js'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
-// Generic: resolve cordis/dsh-llm from DSH_LLM_PATH / DSH_CORDIS_PATH, then node resolution,
-// then (optional compat) a FlyBot checkout.
-const FB = flybotPaths()
-const LLM_PATH = process.env.DSH_LLM_PATH || FB.llm
-const CORDIS_PATH = process.env.DSH_CORDIS_PATH || FB.cordis
+// Resolve cordis + dsh-llm: DSH_CORDIS_PATH / DSH_LLM_PATH, then node resolution, then a global
+// `npm i -g @deepseek-ai/dsh` install (its bundled node_modules).
+import { execSync } from 'node:child_process'
+import { existsSync } from 'node:fs'
+const globalRoot = (() => { try { return execSync('npm root -g', { encoding: 'utf8' }).trim() } catch { return '' } })()
+const DSH_NM = process.env.DSH_NODE_MODULES || join(globalRoot, '@deepseek-ai/dsh/node_modules')
+const LLM_PATH = process.env.DSH_LLM_PATH || join(DSH_NM, '@deepseek-ai/dsh-llm/lib/index.js')
+const CORDIS_PATH = process.env.DSH_CORDIS_PATH || join(DSH_NM, '@deepseek-ai/cordis/lib/index.js')
+if (!existsSync(LLM_PATH) && !process.env.DSH_LLM_PATH) console.log(`note: ${LLM_PATH} not found; set DSH_NODE_MODULES or DSH_LLM_PATH`)
 const require = createRequire(join(ROOT, 'package.json'))
 
 const out = { at: new Date().toISOString(), steps: [] }
@@ -112,7 +115,7 @@ try {
   await new Promise(r => gw.stdout.on('data', d => /listening/.test(String(d)) && r()))
   try {
     await ctx.plugin(plugin, {
-      provider: 'jiuwen-gw', serviceName: 'jiuwenAdapterGw', mode: 'gateway', compat: 'none', finalGraceMs: 300,
+      provider: 'jiuwen-gw', serviceName: 'jiuwenAdapterGw', mode: 'gateway', finalGraceMs: 300,
       gatewayURL: `ws://127.0.0.1:${gwPort}/ws`, mappingPath: join(dir, 'map-gw.json'),
       models: [{ id: 'jiuwen-default', name: 'Jiuwen Default' }],
     })

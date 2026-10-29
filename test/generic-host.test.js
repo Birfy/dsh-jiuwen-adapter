@@ -1,7 +1,7 @@
 /**
  * Generic usage proof: a minimal NON-FlyBot host implementing only the standard
  * Cordis `llm` service surface (registerAdapter/listModels/stream) consumes the
- * `jiuwen` provider via plugin.apply(). No dsh-llm, no FlyBot paths (compat=none).
+ * `jiuwen` provider via plugin.apply(). No dsh-llm required.
  */
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
@@ -12,7 +12,6 @@ import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import * as plugin from '../index.js'
-import { isFlybotCompatEnabled } from '../src/compat/flybot.js'
 import { resolveConfig } from '../src/config.js'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
@@ -60,17 +59,15 @@ after(() => { gw?.kill(); rmSync(dir, { recursive: true, force: true }) })
 
 const text = cs => cs.filter(c => c.type === 'text-delta').map(c => c.text).join('')
 
-test('compat=none disables FlyBot glue; config has no flybot keys', () => {
-  assert.equal(isFlybotCompatEnabled('none', {}), false)
-  assert.equal(isFlybotCompatEnabled('auto', { FLYBOT_ROOT: '/nonexistent' }), false)
-  assert.equal(isFlybotCompatEnabled('flybot', {}), true)
+test('config is host-neutral', () => {
   const keys = Object.keys(resolveConfig({}, { env: {} }))
-  assert.ok(!keys.some(k => /flybot/i.test(k)))
+  assert.ok(!keys.includes('compat'))
+  assert.equal(resolveConfig({}, { env: {} }).provider, 'jiuwen')
 })
 
 test('generic host: plain chat + streaming via gateway mock', async () => {
   const ctx = minimalHost()
-  plugin.apply(ctx, { compat: 'none', gatewayURL: `ws://127.0.0.1:${GW_PORT}/ws`, mappingPath: join(dir, 'm.json') })
+  plugin.apply(ctx, { gatewayURL: `ws://127.0.0.1:${GW_PORT}/ws`, mappingPath: join(dir, 'm.json') })
   assert.deepEqual(ctx.llm.listProviders().map(p => p.id), ['jiuwen'])
   assert.ok((await ctx.llm.listModels('jiuwen')).some(m => m.id === 'jiuwen-default'))
   const chunks = []
@@ -90,7 +87,7 @@ test('generic host: plain chat + streaming via gateway mock', async () => {
 
 test('generic host: OpenAI-style tools in gateway mode are Jiuwen-owned (observed, not re-executed)', async () => {
   const ctx = minimalHost()
-  plugin.apply(ctx, { compat: 'none', gatewayURL: `ws://127.0.0.1:${GW_PORT}/ws`, mappingPath: join(dir, 'm2.json') })
+  plugin.apply(ctx, { gatewayURL: `ws://127.0.0.1:${GW_PORT}/ws`, mappingPath: join(dir, 'm2.json') })
   const chunks = []
   for await (const c of ctx.llm.stream({
     provider: 'jiuwen', model: 'jiuwen-default', sessionId: 'generic-2',
@@ -121,7 +118,7 @@ test('generic host: openai mode with allowDshAgentLoop surfaces OpenAI tool_call
   try {
     const ctx = minimalHost()
     plugin.apply(ctx, {
-      compat: 'none', mode: 'openai', allowDshAgentLoop: true,
+      mode: 'openai', allowDshAgentLoop: true,
       baseURL: `http://127.0.0.1:${server.address().port}/v1`, mappingPath: join(dir, 'm3.json'),
     })
     const chunks = []

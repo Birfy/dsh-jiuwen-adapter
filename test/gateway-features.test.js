@@ -1,6 +1,6 @@
 /**
  * Gateway-mode features against bin/mock-gateway.mjs (real Jiuwen wire shapes):
- * structured events, reasoning, usage, processing_status filtering, markers compat,
+ * structured events, reasoning, usage, processing_status filtering, legacy markers,
  * session continuity, cancel → chat.interrupt, per-request agent/mode/skills/model,
  * multimodal base64Data, ask_user, extra E2A RPCs.
  */
@@ -26,7 +26,7 @@ function host(config = {}) {
     logger: { info() {}, warn() {}, error() {} },
     provide(n, v) { this[n] = v }, on() {},
   }
-  plugin.apply(ctx, { compat: 'none', gatewayURL: URL_, mappingPath: join(dir, `m-${Math.random()}.json`), finalGraceMs: 300, ...config })
+  plugin.apply(ctx, { gatewayURL: URL_, mappingPath: join(dir, `m-${Math.random()}.json`), finalGraceMs: 300, ...config })
   const a = adapters.get('jiuwen')
   return {
     api: ctx.jiuwenAdapter,
@@ -167,7 +167,7 @@ test('host attachments service: content-addressed image is hydrated to base64Dat
     logger: { info() {}, warn() {}, error() {} }, provide() {}, on() {},
     get: (n) => (n === 'attachments' ? store : undefined),
   }
-  plugin.apply(ctx, { compat: 'none', gatewayURL: URL_, mappingPath: join(dir, 'att.json'), finalGraceMs: 300 })
+  plugin.apply(ctx, { gatewayURL: URL_, mappingPath: join(dir, 'att.json'), finalGraceMs: 300 })
   const cs = []
   for await (const c of adapters.get('jiuwen').stream({ provider: 'jiuwen', model: 'jiuwen-default', sessionId: 'att', messages: [{ role: 'user', content: [
     { type: 'text', text: 'echo-params img' },

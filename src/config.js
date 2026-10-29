@@ -39,7 +39,6 @@ const DEFAULT_MODELS = [
  *   allowDshAgentLoop: boolean,
  *   exposeJiuwenTools: boolean,
  *   surfaceGatewayToolEvents: boolean,
- *   compat: string,
  *   llmAdapterModule: string | undefined,
  * }} ResolvedConfig */
 
@@ -148,8 +147,6 @@ export function resolveConfig(raw = {}, opts = {}) {
       .map(p => { try { return new RegExp(String(p), 'm') } catch { return null } }).filter(Boolean),
     /** Append JSONL trace of turns/events here (debugging). */
     traceFile: firstNonEmpty(env.JIUWEN_TRACE_FILE, typeof raw.traceFile === 'string' ? raw.traceFile : undefined),
-    /** 'auto' | 'none' | 'flybot' — optional host-compat glue (src/compat/). */
-    compat: String(env.JIUWEN_COMPAT || raw.compat || 'auto').toLowerCase(),
     llmAdapterModule: firstNonEmpty(env.JIUWEN_LLM_ADAPTER_MODULE, typeof raw.llmAdapterModule === 'string' ? raw.llmAdapterModule : undefined),
   }
 }

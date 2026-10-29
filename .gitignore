@@ -15,7 +15,6 @@ cookies*.txt
 *.lock
 *.jsonl
 session-map*.json
-examples/flybot-verify-home/
 examples/smoke-home/
 examples/live-gateway/
 .DS_Store

@@ -1,7 +1,7 @@
 {
   "name": "@dsh-jiuwen/adapter",
   "version": "0.1.0",
-  "description": "Generic Cordis llm provider `jiuwen`: ctx.llm stream → JiuwenSwarm Gateway / OpenAI-compatible AgentServer (optional FlyBot compat)",
+  "description": "Generic Cordis llm provider `jiuwen`: ctx.llm stream → JiuwenSwarm Gateway / OpenAI-compatible AgentServer",
   "keywords": [
     "dsh-plugin",
     "deepseek-harness",
@@ -31,7 +31,6 @@
   "scripts": {
     "test": "node --test test/*.test.js",
     "smoke": "node scripts/smoke.mjs",
-    "verify:flybot": "node scripts/verify-flybot.mjs",
     "mock:openai": "node bin/mock-openai.mjs",
     "mock:gateway": "node bin/mock-gateway.mjs",
     "smoke:cordis": "node scripts/cordis-load-smoke.mjs",

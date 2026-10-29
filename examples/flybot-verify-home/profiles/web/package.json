@@ -1,0 +1,22 @@
+{
+  "name": "dsh-profile-web",
+  "private": true,
+  "dependencies": {
+    "ds-bot": "link:/workspace/FlyBot/core",
+    "@flybot/social": "link:/workspace/FlyBot/plugins/social",
+    "@flybot/tree": "link:/workspace/FlyBot/plugins/tree",
+    "@dsh-jiuwen/adapter": "link:/workspace/dsh-jiuwen-adapter"
+  },
+  "dsh": {
+    "profile": {
+      "bundles": [
+        "@deepseek-ai/dsh-base",
+        "@deepseek-ai/dsh-web-app",
+        "ds-bot",
+        "@flybot/social",
+        "@flybot/tree",
+        "@dsh-jiuwen/adapter"
+      ]
+    }
+  }
+}

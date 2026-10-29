@@ -1,0 +1,15 @@
+# Jiuwen brain (gateway) + ABI shell; openai mock only if JIUWEN_MODE=openai
+- id: agent-default-model
+  config:
+    provider: jiuwen
+    model: jiuwen-default
+- id: llm-jiuwen
+  config:
+    provider: jiuwen
+    displayName: JiuwenSwarm
+    mode: gateway
+    gatewayURL: ws://127.0.0.1:19088/ws
+    baseURL: http://127.0.0.1:18088/v1
+    apiKey: mock-key
+    defaultModel: jiuwen-default
+    mappingPath: /workspace/dsh-jiuwen-adapter/examples/flybot-verify-home/jiuwen-adapter/session-map.json

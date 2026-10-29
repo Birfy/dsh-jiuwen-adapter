@@ -8,7 +8,6 @@ import { SessionStore } from './session-store.js'
 import { createJiuwenAdapter } from './adapter.js'
 import { createToolBridge } from './tool-bridge.js'
 import { GatewayTransport } from './gateway-transport.js'
-import * as flybotCompat from './compat/flybot.js'
 
 export { Config }
 export const name = 'llm-jiuwen'
@@ -135,8 +134,7 @@ export function apply(ctx, config = {}) {
 /**
  * Resolve the standard `LlmAdapter` base class from @deepseek-ai/dsh-llm.
  * Generic order: explicit module (config.llmAdapterModule / JIUWEN_LLM_ADAPTER_MODULE)
- * → package resolution → common global DSH installs → optional compat candidates
- * (FlyBot only when enabled) → duck-typed base (works with any Cordis `llm` service
+ * → package resolution → common global DSH installs → built-in duck-typed base (works with any Cordis `llm` service
  * exposing registerAdapter()).
  */
 export /** Expose the helper API on ctx under `serviceName` (generic across Cordis versions). */
@@ -164,9 +162,6 @@ function loadLlmAdapter(logger, cfg = {}, env = process.env) {
     '/opt/homebrew/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-llm',
     '/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-llm',
   ]
-  if (flybotCompat.isFlybotCompatEnabled(cfg.compat, env)) {
-    candidates.push(...flybotCompat.llmAdapterCandidates(env))
-  }
   for (const id of candidates) {
     try {
       const mod = require(id)

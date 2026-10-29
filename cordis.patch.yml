@@ -1,7 +1,7 @@
 # JiuwenSwarm is the agent brain; DSH is Cordis ABI/shell only (ARCHITECTURE.md).
 # Default mode=gateway (override with JIUWEN_MODE=openai for diagnostics).
 #
-# Make any agent-loop / host select Jiuwen (e.g. DSH agent, FlyBot):
+# Make the dsh agent (or any host agent-loop) select Jiuwen:
 #   - id: agent-default-model
 #     config: { provider: jiuwen, model: jiuwen-default }
 #
