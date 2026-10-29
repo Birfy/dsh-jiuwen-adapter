@@ -1,0 +1,141 @@
+{
+  "version": 1,
+  "model": "doubao-seed-2.0-mini",
+  "tool_chain": [
+    {
+      "id": "tool-sum-file",
+      "prompt": "Do these steps with tools, then reply with ONLY the final integer on its own line.\n1) Write a file named hard_nums.txt containing exactly these lines:\n3\n17\n42\n8\n2) Use bash to sum the numbers in that file (one number per line).\n3) Reply with only that sum.",
+      "expect": "70"
+    },
+    {
+      "id": "tool-checksum",
+      "prompt": "Use tools only. Create file hard_msg.txt with the exact text HELLO-HARD-9 (no newline at end if possible). Then run: printf '%s' \"$(cat hard_msg.txt)\" | sha256sum | awk '{print $1}'. Reply with ONLY the 64-char hex digest.",
+      "expect_re": "^[0-9a-f]{64}$",
+      "expect_sha256_of": "HELLO-HARD-9"
+    },
+    {
+      "id": "tool-pipe",
+      "prompt": "Use bash tools. Create hard_words.txt with lines: apple, banana, cherry (one word per line). Then count lines with bash and multiply the count by 11. Reply with ONLY the integer result.",
+      "expect": "33"
+    },
+    {
+      "id": "tool-date-arith",
+      "prompt": "Use bash: compute $((365*24+7)) and write the result into hard_hours.txt, then cat the file. Reply with ONLY that integer.",
+      "expect": "8767"
+    },
+    {
+      "id": "tool-json-jq",
+      "prompt": "Write hard_obj.json containing exactly {\"a\":2,\"b\":[3,5,7]}. Using bash/python, compute a + sum(b). Reply with ONLY the integer.",
+      "expect": "17"
+    }
+  ],
+  "memory": [
+    {
+      "id": "mem-code-distractors",
+      "turns": [
+        "Remember the secret codeword is sapphire-91. Reply OK.",
+        "My favorite fruit is mango. Reply OK.",
+        "Ignore prior fruit; my favorite fruit is actually pear. Reply OK.",
+        "The meeting room is B-12. Reply OK.",
+        "What is the secret codeword? Reply with only the codeword.",
+        "What is my favorite fruit now? Reply with only the fruit name.",
+        "What meeting room? Reply with only the room id."
+      ],
+      "checks": [
+        { "turn": 4, "re": "sapphire-91" },
+        { "turn": 5, "re": "pear" },
+        { "turn": 6, "re": "B-12" }
+      ]
+    },
+    {
+      "id": "mem-numbers-chain",
+      "turns": [
+        "Start with N=13. Reply with N.",
+        "Double N. Reply with only the new N.",
+        "Add 9 to N. Reply with only the new N.",
+        "A red herring: my cat is named Pixel. Reply OK.",
+        "Subtract 5 from N. Reply with only the new N.",
+        "What is N now? Reply with only the number.",
+        "What is my cat's name? Reply with only the name."
+      ],
+      "checks": [
+        { "turn": 0, "re": "\\b13\\b" },
+        { "turn": 1, "re": "\\b26\\b" },
+        { "turn": 2, "re": "\\b35\\b" },
+        { "turn": 4, "re": "\\b30\\b" },
+        { "turn": 5, "re": "\\b30\\b" },
+        { "turn": 6, "re": "Pixel" }
+      ]
+    },
+    {
+      "id": "mem-zh-en-mix",
+      "turns": [
+        "请记住：项目代号是「苍穹-7」。只回复 OK。",
+        "Also remember the English alias is SKY-7. Reply OK only.",
+        "Distractor: today's weather is rainy. Reply OK.",
+        "用中文告诉我项目代号是什么？只回答代号本身。",
+        "What is the English alias? Reply with only the alias."
+      ],
+      "checks": [
+        { "turn": 3, "re": "苍穹-7" },
+        { "turn": 4, "re": "SKY-7" }
+      ]
+    }
+  ],
+  "format": [
+    {
+      "id": "fmt-nested-json",
+      "prompt": "Return ONLY a JSON object (no fence, no commentary) with this exact shape: {\"meta\":{\"lang\":\"zh\",\"n\":2},\"items\":[{\"id\":1,\"tag\":\"甲\"},{\"id\":2,\"tag\":\"乙\"}]}. Keys and values must match exactly.",
+      "expect_json": {"meta":{"lang":"zh","n":2},"items":[{"id":1,"tag":"甲"},{"id":2,"tag":"乙"}]}
+    },
+    {
+      "id": "fmt-csv-header",
+      "prompt": "Reply with ONLY these three CSV lines and nothing else:\nname,score\nAlice,9\nBob,7",
+      "expect": "name,score\nAlice,9\nBob,7"
+    },
+    {
+      "id": "fmt-bilingual-block",
+      "prompt": "Output exactly two lines:\nZH: 你好世界\nEN: Hello World\nNo other text.",
+      "expect": "ZH: 你好世界\nEN: Hello World"
+    },
+    {
+      "id": "fmt-ordered-list",
+      "prompt": "Reply with ONLY a numbered list of these three words in this order, one per line: alpha, beta, gamma. Format: 1. alpha",
+      "expect_re": "^1\\.\\s*alpha\\s*\\n2\\.\\s*beta\\s*\\n3\\.\\s*gamma\\s*$"
+    },
+    {
+      "id": "fmt-xml-mini",
+      "prompt": "Return ONLY this XML with no declaration and no extra whitespace beyond a single newline after the root if needed:\n<root><a>1</a><b>2</b></root>",
+      "expect_re": "^\\s*<root>\\s*<a>1</a>\\s*<b>2</b>\\s*</root>\\s*$"
+    }
+  ],
+  "constraint": [
+    {
+      "id": "con-passage-count",
+      "prompt": "Passage: The museum opens at 09:00, closes at 17:30, and has three wings: North, East, and West. Tickets cost 12 yuan for adults and 6 for children. On Tuesday the East wing is closed.\nConstraints: (1) Answer in English only. (2) First line must be OPEN_HOURS: <start>-<end> using 24h times from the passage. (3) Second line WINGS: comma-separated open wings on Tuesday. (4) Third line ADULT_PRICE: integer. No other lines.",
+      "expect_re": "^OPEN_HOURS:\\s*09:00-17:30\\s*\\nWINGS:\\s*North,\\s*West\\s*\\nADULT_PRICE:\\s*12\\s*$"
+    },
+    {
+      "id": "con-no-digit-words",
+      "prompt": "Using English words only (no Arabic digits 0-9 anywhere), state how many days are in two weeks. One sentence.",
+      "expect_re": "(?i)fourteen|fourteen days",
+      "forbid_re": "[0-9]"
+    },
+    {
+      "id": "con-sorted-unique",
+      "prompt": "Given numbers 9, 2, 9, 4, 2, 7 — reply with ONLY the unique values sorted ascending as a JSON array of integers.",
+      "expect_json": [2,4,7,9]
+    },
+    {
+      "id": "con-zh-only-summary",
+      "prompt": "用不超过两句中文概括：Python 是一种解释型高级语言，常用于数据科学与自动化。禁止出现英文字母。",
+      "expect_cjk_min": 10,
+      "forbid_re": "[A-Za-z]"
+    },
+    {
+      "id": "con-triple-rule",
+      "prompt": "A rule: if a word starts with a vowel (a,e,i,o,u), prefix it with V-; otherwise C-. Apply to: apple, banana, orange. Reply with ONLY the three transformed tokens separated by spaces.",
+      "expect_re": "^V-apple\\s+C-banana\\s+V-orange\\s*$"
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "finishedAt": "2026-10-29T13:05:30.864Z",
+  "score": {
+    "C": {
+      "total": "46/48",
+      "parts": {
+        "gsm_hard": {
+          "n": 20,
+          "pass": 19,
+          "fails": [
+            "gsm8k-hard-854"
+          ]
+        },
+        "tools": {
+          "n": 5,
+          "pass": 5,
+          "fails": []
+        },
+        "memory": {
+          "n": 3,
+          "pass": 2,
+          "fails": [
+            "mem-code-distractors"
+          ]
+        },
+        "humaneval_hard": {
+          "n": 10,
+          "pass": 10,
+          "fails": []
+        },
+        "format": {
+          "n": 5,
+          "pass": 5,
+          "fails": []
+        },
+        "constraint": {
+          "n": 5,
+          "pass": 5,
+          "fails": []
+        }
+      }
+    }
+  },
+  "model": "doubao-seed-2.0-mini"
+}

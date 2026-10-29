@@ -1,0 +1,885 @@
+{
+  "startedAt": "2026-10-29T13:05:18.804Z",
+  "model": "doubao-seed-2.0-mini",
+  "paths": [
+    "A"
+  ],
+  "suites": [
+    "gsm_hard",
+    "tools",
+    "memory",
+    "humaneval_hard",
+    "format",
+    "constraint"
+  ],
+  "gsm_hard": {
+    "A": [
+      {
+        "id": "gsm8k-hard-1122",
+        "expected": "18",
+        "got": "18",
+        "correct": true,
+        "ok": true,
+        "totalMs": 9610,
+        "ttftMs": 9564,
+        "inTok": 23201,
+        "outTok": 523,
+        "error": null,
+        "tail": "Answer: 18"
+      },
+      {
+        "id": "gsm8k-hard-1102",
+        "expected": "113",
+        "got": "113",
+        "correct": true,
+        "ok": true,
+        "totalMs": 8738,
+        "ttftMs": 8691,
+        "inTok": 23207,
+        "outTok": 468,
+        "error": null,
+        "tail": "an price: 20% off $20.00 → 20 * (1 - 0.2) = $16.00\n4. Towels price: 10% off $30.00 → 30 * (1 - 0.1) = $27.00\n5. New balance: 70 + 16 + 27 = $113.00\n\nAnswer: 113"
+      },
+      {
+        "id": "gsm8k-hard-422",
+        "expected": "284",
+        "got": "284",
+        "correct": true,
+        "ok": true,
+        "totalMs": 9874,
+        "ttftMs": 9825,
+        "inTok": 23180,
+        "outTok": 610,
+        "error": null,
+        "tail": "r 6 + 8 =14 months, the remaining is \\(24 -14 =10\\) months at $14/month: \\(10 \\times14 =140\\) dollars  \n\nTotal cost: \\(48 +96 +140 =284\\) dollars  \n\nAnswer: 284"
+      },
+      {
+        "id": "gsm8k-hard-1109",
+        "expected": "3",
+        "got": "3",
+        "correct": true,
+        "ok": true,
+        "totalMs": 7271,
+        "ttftMs": 7203,
+        "inTok": 23138,
+        "outTok": 176,
+        "error": null,
+        "tail": " women × 2 inches) = 12 + 6 = 18 inches.  \nTotal number of women = 3 + 3 = 6.  \nAverage height = Total height ÷ Total number of women = 18 ÷ 6 = 3.  \n\nAnswer: 3"
+      },
+      {
+        "id": "gsm8k-hard-1209",
+        "expected": "29",
+        "got": "29",
+        "correct": true,
+        "ok": true,
+        "totalMs": 6030,
+        "ttftMs": 5981,
+        "inTok": 23266,
+        "outTok": 235,
+        "error": null,
+        "tail": "2 liters per day × 3 days = 6 liters\n- High setting: twice as much as medium, so 4 liters per day ×5 days = 20 liters\nTotal: 3 + 6 + 20 = 29 liters.\n\nAnswer: 29"
+      },
+      {
+        "id": "gsm8k-hard-1156",
+        "expected": "120",
+        "got": "120",
+        "correct": true,
+        "ok": true,
+        "totalMs": 7401,
+        "ttftMs": 7352,
+        "inTok": 23169,
+        "outTok": 281,
+        "error": null,
+        "tail": "Answer: 120"
+      },
+      {
+        "id": "gsm8k-hard-528",
+        "expected": "172",
+        "got": "172",
+        "correct": true,
+        "ok": true,
+        "totalMs": 11909,
+        "ttftMs": 11861,
+        "inTok": 23165,
+        "outTok": 874,
+        "error": null,
+        "tail": " + Jenna's sofas = 20 + 64 = 84.  \n   Total chairs = Ophelia's chairs + Jenna's chairs = 22 + 66 = 88.  \n   Total sofas and chairs = 84 + 88 = 172.\n\nAnswer: 172"
+      },
+      {
+        "id": "gsm8k-hard-1071",
+        "expected": "251",
+        "got": "251",
+        "correct": true,
+        "ok": true,
+        "totalMs": 9623,
+        "ttftMs": 9576,
+        "inTok": 23187,
+        "outTok": 465,
+        "error": null,
+        "tail": "he $125 rent) =21 additional guests.\n\n4. Calculate the total cost:\n   Base fee ($125) + (additional guests × $6 each) =125 + (21×6) =125 +126 =251.\n\nAnswer: 251"
+      },
+      {
+        "id": "gsm8k-hard-522",
+        "expected": "29",
+        "got": "29",
+        "correct": true,
+        "ok": true,
+        "totalMs": 7055,
+        "ttftMs": 7005,
+        "inTok": 23200,
+        "outTok": 387,
+        "error": null,
+        "tail": "as Bobby: 5 × 2 = 10 quarts per hour.\n4. Ricky picks 2 fewer quarts than Kathy: 10 - 2 = 8 quarts per hour.\n\nAdding all together: 6 + 5 + 10 + 8 = 29\nAnswer: 29"
+      },
+      {
+        "id": "gsm8k-hard-709",
+        "expected": "3000",
+        "got": "3000",
+        "correct": true,
+        "ok": true,
+        "totalMs": 6587,
+        "ttftMs": 6536,
+        "inTok": 23158,
+        "outTok": 359,
+        "error": null,
+        "tail": "arts / 4 hours = 12.5 quarts per hour.  \n   Production in 48 hours: 12.5 × 48 = 600 quarts.  \n3. **Total production**: 2400 + 600 = 3000 quarts.  \n\nAnswer: 3000"
+      },
+      {
+        "id": "gsm8k-hard-44",
+        "expected": "20",
+        "got": "20",
+        "correct": true,
+        "ok": true,
+        "totalMs": 7384,
+        "ttftMs": 7333,
+        "inTok": 23181,
+        "outTok": 414,
+        "error": null,
+        "tail": "算成本：每磅蜂蜡的 supplies 成本是10美元，2磅的总成本为 \\(2 \\times 10 = 20\\) 美元。\n接着计算收入：每根蜡烛售价2美元，20根的总收入为 \\(20 \\times 2 = 40\\) 美元。\n最后计算净利润：收入减去成本，即 \\(40 - 20 = 20\\) 美元。\n\nAnswer: 20"
+      },
+      {
+        "id": "gsm8k-hard-76",
+        "expected": "5",
+        "got": "5",
+        "correct": true,
+        "ok": true,
+        "totalMs": 8348,
+        "ttftMs": 8300,
+        "inTok": 23190,
+        "outTok": 489,
+        "error": null,
+        "tail": " cups/day = 370 cups.\n4. Total dog food needed in the first year: 180 + 370 = 550 cups.\n5. Number of bags required: 550 cups ÷ 110 cups/bag = 5 bags.\n\nAnswer: 5"
+      },
+      {
+        "id": "gsm8k-hard-844",
+        "expected": "180",
+        "got": "180",
+        "correct": true,
+        "ok": true,
+        "totalMs": 20097,
+        "ttftMs": 20034,
+        "inTok": 23153,
+        "outTok": 779,
+        "error": null,
+        "tail": " 2 = 30。\n\n4. **计算总数量**：  \n   总袜子数 = Jack的袜子 + Peter的袜子 = 30 + 60 = 90；  \n   总盘子数 = Jack的盘子 + Peter的盘子 = 60 + 30 = 90；  \n   总袜子和盘子数 = 90 + 90 = 180。\n\nAnswer: 180"
+      },
+      {
+        "id": "gsm8k-hard-971",
+        "expected": "100",
+        "got": "100",
+        "correct": true,
+        "ok": true,
+        "totalMs": 6162,
+        "ttftMs": 6115,
+        "inTok": 23153,
+        "outTok": 230,
+        "error": null,
+        "tail": "th + width) = 2 × (15 + 10) = 2 × 25 = 50 feet  \n\nThen, multiply the perimeter by the number of wood slats per foot:  \nTotal slats = 50 × 2 = 100  \n\nAnswer: 100"
+      },
+      {
+        "id": "gsm8k-hard-66",
+        "expected": "48",
+        "got": "48",
+        "correct": true,
+        "ok": true,
+        "totalMs": 7329,
+        "ttftMs": 7274,
+        "inTok": 23162,
+        "outTok": 423,
+        "error": null,
+        "tail": "): Total teams = 4 × 2 = 8\n3. Each team has 5 players and 1 coach: Total people per team = 5 + 1 = 6\n4. Total people sent by all schools: 8 × 6 = 48\n\nAnswer: 48"
+      },
+      {
+        "id": "gsm8k-hard-1100",
+        "expected": "5",
+        "got": "5",
+        "correct": true,
+        "ok": true,
+        "totalMs": 9401,
+        "ttftMs": 9357,
+        "inTok": 23145,
+        "outTok": 153,
+        "error": null,
+        "tail": "Answer: 5"
+      },
+      {
+        "id": "gsm8k-hard-1144",
+        "expected": "34",
+        "got": "34",
+        "correct": true,
+        "ok": true,
+        "totalMs": 10467,
+        "ttftMs": 10412,
+        "inTok": 23157,
+        "outTok": 271,
+        "error": null,
+        "tail": "assengers are 84, so each part equals 84 ÷ 14 = 6.\n3. Original number of women: 9 × 6 = 54.\n4. After 20 women alight, remaining women: 54 - 20 = 34.\n\nAnswer: 34"
+      },
+      {
+        "id": "gsm8k-hard-827",
+        "expected": "11",
+        "got": "11",
+        "correct": true,
+        "ok": true,
+        "totalMs": 12201,
+        "ttftMs": 12149,
+        "inTok": 23189,
+        "outTok": 845,
+        "error": null,
+        "tail": "Answer: 11"
+      },
+      {
+        "id": "gsm8k-hard-546",
+        "expected": "130",
+        "got": "130",
+        "correct": true,
+        "ok": true,
+        "totalMs": 7111,
+        "ttftMs": 7060,
+        "inTok": 23157,
+        "outTok": 322,
+        "error": null,
+        "tail": "t, total letters are 52 +13 =65. Then she re-writes everything she has already written, which is another 65 letters. So total letters: 65 +65 =130.\n\nAnswer: 130"
+      },
+      {
+        "id": "gsm8k-hard-854",
+        "expected": "144",
+        "got": "144",
+        "correct": true,
+        "ok": true,
+        "totalMs": 6976,
+        "ttftMs": 6922,
+        "inTok": 23182,
+        "outTok": 264,
+        "error": null,
+        "tail": "解决这个数学问题，我们逐步计算每年建造的房屋数量，再求和：\n\n1. 第一年建造的房屋数：12栋\n2. 第二年建造的房屋数：12 × 3 = 36栋\n3. 第三年建造的房屋数：(12 + 36) × 2 = 48 × 2 = 96栋\n\n三年总共建造的房屋数：12 + 36 + 96 = 144栋\n\nAnswer: 144"
+      }
+    ]
+  },
+  "tools": {
+    "A": [
+      {
+        "id": "tool-sum-file",
+        "correct": true,
+        "got": "70",
+        "ok": true,
+        "totalMs": 17648,
+        "ttftMs": 17585,
+        "inTok": 70526,
+        "outTok": 584,
+        "error": null,
+        "text": "70"
+      },
+      {
+        "id": "tool-checksum",
+        "correct": true,
+        "got": "7ce0e5d8abe246799fb14f001d70491c5e330b4f18f146ea0eace0c921ec16de",
+        "ok": true,
+        "totalMs": 15051,
+        "ttftMs": 14996,
+        "inTok": 70551,
+        "outTok": 733,
+        "error": null,
+        "text": "7ce0e5d8abe246799fb14f001d70491c5e330b4f18f146ea0eace0c921ec16de"
+      },
+      {
+        "id": "tool-pipe",
+        "correct": true,
+        "got": "33",
+        "ok": true,
+        "totalMs": 42971,
+        "ttftMs": 42911,
+        "inTok": 195891,
+        "outTok": 2056,
+        "error": null,
+        "text": "33"
+      },
+      {
+        "id": "tool-date-arith",
+        "correct": true,
+        "got": "8767",
+        "ok": true,
+        "totalMs": 10984,
+        "ttftMs": 10931,
+        "inTok": 46536,
+        "outTok": 315,
+        "error": null,
+        "text": "8767"
+      },
+      {
+        "id": "tool-json-jq",
+        "correct": true,
+        "got": "17",
+        "ok": true,
+        "totalMs": 37765,
+        "ttftMs": 37707,
+        "inTok": 94791,
+        "outTok": 929,
+        "error": null,
+        "text": "17"
+      }
+    ]
+  },
+  "memory": {
+    "A": [
+      {
+        "id": "mem-code-distractors",
+        "correct": true,
+        "checks": [
+          {
+            "turn": 4,
+            "re": "sapphire-91",
+            "text": "sapphire-91",
+            "pass": true
+          },
+          {
+            "turn": 5,
+            "re": "pear",
+            "text": "pear",
+            "pass": true
+          },
+          {
+            "turn": 6,
+            "re": "B-12",
+            "text": "B-12",
+            "pass": true
+          }
+        ],
+        "turns": [
+          {
+            "ok": true,
+            "totalMs": 9644,
+            "ttftMs": 9595,
+            "inTok": 46655,
+            "outTok": 509,
+            "error": null,
+            "text": "OK"
+          },
+          {
+            "ok": true,
+            "totalMs": 13924,
+            "ttftMs": 13871,
+            "inTok": 47319,
+            "outTok": 693,
+            "error": null,
+            "text": "OK"
+          },
+          {
+            "ok": true,
+            "totalMs": 11430,
+            "ttftMs": 11358,
+            "inTok": 71121,
+            "outTok": 315,
+            "error": null,
+            "text": "OK"
+          },
+          {
+            "ok": true,
+            "totalMs": 11143,
+            "ttftMs": 11095,
+            "inTok": 47957,
+            "outTok": 326,
+            "error": null,
+            "text": "OK"
+          },
+          {
+            "ok": true,
+            "totalMs": 4686,
+            "ttftMs": 4630,
+            "inTok": 24026,
+            "outTok": 49,
+            "error": null,
+            "text": "sapphire-91"
+          },
+          {
+            "ok": true,
+            "totalMs": 5053,
+            "ttftMs": 5001,
+            "inTok": 24146,
+            "outTok": 67,
+            "error": null,
+            "text": "pear"
+          },
+          {
+            "ok": true,
+            "totalMs": 6611,
+            "ttftMs": 6552,
+            "inTok": 24259,
+            "outTok": 54,
+            "error": null,
+            "text": "B-12"
+          }
+        ]
+      },
+      {
+        "id": "mem-numbers-chain",
+        "correct": true,
+        "checks": [
+          {
+            "turn": 0,
+            "re": "\\b13\\b",
+            "text": "13",
+            "pass": true
+          },
+          {
+            "turn": 1,
+            "re": "\\b26\\b",
+            "text": "26",
+            "pass": true
+          },
+          {
+            "turn": 2,
+            "re": "\\b35\\b",
+            "text": "35",
+            "pass": true
+          },
+          {
+            "turn": 4,
+            "re": "\\b30\\b",
+            "text": "30",
+            "pass": true
+          },
+          {
+            "turn": 5,
+            "re": "\\b30\\b",
+            "text": "30",
+            "pass": true
+          },
+          {
+            "turn": 6,
+            "re": "Pixel",
+            "text": "Pixel",
+            "pass": true
+          }
+        ],
+        "turns": [
+          {
+            "ok": true,
+            "totalMs": 5513,
+            "ttftMs": 5460,
+            "inTok": 23088,
+            "outTok": 80,
+            "error": null,
+            "text": "13"
+          },
+          {
+            "ok": true,
+            "totalMs": 5410,
+            "ttftMs": 5359,
+            "inTok": 23200,
+            "outTok": 26,
+            "error": null,
+            "text": "26"
+          },
+          {
+            "ok": true,
+            "totalMs": 5494,
+            "ttftMs": 5443,
+            "inTok": 23315,
+            "outTok": 49,
+            "error": null,
+            "text": "35"
+          },
+          {
+            "ok": true,
+            "totalMs": 8646,
+            "ttftMs": 8594,
+            "inTok": 23431,
+            "outTok": 35,
+            "error": null,
+            "text": "OK"
+          },
+          {
+            "ok": true,
+            "totalMs": 4242,
+            "ttftMs": 4189,
+            "inTok": 23546,
+            "outTok": 54,
+            "error": null,
+            "text": "30"
+          },
+          {
+            "ok": true,
+            "totalMs": 8720,
+            "ttftMs": 8663,
+            "inTok": 23659,
+            "outTok": 53,
+            "error": null,
+            "text": "30"
+          },
+          {
+            "ok": true,
+            "totalMs": 4183,
+            "ttftMs": 4126,
+            "inTok": 23774,
+            "outTok": 55,
+            "error": null,
+            "text": "Pixel"
+          }
+        ]
+      },
+      {
+        "id": "mem-zh-en-mix",
+        "correct": true,
+        "checks": [
+          {
+            "turn": 3,
+            "re": "苍穹-7",
+            "text": "苍穹-7",
+            "pass": true
+          },
+          {
+            "turn": 4,
+            "re": "SKY-7",
+            "text": "SKY-7",
+            "pass": true
+          }
+        ],
+        "turns": [
+          {
+            "ok": true,
+            "totalMs": 12696,
+            "ttftMs": 12641,
+            "inTok": 46558,
+            "outTok": 369,
+            "error": null,
+            "text": "OK"
+          },
+          {
+            "ok": true,
+            "totalMs": 11803,
+            "ttftMs": 11753,
+            "inTok": 46810,
+            "outTok": 208,
+            "error": null,
+            "text": "OK"
+          },
+          {
+            "ok": true,
+            "totalMs": 5476,
+            "ttftMs": 5423,
+            "inTok": 23516,
+            "outTok": 67,
+            "error": null,
+            "text": "OK"
+          },
+          {
+            "ok": true,
+            "totalMs": 9428,
+            "ttftMs": 9374,
+            "inTok": 47380,
+            "outTok": 136,
+            "error": null,
+            "text": "苍穹-7"
+          },
+          {
+            "ok": true,
+            "totalMs": 4560,
+            "ttftMs": 4512,
+            "inTok": 23808,
+            "outTok": 36,
+            "error": null,
+            "text": "SKY-7"
+          }
+        ]
+      }
+    ]
+  },
+  "humaneval_hard": {
+    "A": [
+      {
+        "id": "HumanEval/69",
+        "passed": true,
+        "err": null,
+        "ok": true,
+        "totalMs": 13592,
+        "ttftMs": 13541,
+        "inTok": 23283,
+        "outTok": 998,
+        "error": null
+      },
+      {
+        "id": "HumanEval/141",
+        "passed": true,
+        "err": null,
+        "ok": true,
+        "totalMs": 10703,
+        "ttftMs": 10653,
+        "inTok": 23346,
+        "outTok": 760,
+        "error": null
+      },
+      {
+        "id": "HumanEval/92",
+        "passed": true,
+        "err": null,
+        "ok": true,
+        "totalMs": 14057,
+        "ttftMs": 14001,
+        "inTok": 23268,
+        "outTok": 1155,
+        "error": null
+      },
+      {
+        "id": "HumanEval/140",
+        "passed": false,
+        "err": "AssertionError: This prints if this assert fails 3 (good for debugging!)",
+        "ok": true,
+        "totalMs": 11274,
+        "ttftMs": 11220,
+        "inTok": 23246,
+        "outTok": 869,
+        "error": null
+      },
+      {
+        "id": "HumanEval/130",
+        "passed": true,
+        "err": null,
+        "ok": true,
+        "totalMs": 36269,
+        "ttftMs": 36211,
+        "inTok": 23361,
+        "outTok": 3587,
+        "error": null
+      },
+      {
+        "id": "HumanEval/105",
+        "passed": true,
+        "err": null,
+        "ok": true,
+        "totalMs": 19880,
+        "ttftMs": 19823,
+        "inTok": 23421,
+        "outTok": 1749,
+        "error": null
+      },
+      {
+        "id": "HumanEval/151",
+        "passed": true,
+        "err": null,
+        "ok": true,
+        "totalMs": 16911,
+        "ttftMs": 16851,
+        "inTok": 23266,
+        "outTok": 1342,
+        "error": null
+      },
+      {
+        "id": "HumanEval/78",
+        "passed": true,
+        "err": null,
+        "ok": true,
+        "totalMs": 19175,
+        "ttftMs": 19113,
+        "inTok": 23452,
+        "outTok": 768,
+        "error": null
+      },
+      {
+        "id": "HumanEval/93",
+        "passed": true,
+        "err": null,
+        "ok": true,
+        "totalMs": 28066,
+        "ttftMs": 28008,
+        "inTok": 23240,
+        "outTok": 2432,
+        "error": null
+      },
+      {
+        "id": "HumanEval/107",
+        "passed": true,
+        "err": null,
+        "ok": true,
+        "totalMs": 15244,
+        "ttftMs": 15180,
+        "inTok": 23351,
+        "outTok": 1257,
+        "error": null
+      }
+    ]
+  },
+  "format": {
+    "A": [
+      {
+        "id": "fmt-nested-json",
+        "correct": true,
+        "note": "",
+        "ok": true,
+        "totalMs": 9534,
+        "ttftMs": 9463,
+        "inTok": 23142,
+        "outTok": 115,
+        "error": null,
+        "text": "{\"meta\":{\"lang\":\"zh\",\"n\":2},\"items\":[{\"id\":1,\"tag\":\"甲\"},{\"id\":2,\"tag\":\"乙\"}]}"
+      },
+      {
+        "id": "fmt-csv-header",
+        "correct": true,
+        "note": "",
+        "ok": true,
+        "totalMs": 5814,
+        "ttftMs": 5730,
+        "inTok": 23101,
+        "outTok": 72,
+        "error": null,
+        "text": "name,score\nAlice,9\nBob,7"
+      },
+      {
+        "id": "fmt-bilingual-block",
+        "correct": true,
+        "note": "",
+        "ok": true,
+        "totalMs": 5608,
+        "ttftMs": 5543,
+        "inTok": 23099,
+        "outTok": 57,
+        "error": null,
+        "text": "ZH: 你好世界\nEN: Hello World"
+      },
+      {
+        "id": "fmt-ordered-list",
+        "correct": true,
+        "note": "",
+        "ok": true,
+        "totalMs": 5728,
+        "ttftMs": 5672,
+        "inTok": 23108,
+        "outTok": 54,
+        "error": null,
+        "text": "1. alpha\n2. beta\n3. gamma"
+      },
+      {
+        "id": "fmt-xml-mini",
+        "correct": true,
+        "note": "",
+        "ok": true,
+        "totalMs": 22035,
+        "ttftMs": 21977,
+        "inTok": 94555,
+        "outTok": 943,
+        "error": null,
+        "text": "[jiuwen-file:result.xml]\nThe XML file has been created and sent to you. Here is the content you requested:\n<root><a>1</a><b>2</b></root>"
+      }
+    ]
+  },
+  "constraint": {
+    "A": [
+      {
+        "id": "con-sorted-unique",
+        "correct": true,
+        "ok": true,
+        "totalMs": 7113,
+        "ttftMs": 7050,
+        "inTok": 23112,
+        "outTok": 222,
+        "error": null,
+        "text": "[2,4,7,9]"
+      },
+      {
+        "id": "con-passage-count",
+        "correct": true,
+        "ok": true,
+        "totalMs": 7339,
+        "ttftMs": 7292,
+        "inTok": 23206,
+        "outTok": 236,
+        "error": null,
+        "text": "OPEN_HOURS: 09:00-17:30\nWINGS: North, West\nADULT_PRICE: 12"
+      },
+      {
+        "id": "con-no-digit-words",
+        "correct": true,
+        "ok": true,
+        "totalMs": 8621,
+        "ttftMs": 8574,
+        "inTok": 23103,
+        "outTok": 273,
+        "error": null,
+        "text": "Two weeks contain fourteen days."
+      },
+      {
+        "id": "con-triple-rule",
+        "correct": true,
+        "ok": true,
+        "totalMs": 5043,
+        "ttftMs": 4992,
+        "inTok": 23124,
+        "outTok": 129,
+        "error": null,
+        "text": "V-apple C-banana V-orange"
+      },
+      {
+        "id": "con-zh-only-summary",
+        "correct": true,
+        "ok": true,
+        "totalMs": 7883,
+        "ttftMs": 7834,
+        "inTok": 23106,
+        "outTok": 391,
+        "error": null,
+        "text": "它是一种解释型高级语言，在数据科学与自动化领域应用广泛。"
+      }
+    ]
+  },
+  "finishedAt": "2026-10-29T13:05:33.809Z",
+  "score": {
+    "A": {
+      "total": "47/48",
+      "parts": {
+        "gsm_hard": {
+          "n": 20,
+          "pass": 20,
+          "fails": []
+        },
+        "tools": {
+          "n": 5,
+          "pass": 5,
+          "fails": []
+        },
+        "memory": {
+          "n": 3,
+          "pass": 3,
+          "fails": []
+        },
+        "humaneval_hard": {
+          "n": 10,
+          "pass": 9,
+          "fails": [
+            "HumanEval/140"
+          ]
+        },
+        "format": {
+          "n": 5,
+          "pass": 5,
+          "fails": []
+        },
+        "constraint": {
+          "n": 5,
+          "pass": 5,
+          "fails": []
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,99 @@
+{
+  "paths": {
+    "A": {
+      "score": "47/48",
+      "parts": {
+        "gsm_hard": "20/20",
+        "tools": "5/5",
+        "memory": "3/3",
+        "humaneval_hard": "9/10",
+        "format": "5/5",
+        "constraint": "5/5"
+      },
+      "fails": {
+        "humaneval_hard": [
+          "HumanEval/140"
+        ]
+      },
+      "latMed": 9610,
+      "memScenarioMed": 43963
+    },
+    "B": {
+      "score": "47/48",
+      "parts": {
+        "gsm_hard": "20/20",
+        "tools": "5/5",
+        "memory": "3/3",
+        "humaneval_hard": "10/10",
+        "format": "4/5",
+        "constraint": "5/5"
+      },
+      "fails": {
+        "format": [
+          "fmt-csv-header"
+        ]
+      },
+      "latMed": 8665,
+      "memScenarioMed": 31804
+    },
+    "C": {
+      "score": "46/48",
+      "parts": {
+        "gsm_hard": "19/20",
+        "tools": "5/5",
+        "memory": "2/3",
+        "humaneval_hard": "10/10",
+        "format": "5/5",
+        "constraint": "5/5"
+      },
+      "fails": {
+        "gsm_hard": [
+          "gsm8k-hard-854"
+        ],
+        "memory": [
+          "mem-code-distractors"
+        ]
+      },
+      "latMed": 9724,
+      "memScenarioMed": 28869
+    }
+  },
+  "failures": {
+    "A:HumanEval/140": {
+      "suite": "humaneval_hard",
+      "err": "AssertionError: This prints if this assert fails 3 (good for debugging!)"
+    },
+    "B:fmt-csv-header": {
+      "suite": "format",
+      "got": "The file `/tmp/hard-j2krHd/scores.csv` has been created successfully with the exact requested CSV content:\n```\nname,score\nAlice,9\nBob,7\n```"
+    },
+    "C:gsm8k-hard-854": {
+      "suite": "gsm_hard",
+      "got": "96",
+      "expected": "144"
+    },
+    "C:mem-code-distractors": {
+      "suite": "memory",
+      "got": [
+        {
+          "turn": 4,
+          "re": "sapphire-91",
+          "text": "sapphire-91",
+          "pass": true
+        },
+        {
+          "turn": 5,
+          "re": "pear",
+          "text": "梨",
+          "pass": false
+        },
+        {
+          "turn": 6,
+          "re": "B-12",
+          "text": "B-12",
+          "pass": true
+        }
+      ]
+    }
+  }
+}

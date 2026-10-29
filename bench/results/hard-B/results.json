@@ -1,0 +1,885 @@
+{
+  "startedAt": "2026-10-29T13:05:18.804Z",
+  "model": "doubao-seed-2.0-mini",
+  "paths": [
+    "B"
+  ],
+  "suites": [
+    "gsm_hard",
+    "tools",
+    "memory",
+    "humaneval_hard",
+    "format",
+    "constraint"
+  ],
+  "gsm_hard": {
+    "B": [
+      {
+        "id": "gsm8k-hard-1122",
+        "expected": "18",
+        "got": "18",
+        "correct": true,
+        "ok": true,
+        "totalMs": 7056,
+        "ttftMs": 6598,
+        "inTok": 5985,
+        "outTok": 322,
+        "error": null,
+        "tail": "Answer: 18"
+      },
+      {
+        "id": "gsm8k-hard-1102",
+        "expected": "113",
+        "got": "113",
+        "correct": true,
+        "ok": true,
+        "totalMs": 7022,
+        "ttftMs": 5986,
+        "inTok": 5991,
+        "outTok": 297,
+        "error": null,
+        "tail": "Answer: 113"
+      },
+      {
+        "id": "gsm8k-hard-422",
+        "expected": "284",
+        "got": "284",
+        "correct": true,
+        "ok": true,
+        "totalMs": 7420,
+        "ttftMs": 6920,
+        "inTok": 5964,
+        "outTok": 349,
+        "error": null,
+        "tail": "Answer: 284"
+      },
+      {
+        "id": "gsm8k-hard-1109",
+        "expected": "3",
+        "got": "3",
+        "correct": true,
+        "ok": true,
+        "totalMs": 4822,
+        "ttftMs": 3816,
+        "inTok": 234,
+        "outTok": 149,
+        "error": null,
+        "tail": "Answer: 3"
+      },
+      {
+        "id": "gsm8k-hard-1209",
+        "expected": "29",
+        "got": "29",
+        "correct": true,
+        "ok": true,
+        "totalMs": 5753,
+        "ttftMs": 4652,
+        "inTok": 6050,
+        "outTok": 224,
+        "error": null,
+        "tail": "Answer: 29"
+      },
+      {
+        "id": "gsm8k-hard-1156",
+        "expected": "120",
+        "got": "120",
+        "correct": true,
+        "ok": true,
+        "totalMs": 5833,
+        "ttftMs": 5061,
+        "inTok": 5953,
+        "outTok": 251,
+        "error": null,
+        "tail": "Answer: 120"
+      },
+      {
+        "id": "gsm8k-hard-528",
+        "expected": "172",
+        "got": "172",
+        "correct": true,
+        "ok": true,
+        "totalMs": 11938,
+        "ttftMs": 9768,
+        "inTok": 261,
+        "outTok": 873,
+        "error": null,
+        "tail": "Answer: 172"
+      },
+      {
+        "id": "gsm8k-hard-1071",
+        "expected": "251",
+        "got": "251",
+        "correct": true,
+        "ok": true,
+        "totalMs": 18218,
+        "ttftMs": 17135,
+        "inTok": 283,
+        "outTok": 1780,
+        "error": null,
+        "tail": "Answer: 251"
+      },
+      {
+        "id": "gsm8k-hard-522",
+        "expected": "29",
+        "got": "29",
+        "correct": true,
+        "ok": true,
+        "totalMs": 5833,
+        "ttftMs": 4580,
+        "inTok": 296,
+        "outTok": 226,
+        "error": null,
+        "tail": "Answer: 29"
+      },
+      {
+        "id": "gsm8k-hard-709",
+        "expected": "3000",
+        "got": "3000",
+        "correct": true,
+        "ok": true,
+        "totalMs": 5130,
+        "ttftMs": 4600,
+        "inTok": 254,
+        "outTok": 266,
+        "error": null,
+        "tail": "Answer: 3000"
+      },
+      {
+        "id": "gsm8k-hard-44",
+        "expected": "20",
+        "got": "20",
+        "correct": true,
+        "ok": true,
+        "totalMs": 6098,
+        "ttftMs": 5532,
+        "inTok": 277,
+        "outTok": 394,
+        "error": null,
+        "tail": "Answer: 20"
+      },
+      {
+        "id": "gsm8k-hard-76",
+        "expected": "5",
+        "got": "5",
+        "correct": true,
+        "ok": true,
+        "totalMs": 5778,
+        "ttftMs": 4575,
+        "inTok": 286,
+        "outTok": 285,
+        "error": null,
+        "tail": "Answer: 5"
+      },
+      {
+        "id": "gsm8k-hard-844",
+        "expected": "180",
+        "got": "180",
+        "correct": true,
+        "ok": true,
+        "totalMs": 7530,
+        "ttftMs": 6972,
+        "inTok": 249,
+        "outTok": 504,
+        "error": null,
+        "tail": "Answer: 180"
+      },
+      {
+        "id": "gsm8k-hard-971",
+        "expected": "100",
+        "got": "100",
+        "correct": true,
+        "ok": true,
+        "totalMs": 8665,
+        "ttftMs": 7868,
+        "inTok": 249,
+        "outTok": 171,
+        "error": null,
+        "tail": "Answer: 100"
+      },
+      {
+        "id": "gsm8k-hard-66",
+        "expected": "48",
+        "got": "48",
+        "correct": true,
+        "ok": true,
+        "totalMs": 8952,
+        "ttftMs": 8268,
+        "inTok": 258,
+        "outTok": 613,
+        "error": null,
+        "tail": "Answer: 48"
+      },
+      {
+        "id": "gsm8k-hard-1100",
+        "expected": "5",
+        "got": "5",
+        "correct": true,
+        "ok": true,
+        "totalMs": 6547,
+        "ttftMs": 6078,
+        "inTok": 5929,
+        "outTok": 207,
+        "error": null,
+        "tail": "Answer: 5"
+      },
+      {
+        "id": "gsm8k-hard-1144",
+        "expected": "34",
+        "got": "34",
+        "correct": true,
+        "ok": true,
+        "totalMs": 5298,
+        "ttftMs": 4729,
+        "inTok": 253,
+        "outTok": 199,
+        "error": null,
+        "tail": "Answer: 34"
+      },
+      {
+        "id": "gsm8k-hard-827",
+        "expected": "11",
+        "got": "11",
+        "correct": true,
+        "ok": true,
+        "totalMs": 10832,
+        "ttftMs": 10214,
+        "inTok": 285,
+        "outTok": 1017,
+        "error": null,
+        "tail": "Answer: 11"
+      },
+      {
+        "id": "gsm8k-hard-546",
+        "expected": "130",
+        "got": "130",
+        "correct": true,
+        "ok": true,
+        "totalMs": 5731,
+        "ttftMs": 4792,
+        "inTok": 253,
+        "outTok": 304,
+        "error": null,
+        "tail": "Answer: 130"
+      },
+      {
+        "id": "gsm8k-hard-854",
+        "expected": "144",
+        "got": "144",
+        "correct": true,
+        "ok": true,
+        "totalMs": 11460,
+        "ttftMs": 10446,
+        "inTok": 278,
+        "outTok": 1021,
+        "error": null,
+        "tail": "Answer: 144"
+      }
+    ]
+  },
+  "tools": {
+    "B": [
+      {
+        "id": "tool-sum-file",
+        "correct": true,
+        "got": "70",
+        "ok": true,
+        "totalMs": 10331,
+        "ttftMs": 5480,
+        "inTok": 1447,
+        "outTok": 408,
+        "error": null,
+        "text": "70"
+      },
+      {
+        "id": "tool-checksum",
+        "correct": true,
+        "got": "7ce0e5d8abe246799fb14f001d70491c5e330b4f18f146ea0eace0c921ec16de",
+        "ok": true,
+        "totalMs": 12573,
+        "ttftMs": 9548,
+        "inTok": 1452,
+        "outTok": 1014,
+        "error": null,
+        "text": "7ce0e5d8abe246799fb14f001d70491c5e330b4f18f146ea0eace0c921ec16de"
+      },
+      {
+        "id": "tool-pipe",
+        "correct": true,
+        "got": "33",
+        "ok": true,
+        "totalMs": 9384,
+        "ttftMs": 7365,
+        "inTok": 6608,
+        "outTok": 507,
+        "error": null,
+        "text": "33"
+      },
+      {
+        "id": "tool-date-arith",
+        "correct": true,
+        "got": "8767",
+        "ok": true,
+        "totalMs": 8386,
+        "ttftMs": 5340,
+        "inTok": 718,
+        "outTok": 326,
+        "error": null,
+        "text": "8767"
+      },
+      {
+        "id": "tool-json-jq",
+        "correct": true,
+        "got": "17",
+        "ok": true,
+        "totalMs": 11732,
+        "ttftMs": 6560,
+        "inTok": 7267,
+        "outTok": 555,
+        "error": null,
+        "text": "17"
+      }
+    ]
+  },
+  "memory": {
+    "B": [
+      {
+        "id": "mem-code-distractors",
+        "correct": true,
+        "checks": [
+          {
+            "turn": 4,
+            "re": "sapphire-91",
+            "text": "sapphire-91",
+            "pass": true
+          },
+          {
+            "turn": 5,
+            "re": "pear",
+            "text": "pear",
+            "pass": true
+          },
+          {
+            "turn": 6,
+            "re": "B-12",
+            "text": "B-12",
+            "pass": true
+          }
+        ],
+        "turns": [
+          {
+            "ok": true,
+            "totalMs": 4512,
+            "ttftMs": 3872,
+            "inTok": 190,
+            "outTok": 89,
+            "error": null,
+            "text": "OK."
+          },
+          {
+            "ok": true,
+            "totalMs": 3474,
+            "ttftMs": 2981,
+            "inTok": 212,
+            "outTok": 32,
+            "error": null,
+            "text": "OK."
+          },
+          {
+            "ok": true,
+            "totalMs": 3957,
+            "ttftMs": 2975,
+            "inTok": 239,
+            "outTok": 36,
+            "error": null,
+            "text": "OK."
+          },
+          {
+            "ok": true,
+            "totalMs": 4191,
+            "ttftMs": 3790,
+            "inTok": 5952,
+            "outTok": 36,
+            "error": null,
+            "text": "OK."
+          },
+          {
+            "ok": true,
+            "totalMs": 8610,
+            "ttftMs": 8189,
+            "inTok": 291,
+            "outTok": 63,
+            "error": null,
+            "text": "sapphire-91"
+          },
+          {
+            "ok": true,
+            "totalMs": 4510,
+            "ttftMs": 3536,
+            "inTok": 322,
+            "outTok": 51,
+            "error": null,
+            "text": "pear"
+          },
+          {
+            "ok": true,
+            "totalMs": 3277,
+            "ttftMs": 2674,
+            "inTok": 90,
+            "outTok": 5,
+            "error": null,
+            "text": "B-12"
+          }
+        ]
+      },
+      {
+        "id": "mem-numbers-chain",
+        "correct": true,
+        "checks": [
+          {
+            "turn": 0,
+            "re": "\\b13\\b",
+            "text": "13",
+            "pass": true
+          },
+          {
+            "turn": 1,
+            "re": "\\b26\\b",
+            "text": "26",
+            "pass": true
+          },
+          {
+            "turn": 2,
+            "re": "\\b35\\b",
+            "text": "35",
+            "pass": true
+          },
+          {
+            "turn": 4,
+            "re": "\\b30\\b",
+            "text": "30",
+            "pass": true
+          },
+          {
+            "turn": 5,
+            "re": "\\b30\\b",
+            "text": "30",
+            "pass": true
+          },
+          {
+            "turn": 6,
+            "re": "Pixel",
+            "text": "Pixel",
+            "pass": true
+          }
+        ],
+        "turns": [
+          {
+            "ok": true,
+            "totalMs": 5116,
+            "ttftMs": 4667,
+            "inTok": 186,
+            "outTok": 211,
+            "error": null,
+            "text": "13"
+          },
+          {
+            "ok": true,
+            "totalMs": 4840,
+            "ttftMs": 4284,
+            "inTok": 5897,
+            "outTok": 52,
+            "error": null,
+            "text": "26"
+          },
+          {
+            "ok": true,
+            "totalMs": 4582,
+            "ttftMs": 3146,
+            "inTok": 235,
+            "outTok": 47,
+            "error": null,
+            "text": "35"
+          },
+          {
+            "ok": true,
+            "totalMs": 4203,
+            "ttftMs": 3819,
+            "inTok": 5950,
+            "outTok": 34,
+            "error": null,
+            "text": "OK"
+          },
+          {
+            "ok": true,
+            "totalMs": 4904,
+            "ttftMs": 4500,
+            "inTok": 32,
+            "outTok": 68,
+            "error": null,
+            "text": "30"
+          },
+          {
+            "ok": true,
+            "totalMs": 4332,
+            "ttftMs": 3710,
+            "inTok": 6000,
+            "outTok": 50,
+            "error": null,
+            "text": "30"
+          },
+          {
+            "ok": true,
+            "totalMs": 3827,
+            "ttftMs": 3437,
+            "inTok": 6026,
+            "outTok": 2,
+            "error": null,
+            "text": "Pixel"
+          }
+        ]
+      },
+      {
+        "id": "mem-zh-en-mix",
+        "correct": true,
+        "checks": [
+          {
+            "turn": 3,
+            "re": "苍穹-7",
+            "text": "苍穹-7",
+            "pass": true
+          },
+          {
+            "turn": 4,
+            "re": "SKY-7",
+            "text": "SKY-7",
+            "pass": true
+          }
+        ],
+        "turns": [
+          {
+            "ok": true,
+            "totalMs": 5151,
+            "ttftMs": 4504,
+            "inTok": 5879,
+            "outTok": 75,
+            "error": null,
+            "text": "OK"
+          },
+          {
+            "ok": true,
+            "totalMs": 6096,
+            "ttftMs": 3696,
+            "inTok": 514,
+            "outTok": 101,
+            "error": null,
+            "text": "OK"
+          },
+          {
+            "ok": true,
+            "totalMs": 4141,
+            "ttftMs": 4090,
+            "inTok": 5992,
+            "outTok": 30,
+            "error": null,
+            "text": "OK"
+          },
+          {
+            "ok": true,
+            "totalMs": 3895,
+            "ttftMs": 3485,
+            "inTok": 328,
+            "outTok": 51,
+            "error": null,
+            "text": "苍穹-7"
+          },
+          {
+            "ok": true,
+            "totalMs": 4381,
+            "ttftMs": 3969,
+            "inTok": 98,
+            "outTok": 40,
+            "error": null,
+            "text": "SKY-7"
+          }
+        ]
+      }
+    ]
+  },
+  "humaneval_hard": {
+    "B": [
+      {
+        "id": "HumanEval/69",
+        "passed": true,
+        "err": null,
+        "ok": true,
+        "totalMs": 13318,
+        "ttftMs": 12891,
+        "inTok": 373,
+        "outTok": 1339,
+        "error": null
+      },
+      {
+        "id": "HumanEval/141",
+        "passed": true,
+        "err": null,
+        "ok": true,
+        "totalMs": 21056,
+        "ttftMs": 20394,
+        "inTok": 427,
+        "outTok": 1889,
+        "error": null
+      },
+      {
+        "id": "HumanEval/92",
+        "passed": true,
+        "err": null,
+        "ok": true,
+        "totalMs": 13444,
+        "ttftMs": 13025,
+        "inTok": 345,
+        "outTok": 1322,
+        "error": null
+      },
+      {
+        "id": "HumanEval/140",
+        "passed": true,
+        "err": null,
+        "ok": true,
+        "totalMs": 23746,
+        "ttftMs": 22842,
+        "inTok": 321,
+        "outTok": 2302,
+        "error": null
+      },
+      {
+        "id": "HumanEval/130",
+        "passed": true,
+        "err": null,
+        "ok": true,
+        "totalMs": 57581,
+        "ttftMs": 56382,
+        "inTok": 448,
+        "outTok": 6984,
+        "error": null
+      },
+      {
+        "id": "HumanEval/105",
+        "passed": true,
+        "err": null,
+        "ok": true,
+        "totalMs": 15233,
+        "ttftMs": 14379,
+        "inTok": 493,
+        "outTok": 1234,
+        "error": null
+      },
+      {
+        "id": "HumanEval/151",
+        "passed": true,
+        "err": null,
+        "ok": true,
+        "totalMs": 25983,
+        "ttftMs": 25263,
+        "inTok": 351,
+        "outTok": 2605,
+        "error": null
+      },
+      {
+        "id": "HumanEval/78",
+        "passed": true,
+        "err": null,
+        "ok": true,
+        "totalMs": 7999,
+        "ttftMs": 7951,
+        "inTok": 6222,
+        "outTok": 670,
+        "error": null
+      },
+      {
+        "id": "HumanEval/93",
+        "passed": true,
+        "err": null,
+        "ok": true,
+        "totalMs": 38761,
+        "ttftMs": 38197,
+        "inTok": 6009,
+        "outTok": 4031,
+        "error": null
+      },
+      {
+        "id": "HumanEval/107",
+        "passed": true,
+        "err": null,
+        "ok": true,
+        "totalMs": 11178,
+        "ttftMs": 11108,
+        "inTok": 6124,
+        "outTok": 833,
+        "error": null
+      }
+    ]
+  },
+  "format": {
+    "B": [
+      {
+        "id": "fmt-nested-json",
+        "correct": true,
+        "note": "",
+        "ok": true,
+        "totalMs": 4616,
+        "ttftMs": 4113,
+        "inTok": 5921,
+        "outTok": 118,
+        "error": null,
+        "text": "{\"meta\":{\"lang\":\"zh\",\"n\":2},\"items\":[{\"id\":1,\"tag\":\"甲\"},{\"id\":2,\"tag\":\"乙\"}]}"
+      },
+      {
+        "id": "fmt-csv-header",
+        "correct": false,
+        "note": "",
+        "ok": true,
+        "totalMs": 12594,
+        "ttftMs": 4412,
+        "inTok": 1165,
+        "outTok": 562,
+        "error": null,
+        "text": "The file `/tmp/hard-j2krHd/scores.csv` has been created successfully with the exact requested CSV content:\n```\nname,score\nAlice,9\nBob,7\n```"
+      },
+      {
+        "id": "fmt-bilingual-block",
+        "correct": true,
+        "note": "",
+        "ok": true,
+        "totalMs": 4463,
+        "ttftMs": 3792,
+        "inTok": 5885,
+        "outTok": 87,
+        "error": null,
+        "text": "ZH: 你好世界\nEN: Hello World"
+      },
+      {
+        "id": "fmt-ordered-list",
+        "correct": true,
+        "note": "",
+        "ok": true,
+        "totalMs": 4599,
+        "ttftMs": 3908,
+        "inTok": 205,
+        "outTok": 114,
+        "error": null,
+        "text": "1. alpha\n2. beta\n3. gamma"
+      },
+      {
+        "id": "fmt-xml-mini",
+        "correct": true,
+        "note": "",
+        "ok": true,
+        "totalMs": 15588,
+        "ttftMs": 9484,
+        "inTok": 2072,
+        "outTok": 903,
+        "error": null,
+        "text": "The XML content has been successfully written to `/tmp/hard-j2krHd/output.xml` as requested:\n```xml\n<root><a>1</a><b>2</b></root>\n```"
+      }
+    ]
+  },
+  "constraint": {
+    "B": [
+      {
+        "id": "con-no-digit-words",
+        "correct": true,
+        "ok": true,
+        "totalMs": 5266,
+        "ttftMs": 4725,
+        "inTok": 5889,
+        "outTok": 103,
+        "error": null,
+        "text": "There are fourteen days in two weeks."
+      },
+      {
+        "id": "con-sorted-unique",
+        "correct": true,
+        "ok": true,
+        "totalMs": 6623,
+        "ttftMs": 6012,
+        "inTok": 5898,
+        "outTok": 204,
+        "error": null,
+        "text": "[2, 4, 7, 9]"
+      },
+      {
+        "id": "con-passage-count",
+        "correct": true,
+        "ok": true,
+        "totalMs": 10605,
+        "ttftMs": 7830,
+        "inTok": 6599,
+        "outTok": 682,
+        "error": null,
+        "text": "The required output has been created in `/tmp/hard-Ede6f0/output.txt` with the following content:\n```\nOPEN_HOURS: 09:00-17:30\nWINGS: North,West\nADULT_PRICE: 12\n```"
+      },
+      {
+        "id": "con-triple-rule",
+        "correct": true,
+        "ok": true,
+        "totalMs": 5787,
+        "ttftMs": 4983,
+        "inTok": 5910,
+        "outTok": 134,
+        "error": null,
+        "text": "V-apple C-banana V-orange"
+      },
+      {
+        "id": "con-zh-only-summary",
+        "correct": true,
+        "ok": true,
+        "totalMs": 11447,
+        "ttftMs": 10909,
+        "inTok": 203,
+        "outTok": 442,
+        "error": null,
+        "text": "这是一种解释型高级语言，常被应用于数据科学与自动化领域。"
+      }
+    ]
+  },
+  "finishedAt": "2026-10-29T13:05:35.525Z",
+  "score": {
+    "B": {
+      "total": "47/48",
+      "parts": {
+        "gsm_hard": {
+          "n": 20,
+          "pass": 20,
+          "fails": []
+        },
+        "tools": {
+          "n": 5,
+          "pass": 5,
+          "fails": []
+        },
+        "memory": {
+          "n": 3,
+          "pass": 3,
+          "fails": []
+        },
+        "humaneval_hard": {
+          "n": 10,
+          "pass": 10,
+          "fails": []
+        },
+        "format": {
+          "n": 5,
+          "pass": 4,
+          "fails": [
+            "fmt-csv-header"
+          ]
+        },
+        "constraint": {
+          "n": 5,
+          "pass": 5,
+          "fails": []
+        }
+      }
+    }
+  }
+}

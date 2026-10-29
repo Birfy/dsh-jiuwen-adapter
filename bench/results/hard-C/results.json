@@ -1,0 +1,887 @@
+{
+  "startedAt": "2026-10-29T13:05:18.804Z",
+  "model": "doubao-seed-2.0-mini",
+  "paths": [
+    "C"
+  ],
+  "suites": [
+    "gsm_hard",
+    "tools",
+    "memory",
+    "humaneval_hard",
+    "format",
+    "constraint"
+  ],
+  "gsm_hard": {
+    "C": [
+      {
+        "id": "gsm8k-hard-1122",
+        "expected": "18",
+        "got": "18",
+        "correct": true,
+        "ok": true,
+        "totalMs": 9724,
+        "ttftMs": 3967,
+        "inTok": 23201,
+        "outTok": 676,
+        "error": null,
+        "tail": "ers: 120 + 80 = 200 toys.\n5. Production of the fifth worker: 380 - 200 = 180 toys in 10 hours.\n6. Toys per hour for the fifth worker: 180 ÷ 10 = 18.\n\nAnswer: 18"
+      },
+      {
+        "id": "gsm8k-hard-1102",
+        "expected": "113",
+        "got": "113",
+        "correct": true,
+        "ok": true,
+        "totalMs": 9643,
+        "ttftMs": 4466,
+        "inTok": 23207,
+        "outTok": 549,
+        "error": null,
+        "tail": " (20% off $20.00): $20.00 × 0.8 = $16.00\n4. Towels price (10% off $30.00): $30.00 × 0.9 = $27.00\n5. New balance: $70.00 + $16.00 + $27.00 = $113.00\n\nAnswer: 113"
+      },
+      {
+        "id": "gsm8k-hard-422",
+        "expected": "284",
+        "got": "284",
+        "correct": true,
+        "ok": true,
+        "totalMs": 11434,
+        "ttftMs": 5857,
+        "inTok": 23180,
+        "outTok": 670,
+        "error": null,
+        "tail": "8 months at $12/month: 8 × 12 = $96.\n4. Remaining months at $14/month: 24 - 6 - 8 = 10 months, so 10 ×14 = $140.\n5. Total cost: 48 + 96 +140 = 284.\n\nAnswer: 284"
+      },
+      {
+        "id": "gsm8k-hard-1109",
+        "expected": "3",
+        "got": "3",
+        "correct": true,
+        "ok": true,
+        "totalMs": 6317,
+        "ttftMs": 3653,
+        "inTok": 23138,
+        "outTok": 231,
+        "error": null,
+        "tail": "* 2 = 6 inches. The total number of women is 3 + 3 = 6. The average height is total height divided by the number of women: (12 + 6) / 6 = 18 / 6 = 3.\n\nAnswer: 3"
+      },
+      {
+        "id": "gsm8k-hard-1209",
+        "expected": "29",
+        "got": "29",
+        "correct": true,
+        "ok": true,
+        "totalMs": 7402,
+        "ttftMs": 3962,
+        "inTok": 23266,
+        "outTok": 340,
+        "error": null,
+        "tail": "ting (3 days): 3 × 2 = 6 liters\n- High setting (5 days): 5 × 4 = 20 liters\n\nSum these values to get the total water removed: 3 + 6 + 20 = 29 liters.\n\nAnswer: 29"
+      },
+      {
+        "id": "gsm8k-hard-1156",
+        "expected": "120",
+        "got": "120",
+        "correct": true,
+        "ok": true,
+        "totalMs": 5834,
+        "ttftMs": 2966,
+        "inTok": 23169,
+        "outTok": 271,
+        "error": null,
+        "tail": "Answer: 120"
+      },
+      {
+        "id": "gsm8k-hard-528",
+        "expected": "172",
+        "got": "172",
+        "correct": true,
+        "ok": true,
+        "totalMs": 9062,
+        "ttftMs": 4107,
+        "inTok": 23165,
+        "outTok": 593,
+        "error": null,
+        "tail": "0 (Ophelia) + 64 (Jenna) = 84.\n4. Total chairs: 22 (Ophelia) + 66 (Jenna) = 88.\n5. The total number of sofas and chairs they have is 84 + 88 = 172.\n\nAnswer: 172"
+      },
+      {
+        "id": "gsm8k-hard-1071",
+        "expected": "251",
+        "got": "251",
+        "correct": true,
+        "ok": true,
+        "totalMs": 7575,
+        "ttftMs": 3318,
+        "inTok": 23187,
+        "outTok": 461,
+        "error": null,
+        "tail": "125. The number of additional guests beyond 20 is 41 - 20 =21.\n4. Calculate the additional cost: 21 * $6 = $126.\n5. Total cost: $125 + $126 = $251.\n\nAnswer: 251"
+      },
+      {
+        "id": "gsm8k-hard-522",
+        "expected": "29",
+        "got": "29",
+        "correct": true,
+        "ok": true,
+        "totalMs": 11514,
+        "ttftMs": 9046,
+        "inTok": 23200,
+        "outTok": 231,
+        "error": null,
+        "tail": "Answer: 29"
+      },
+      {
+        "id": "gsm8k-hard-709",
+        "expected": "3000",
+        "got": "3000",
+        "correct": true,
+        "ok": true,
+        "totalMs": 17024,
+        "ttftMs": 13910,
+        "inTok": 23158,
+        "outTok": 304,
+        "error": null,
+        "tail": "Answer: 3000"
+      },
+      {
+        "id": "gsm8k-hard-44",
+        "expected": "20",
+        "got": "20",
+        "correct": true,
+        "ok": true,
+        "totalMs": 5178,
+        "ttftMs": 3002,
+        "inTok": 23181,
+        "outTok": 174,
+        "error": null,
+        "tail": "Answer: 20"
+      },
+      {
+        "id": "gsm8k-hard-76",
+        "expected": "5",
+        "got": "5",
+        "correct": true,
+        "ok": true,
+        "totalMs": 20314,
+        "ttftMs": 9410,
+        "inTok": 23190,
+        "outTok": 658,
+        "error": null,
+        "tail": ". Total dog food needed in the first year:\n   180 cups + 370 cups = 550 cups\n\n5. Number of 110-cup bags required:\n   550 cups ÷ 110 cups/bag = 5 bags\n\nAnswer: 5"
+      },
+      {
+        "id": "gsm8k-hard-844",
+        "expected": "180",
+        "got": "180",
+        "correct": true,
+        "ok": true,
+        "totalMs": 8204,
+        "ttftMs": 2120,
+        "inTok": 23153,
+        "outTok": 739,
+        "error": null,
+        "tail": "Answer: 180"
+      },
+      {
+        "id": "gsm8k-hard-971",
+        "expected": "100",
+        "got": "100",
+        "correct": true,
+        "ok": true,
+        "totalMs": 6922,
+        "ttftMs": 4648,
+        "inTok": 23153,
+        "outTok": 211,
+        "error": null,
+        "tail": "ular fence is (length + width) × 2 = (15 + 10) × 2 = 25 × 2 = 50 feet.\n2. Since 2 wood slats are needed for every foot, total slats = 50 × 2 = 100.\n\nAnswer: 100"
+      },
+      {
+        "id": "gsm8k-hard-66",
+        "expected": "48",
+        "got": "48",
+        "correct": true,
+        "ok": true,
+        "totalMs": 7952,
+        "ttftMs": 6024,
+        "inTok": 23162,
+        "outTok": 385,
+        "error": null,
+        "tail": "rs: 8 × 5 = 40 players\n4. Each team has 1 coach → Total coaches: 8 × 1 = 8 coaches\n5. Total people sent: Total players + Total coaches = 40 + 8 = 48\n\nAnswer: 48"
+      },
+      {
+        "id": "gsm8k-hard-1100",
+        "expected": "5",
+        "got": "5",
+        "correct": true,
+        "ok": true,
+        "totalMs": 8420,
+        "ttftMs": 5609,
+        "inTok": 23145,
+        "outTok": 283,
+        "error": null,
+        "tail": "首先计算每天的午餐和休息总时间：\n- 每天午餐时间：30分钟\n- 每天休息时间：2×15分钟=30分钟\n- 每天总耗时：30+30=60分钟=1小时\n\n5天的总耗时：5天×1小时/天=5小时\n\nAnswer: 5"
+      },
+      {
+        "id": "gsm8k-hard-1144",
+        "expected": "34",
+        "got": "34",
+        "correct": true,
+        "ok": true,
+        "totalMs": 5776,
+        "ttftMs": 3220,
+        "inTok": 23157,
+        "outTok": 223,
+        "error": null,
+        "tail": "首先计算原来车上的女人数量：\n\n男女比例为5:9，总份数为5+9=14份，总乘客84人，每份人数为84÷14=6人。\n原来女人数量为9×6=54人。\n\n20个女人下车后，剩下的女人数量为54-20=34人。\n\nAnswer: 34"
+      },
+      {
+        "id": "gsm8k-hard-827",
+        "expected": "11",
+        "got": "11",
+        "correct": true,
+        "ok": true,
+        "totalMs": 12081,
+        "ttftMs": 4295,
+        "inTok": 23189,
+        "outTok": 878,
+        "error": null,
+        "tail": "32 for the book and $3 for shipping, but only gets $24 back.\n   - Total loss = (Book price + Shipping cost) - Refund amount = ($32 + $3) - $24 = $11\n\nAnswer: 11"
+      },
+      {
+        "id": "gsm8k-hard-546",
+        "expected": "130",
+        "got": "130",
+        "correct": true,
+        "ok": true,
+        "totalMs": 6603,
+        "ttftMs": 3104,
+        "inTok": 23157,
+        "outTok": 382,
+        "error": null,
+        "tail": "these two steps, total written is 52 +13 =65 letters.\n4. Then re-writes everything she has already written: another 65 letters.\nTotal: 65 +65 =130.\n\nAnswer: 130"
+      },
+      {
+        "id": "gsm8k-hard-854",
+        "expected": "144",
+        "got": "96",
+        "correct": false,
+        "ok": true,
+        "totalMs": 13942,
+        "ttftMs": 3419,
+        "inTok": 23182,
+        "outTok": 1151,
+        "error": null,
+        "tail": "Answer: 96"
+      }
+    ]
+  },
+  "tools": {
+    "C": [
+      {
+        "id": "tool-sum-file",
+        "correct": true,
+        "got": "70",
+        "ok": true,
+        "totalMs": 20891,
+        "ttftMs": 10972,
+        "inTok": 70594,
+        "outTok": 647,
+        "error": null,
+        "text": "70"
+      },
+      {
+        "id": "tool-checksum",
+        "correct": true,
+        "got": "7ce0e5d8abe246799fb14f001d70491c5e330b4f18f146ea0eace0c921ec16de",
+        "ok": true,
+        "totalMs": 35655,
+        "ttftMs": 4149,
+        "inTok": 72341,
+        "outTok": 1562,
+        "error": null,
+        "text": "7ce0e5d8abe246799fb14f001d70491c5e330b4f18f146ea0eace0c921ec16de"
+      },
+      {
+        "id": "tool-pipe",
+        "correct": true,
+        "got": "33",
+        "ok": true,
+        "totalMs": 13506,
+        "ttftMs": 4582,
+        "inTok": 46703,
+        "outTok": 470,
+        "error": null,
+        "text": "33"
+      },
+      {
+        "id": "tool-date-arith",
+        "correct": true,
+        "got": "8767",
+        "ok": true,
+        "totalMs": 9925,
+        "ttftMs": 3855,
+        "inTok": 46515,
+        "outTok": 309,
+        "error": null,
+        "text": "8767"
+      },
+      {
+        "id": "tool-json-jq",
+        "correct": true,
+        "got": "17",
+        "ok": true,
+        "totalMs": 17980,
+        "ttftMs": 2233,
+        "inTok": 95348,
+        "outTok": 1036,
+        "error": null,
+        "text": "17"
+      }
+    ]
+  },
+  "memory": {
+    "C": [
+      {
+        "id": "mem-code-distractors",
+        "correct": false,
+        "checks": [
+          {
+            "turn": 4,
+            "re": "sapphire-91",
+            "text": "sapphire-91",
+            "pass": true
+          },
+          {
+            "turn": 5,
+            "re": "pear",
+            "text": "梨",
+            "pass": false
+          },
+          {
+            "turn": 6,
+            "re": "B-12",
+            "text": "B-12",
+            "pass": true
+          }
+        ],
+        "turns": [
+          {
+            "ok": true,
+            "totalMs": 8928,
+            "ttftMs": 4336,
+            "inTok": 46360,
+            "outTok": 223,
+            "error": null,
+            "text": "OK"
+          },
+          {
+            "ok": true,
+            "totalMs": 9048,
+            "ttftMs": 2913,
+            "inTok": 46938,
+            "outTok": 314,
+            "error": null,
+            "text": "OK"
+          },
+          {
+            "ok": true,
+            "totalMs": 9259,
+            "ttftMs": 5124,
+            "inTok": 47261,
+            "outTok": 171,
+            "error": null,
+            "text": "OK"
+          },
+          {
+            "ok": true,
+            "totalMs": 10461,
+            "ttftMs": 4807,
+            "inTok": 47873,
+            "outTok": 365,
+            "error": null,
+            "text": "OK"
+          },
+          {
+            "ok": true,
+            "totalMs": 4521,
+            "ttftMs": 3253,
+            "inTok": 23971,
+            "outTok": 53,
+            "error": null,
+            "text": "sapphire-91"
+          },
+          {
+            "ok": true,
+            "totalMs": 3920,
+            "ttftMs": 2518,
+            "inTok": 24091,
+            "outTok": 54,
+            "error": null,
+            "text": "梨"
+          },
+          {
+            "ok": true,
+            "totalMs": 10786,
+            "ttftMs": 9613,
+            "inTok": 24203,
+            "outTok": 52,
+            "error": null,
+            "text": "B-12"
+          }
+        ]
+      },
+      {
+        "id": "mem-numbers-chain",
+        "correct": true,
+        "checks": [
+          {
+            "turn": 0,
+            "re": "\\b13\\b",
+            "text": "13",
+            "pass": true
+          },
+          {
+            "turn": 1,
+            "re": "\\b26\\b",
+            "text": "26",
+            "pass": true
+          },
+          {
+            "turn": 2,
+            "re": "\\b35\\b",
+            "text": "35",
+            "pass": true
+          },
+          {
+            "turn": 4,
+            "re": "\\b30\\b",
+            "text": "30",
+            "pass": true
+          },
+          {
+            "turn": 5,
+            "re": "\\b30\\b",
+            "text": "30",
+            "pass": true
+          },
+          {
+            "turn": 6,
+            "re": "Pixel",
+            "text": "Pixel",
+            "pass": true
+          }
+        ],
+        "turns": [
+          {
+            "ok": true,
+            "totalMs": 4075,
+            "ttftMs": 2693,
+            "inTok": 23088,
+            "outTok": 69,
+            "error": null,
+            "text": "13"
+          },
+          {
+            "ok": true,
+            "totalMs": 5137,
+            "ttftMs": 4071,
+            "inTok": 23200,
+            "outTok": 31,
+            "error": null,
+            "text": "26"
+          },
+          {
+            "ok": true,
+            "totalMs": 3236,
+            "ttftMs": 2144,
+            "inTok": 23315,
+            "outTok": 42,
+            "error": null,
+            "text": "35"
+          },
+          {
+            "ok": true,
+            "totalMs": 3325,
+            "ttftMs": 2113,
+            "inTok": 23431,
+            "outTok": 38,
+            "error": null,
+            "text": "OK"
+          },
+          {
+            "ok": true,
+            "totalMs": 3478,
+            "ttftMs": 2448,
+            "inTok": 23546,
+            "outTok": 30,
+            "error": null,
+            "text": "30"
+          },
+          {
+            "ok": true,
+            "totalMs": 3703,
+            "ttftMs": 2444,
+            "inTok": 23659,
+            "outTok": 59,
+            "error": null,
+            "text": "30"
+          },
+          {
+            "ok": true,
+            "totalMs": 4265,
+            "ttftMs": 3010,
+            "inTok": 23774,
+            "outTok": 40,
+            "error": null,
+            "text": "Pixel"
+          }
+        ]
+      },
+      {
+        "id": "mem-zh-en-mix",
+        "correct": true,
+        "checks": [
+          {
+            "turn": 3,
+            "re": "苍穹-7",
+            "text": "苍穹-7",
+            "pass": true
+          },
+          {
+            "turn": 4,
+            "re": "SKY-7",
+            "text": "SKY-7",
+            "pass": true
+          }
+        ],
+        "turns": [
+          {
+            "ok": true,
+            "totalMs": 8732,
+            "ttftMs": 2945,
+            "inTok": 46520,
+            "outTok": 356,
+            "error": null,
+            "text": "OK。"
+          },
+          {
+            "ok": true,
+            "totalMs": 7468,
+            "ttftMs": 2463,
+            "inTok": 46879,
+            "outTok": 267,
+            "error": null,
+            "text": "OK。"
+          },
+          {
+            "ok": true,
+            "totalMs": 4353,
+            "ttftMs": 2744,
+            "inTok": 23530,
+            "outTok": 53,
+            "error": null,
+            "text": "OK。"
+          },
+          {
+            "ok": true,
+            "totalMs": 4116,
+            "ttftMs": 2966,
+            "inTok": 23645,
+            "outTok": 51,
+            "error": null,
+            "text": "苍穹-7"
+          },
+          {
+            "ok": true,
+            "totalMs": 4200,
+            "ttftMs": 2620,
+            "inTok": 23760,
+            "outTok": 67,
+            "error": null,
+            "text": "SKY-7"
+          }
+        ]
+      }
+    ]
+  },
+  "humaneval_hard": {
+    "C": [
+      {
+        "id": "HumanEval/69",
+        "passed": true,
+        "err": null,
+        "ok": true,
+        "totalMs": 11664,
+        "ttftMs": 3007,
+        "inTok": 23283,
+        "outTok": 1072,
+        "error": null
+      },
+      {
+        "id": "HumanEval/141",
+        "passed": true,
+        "err": null,
+        "ok": true,
+        "totalMs": 22410,
+        "ttftMs": 12610,
+        "inTok": 23346,
+        "outTok": 1151,
+        "error": null
+      },
+      {
+        "id": "HumanEval/92",
+        "passed": true,
+        "err": null,
+        "ok": true,
+        "totalMs": 25202,
+        "ttftMs": 9344,
+        "inTok": 23268,
+        "outTok": 2006,
+        "error": null
+      },
+      {
+        "id": "HumanEval/140",
+        "passed": true,
+        "err": null,
+        "ok": true,
+        "totalMs": 16491,
+        "ttftMs": 3739,
+        "inTok": 23246,
+        "outTok": 1267,
+        "error": null
+      },
+      {
+        "id": "HumanEval/130",
+        "passed": true,
+        "err": null,
+        "ok": true,
+        "totalMs": 35157,
+        "ttftMs": 3088,
+        "inTok": 23361,
+        "outTok": 3454,
+        "error": null
+      },
+      {
+        "id": "HumanEval/105",
+        "passed": true,
+        "err": null,
+        "ok": true,
+        "totalMs": 12498,
+        "ttftMs": 4279,
+        "inTok": 23421,
+        "outTok": 1091,
+        "error": null
+      },
+      {
+        "id": "HumanEval/151",
+        "passed": true,
+        "err": null,
+        "ok": true,
+        "totalMs": 11712,
+        "ttftMs": 3202,
+        "inTok": 23266,
+        "outTok": 921,
+        "error": null
+      },
+      {
+        "id": "HumanEval/78",
+        "passed": true,
+        "err": null,
+        "ok": true,
+        "totalMs": 9923,
+        "ttftMs": 2749,
+        "inTok": 23452,
+        "outTok": 829,
+        "error": null
+      },
+      {
+        "id": "HumanEval/93",
+        "passed": true,
+        "err": null,
+        "ok": true,
+        "totalMs": 55479,
+        "ttftMs": 3732,
+        "inTok": 23240,
+        "outTok": 6481,
+        "error": null
+      },
+      {
+        "id": "HumanEval/107",
+        "passed": true,
+        "err": null,
+        "ok": true,
+        "totalMs": 12567,
+        "ttftMs": 2085,
+        "inTok": 23351,
+        "outTok": 1293,
+        "error": null
+      }
+    ]
+  },
+  "format": {
+    "C": [
+      {
+        "id": "fmt-nested-json",
+        "correct": true,
+        "note": "",
+        "ok": true,
+        "totalMs": 6011,
+        "ttftMs": 4412,
+        "inTok": 23142,
+        "outTok": 127,
+        "error": null,
+        "text": "{\"meta\":{\"lang\":\"zh\",\"n\":2},\"items\":[{\"id\":1,\"tag\":\"甲\"},{\"id\":2,\"tag\":\"乙\"}]}"
+      },
+      {
+        "id": "fmt-csv-header",
+        "correct": true,
+        "note": "",
+        "ok": true,
+        "totalMs": 7341,
+        "ttftMs": 4338,
+        "inTok": 23101,
+        "outTok": 82,
+        "error": null,
+        "text": "name,score\nAlice,9\nBob,7"
+      },
+      {
+        "id": "fmt-bilingual-block",
+        "correct": true,
+        "note": "",
+        "ok": true,
+        "totalMs": 5869,
+        "ttftMs": 4406,
+        "inTok": 23099,
+        "outTok": 75,
+        "error": null,
+        "text": "ZH: 你好世界\nEN: Hello World"
+      },
+      {
+        "id": "fmt-ordered-list",
+        "correct": true,
+        "note": "",
+        "ok": true,
+        "totalMs": 13031,
+        "ttftMs": 11661,
+        "inTok": 23108,
+        "outTok": 110,
+        "error": null,
+        "text": "1. alpha\n2. beta\n3. gamma"
+      },
+      {
+        "id": "fmt-xml-mini",
+        "correct": true,
+        "note": "",
+        "ok": true,
+        "totalMs": 5597,
+        "ttftMs": 4048,
+        "inTok": 23116,
+        "outTok": 81,
+        "error": null,
+        "text": "<root><a>1</a><b>2</b></root>"
+      }
+    ]
+  },
+  "constraint": {
+    "C": [
+      {
+        "id": "con-sorted-unique",
+        "correct": true,
+        "ok": true,
+        "totalMs": 5152,
+        "ttftMs": 3347,
+        "inTok": 23112,
+        "outTok": 132,
+        "error": null,
+        "text": "[2,4,7,9]"
+      },
+      {
+        "id": "con-no-digit-words",
+        "correct": true,
+        "ok": true,
+        "totalMs": 6294,
+        "ttftMs": 4793,
+        "inTok": 23103,
+        "outTok": 108,
+        "error": null,
+        "text": "There are fourteen days in two weeks."
+      },
+      {
+        "id": "con-passage-count",
+        "correct": true,
+        "ok": true,
+        "totalMs": 7836,
+        "ttftMs": 5628,
+        "inTok": 23206,
+        "outTok": 189,
+        "error": null,
+        "text": "OPEN_HOURS: 09:00-17:30\nWINGS: North, West\nADULT_PRICE: 12"
+      },
+      {
+        "id": "con-triple-rule",
+        "correct": true,
+        "ok": true,
+        "totalMs": 5185,
+        "ttftMs": 3361,
+        "inTok": 23124,
+        "outTok": 120,
+        "error": null,
+        "text": "V-apple C-banana V-orange"
+      },
+      {
+        "id": "con-zh-only-summary",
+        "correct": true,
+        "ok": true,
+        "totalMs": 6877,
+        "ttftMs": 2398,
+        "inTok": 23106,
+        "outTok": 445,
+        "error": null,
+        "text": "蟒语言是一种解释型高级编程语言，它常被用于数据科学与自动化领域。"
+      }
+    ]
+  },
+  "finishedAt": "2026-10-29T13:05:30.864Z",
+  "score": {
+    "C": {
+      "total": "46/48",
+      "parts": {
+        "gsm_hard": {
+          "n": 20,
+          "pass": 19,
+          "fails": [
+            "gsm8k-hard-854"
+          ]
+        },
+        "tools": {
+          "n": 5,
+          "pass": 5,
+          "fails": []
+        },
+        "memory": {
+          "n": 3,
+          "pass": 2,
+          "fails": [
+            "mem-code-distractors"
+          ]
+        },
+        "humaneval_hard": {
+          "n": 10,
+          "pass": 10,
+          "fails": []
+        },
+        "format": {
+          "n": 5,
+          "pass": 5,
+          "fails": []
+        },
+        "constraint": {
+          "n": 5,
+          "pass": 5,
+          "fails": []
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "finishedAt": "2026-10-29T13:05:35.525Z",
+  "score": {
+    "B": {
+      "total": "47/48",
+      "parts": {
+        "gsm_hard": {
+          "n": 20,
+          "pass": 20,
+          "fails": []
+        },
+        "tools": {
+          "n": 5,
+          "pass": 5,
+          "fails": []
+        },
+        "memory": {
+          "n": 3,
+          "pass": 3,
+          "fails": []
+        },
+        "humaneval_hard": {
+          "n": 10,
+          "pass": 10,
+          "fails": []
+        },
+        "format": {
+          "n": 5,
+          "pass": 4,
+          "fails": [
+            "fmt-csv-header"
+          ]
+        },
+        "constraint": {
+          "n": 5,
+          "pass": 5,
+          "fails": []
+        }
+      }
+    }
+  },
+  "model": "doubao-seed-2.0-mini"
+}

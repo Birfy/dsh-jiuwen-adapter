@@ -36,7 +36,8 @@
     "smoke:cordis": "node scripts/cordis-load-smoke.mjs",
     "smoke:live": "node scripts/live-gateway-smoke.mjs",
     "bare-dsh": "bash scripts/bare-dsh.sh",
-    "bench": "node scripts/bench.mjs"
+    "bench": "node scripts/bench.mjs",
+    "bench:hard": "node scripts/bench-hard.mjs"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "*",
