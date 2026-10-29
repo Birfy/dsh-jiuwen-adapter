@@ -21,3 +21,4 @@ examples/live-gateway/
 .browser/
 .browser-profiles/
 .playwright-mcp/
+examples/
