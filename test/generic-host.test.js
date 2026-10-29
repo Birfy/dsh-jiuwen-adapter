@@ -1,5 +1,5 @@
 /**
- * Generic usage proof: a minimal NON-FlyBot host implementing only the standard
+ * Generic usage proof: a minimal host implementing only the standard
  * Cordis `llm` service surface (registerAdapter/listModels/stream) consumes the
  * `jiuwen` provider via plugin.apply(). No dsh-llm required.
  */

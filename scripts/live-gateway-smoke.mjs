@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Live smoke against a real JiuwenSwarm gateway with a minimal generic host
- * (no DSH/FlyBot). Skips (exit 0) if the gateway is not reachable.
+ * (no dsh required). Skips (exit 0) if the gateway is not reachable.
  *   JIUWEN_GATEWAY_URL (default ws://127.0.0.1:19000/ws), auth via JIUWEN_* env.
  * Covers: plain chat, multi-turn continuity, Jiuwen-owned tool use (structured events),
  * usage, processing_status filtering, cancel → chat.interrupt, E2A RPCs.

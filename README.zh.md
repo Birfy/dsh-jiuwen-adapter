@@ -1,28 +1,52 @@
 # @dsh-jiuwen/adapter
 
-**通用 Cordis LLM provider：把 `ctx.llm` 上的 `jiuwen` provider 路由到 JiuwenSwarm。宿主（DSH、FlyBot 或任意 Cordis 应用）= 插件 ABI/壳；JiuwenSwarm = Agent 脑。**
+**通用 Cordis LLM provider：把 `ctx.llm` 上的 `jiuwen` provider 路由到 JiuwenSwarm。宿主（dsh 或任意 Cordis 应用）= 插件 ABI/壳；JiuwenSwarm = Agent 脑。**
 
 English: [README.md](./README.md) · 架构：[ARCHITECTURE.md](./ARCHITECTURE.md) · 配置：[docs/configuration.md](./docs/configuration.md) · 测试：[docs/testing.md](./docs/testing.md) · 排障/FAQ：[docs/troubleshooting.md](./docs/troubleshooting.md) · 验证记录：[VERIFICATION.md](./VERIFICATION.md)
 
+## 🚀 Quickstart（快速开始）
+
+完整、逐条实测过的步骤（Mac + Linux、前置依赖、模型配置、停止/重启、常见错误）见 **[docs/quickstart.md](./docs/quickstart.md)**。最短路径：
+
+```bash
+# 1. 安装并启动 JiuwenSwarm（Python 3.11–3.14）
+uv venv ~/jiuwenswarm-venv --python 3.13 && source ~/jiuwenswarm-venv/bin/activate
+uv pip install workswarm && jiuwenswarm-init
+$EDITOR ~/.jiuwenswarm/config/.env        # 填 API_BASE / API_KEY / MODEL_NAME / MODEL_PROVIDER=OpenAI / ENDPOINT_PROFILE
+jiuwenswarm-start app                      # Gateway：ws://127.0.0.1:19000/ws（检查：ss -ltn | grep 19000）
+
+# 2. 安装 dsh（Node ≥ 22，dsh ≥ 0.2）——另开终端
+npm install -g @deepseek-ai/dsh            # 或 macOS：brew install dsh
+
+# 3. 安装本适配器
+git clone https://github.com/Birfy/dsh-jiuwen-adapter.git && cd dsh-jiuwen-adapter
+dsh plugin --profile web add "$PWD" && dsh plugin --profile headless add "$PWD"
+for p in web headless; do printf -- '- id: agent-default-model\n  config:\n    provider: jiuwen\n    model: jiuwen-default\n' > ~/.dsh/profiles/$p/cordis.patch.yml; done
+
+# 4. 开聊
+dsh --profile headless "用一句话介绍你自己，并以 QUICKSTART-OK 结尾"
+dsh --profile web --no-open --port 3291    # 浏览器打开打印出的 http://127.0.0.1:3291/?token=… 地址
+```
+
+停止：dsh / JiuwenSwarm 所在终端 Ctrl-C；重启：重新执行对应命令。连不上 Gateway 时 dsh 报 `TRANSPORT: Jiuwen Gateway WebSocket failed`，先确认 19000 端口在监听。
+
 ## 1. 概览
 
-- 核心只依赖**标准 Cordis `llm` 服务**（`ctx.llm.registerAdapter([id], adapter)`）和 **OpenAI 风格**的 messages / tools，不依赖 FlyBot、ds-bot、permissionPresets。
+- 核心只依赖**标准 Cordis `llm` 服务**（`ctx.llm.registerAdapter([id], adapter)`）和 **OpenAI 风格**的 messages / tools。
 - 默认 `mode=gateway`：一次 `stream()` = 一次 Gateway `chat.send`，聊天循环、工具、记忆、会话、模型全部在 JiuwenSwarm 执行，增量文本流式回传。
 - `mode=openai`：OpenAI 兼容接口，仅用于诊断；配合 `allowDshAgentLoop` 可让宿主自己执行工具。
-- FlyBot 专用逻辑隔离在可选模块 `src/compat/flybot.js`。
 
 ## 2. 架构
 
 ```mermaid
 flowchart LR
-  subgraph Host["任意 Cordis 宿主 (DSH / FlyBot / 自定义)"]
+  subgraph Host["任意 Cordis 宿主 (dsh / 自定义)"]
     P["你的插件<br/>inject: ['llm']"] -->|ctx.llm.stream| L["Cordis llm 服务"]
   end
   L -->|provider=jiuwen| A["@dsh-jiuwen/adapter"]
   A -->|"WS chat.send / unary RPC"| G["JiuwenSwarm Gateway :19000"]
   A -.->|"mode=openai (诊断)"| O["OpenAI 兼容 :18080/v1"]
   G --> B["Jiuwen Agent / Swarm<br/>工具·记忆·会话·模型"]
-  C["src/compat/flybot.js<br/>(可选)"] -.-> A
 ```
 
 ## 3. 安装
@@ -72,7 +96,6 @@ dsh plugin --profile web add $PWD/dsh-jiuwen-adapter
 | `allowDshAgentLoop` | `JIUWEN_ALLOW_DSH_AGENT_LOOP=1` | `false` |
 | `exposeJiuwenTools` | `JIUWEN_EXPOSE_TOOLS=1` | `false` |
 | `surfaceGatewayToolEvents` | — | `true` |
-| `compat` | `JIUWEN_COMPAT` | `auto`（`flybot`/`none`） |
 | `llmAdapterModule` | `JIUWEN_LLM_ADAPTER_MODULE` | 空 |
 | `provider`/`displayName`/`models`/`defaultModel` | — | `jiuwen`/`JiuwenSwarm`/两个默认模型/首个 |
 
@@ -89,7 +112,7 @@ import * as jiuwen from '@dsh-jiuwen/adapter'
 
 const ctx = new Context()
 await ctx.plugin(LlmRuntime)                 // 或你自己的 llm 服务（需 registerAdapter）
-await ctx.plugin(jiuwen, { compat: 'none', gatewayURL: 'ws://127.0.0.1:19000/ws' })
+await ctx.plugin(jiuwen, { gatewayURL: 'ws://127.0.0.1:19000/ws' })
 ```
 
 ### 普通对话 + 流式
@@ -142,13 +165,6 @@ await jw.gateway.chatCancel(sessionId)
 - **会话**：宿主 `sessionId` → 稳定 Jiuwen `session_id`（`dsh-<hex>`，记录轮数），持久化到 `mappingPath`；第二轮起只发新消息；历史与记忆在 Jiuwen。未传 sessionId 时归为 `anonymous`。
 - **模型**：`model` 作为 `model_name` 转发；`listModels` 返回配置中的目录。
 
-## 8. 可选 FlyBot 兼容
-
-`src/compat/flybot.js` 只提供 FlyBot monorepo 内 `dsh-llm`/cordis 的解析路径。
-- `compat: auto`（默认）：检测到 `$FLYBOT_ROOT`（默认 `/workspace/FlyBot`）才启用；
-- `compat: flybot` / `JIUWEN_COMPAT=flybot`：强制启用；`compat: none`：关闭。
-- 原有 `cordis.patch.yml`（`llm-jiuwen`、`jiuwen-default`）与 `agent-default-model` 配置保持不变；`npm run verify:flybot` 验证。
-
 ## 8.5 Gateway 进阶能力（主力模式）
 
 完整能力清单见 [docs/gateway.md](./docs/gateway.md)。要点：
@@ -170,7 +186,7 @@ for await (const c of ctx.llm.stream({ provider: 'jiuwen', model: 'jiuwen-swarm'
 })) { if (c.type === 'reasoning-delta') process.stderr.write(c.text); if (c.type === 'text-delta') process.stdout.write(c.text) }
 ```
 
-## 8.6 在裸 dsh 上运行（无 FlyBot）
+## 8.6 dsh 实测
 
 `BARE=$HOME/bare-dsh npm run bare-dsh` 一键安装 npm 版 dsh 并配置 headless/web profile；之后 `dsh --profile headless "…"` 或 `dsh --profile web --no-open --port 3291`。实测记录与 UX 观察见 [docs/bare-dsh.md](./docs/bare-dsh.md)。
 
@@ -182,7 +198,6 @@ npm run smoke         # mock openai + gateway
 npm run smoke:cordis  # 真实 Cordis Context 加载
 npm run smoke:live    # 真实 gateway :19000（13 项），不在线则 SKIP
 npm run bare-dsh      # 裸 dsh 安装/配置
-npm run verify:flybot # 可选 FlyBot 兼容
 ```
 详见 [docs/testing.md](./docs/testing.md)。
 
@@ -209,12 +224,11 @@ npm run verify:flybot # 可选 FlyBot 兼容
 | `src/session-store.js` | 会话映射 |
 | `src/stream-emit.js` | StreamChunk 生成 |
 | `src/e2a-methods.js` | E2A 方法/事件表 |
-| `src/compat/flybot.js` | 可选 FlyBot 兼容 |
 
 ## 当前缺口（诚实）
 
 1. **Live chat 需真实模型**：本机 `:19000` 已通过 `npm run smoke:live` 13/13（2026-10-29）；未配置模型时 `chat.send` 返回「还没有配置可用的模型…」。图片需要 Jiuwen 侧视觉模型。
-2. **完整 `dsh web` UI**（`verify:flybot` 中 web boot 一项在本机因 FlyBot 宿主缺 `connection` 服务失败，改造前后一致）：`apps/cli/lib/bin.js` 可用（定向 `tsc`+`tsdown`）；全量 `pnpm run build:lib` 仍因 host/client tsdown 缺 entry（如 `onboarding-config.js`）失败，verify 跳过 UI boot。
+2. **dsh web UI** 已用 npm 版 dsh 0.2.1-rc.2 实测可用（见 docs/bare-dsh.md）。
 3. DSH 附件若仅 device/offloaded、无 data URL / 可读 path，只能发文本占位；Gateway 无法拉取 DSH 私有 attachment store。
 4. Jiuwen 工具/子任务以推理块文本 + 结构化事件呈现；宿主 UI 不会把它们画成原生工具卡片（标准 llm 流语法里工具块意味着宿主执行）。
 6. `ask_user` 默认关闭（`supportsUserInteraction: false`）；开启后问题以文本呈现，回答需调用 `gateway.userAnswer`，宿主 UI 没有原生问答卡。

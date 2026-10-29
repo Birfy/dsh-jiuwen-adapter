@@ -18,11 +18,10 @@
 | 想要旧的 `[jiuwen-tool:…]` 文本 | 新默认放在推理块 | `eventDisplay: markers` |
 | 图片发了但 Jiuwen 说看不到 / 重复输出错误 | Jiuwen 模型不支持视觉 | 在 Jiuwen 配置视觉模型（`.env` / `models.upsert`），或 `providerOptions.jiuwen.modelName` |
 | 排查发送内容 | — | `JIUWEN_TRACE_FILE=/tmp/jw.jsonl` |
-| FlyBot 路径被意外探测 | `compat: auto` 检测到 `/workspace/FlyBot` | `compat: none` 或 `JIUWEN_COMPAT=none` |
 
 ## FAQ
 
-- **一定要 DSH / FlyBot 吗？** 不需要。任何提供 Cordis `llm` 服务（`registerAdapter`）的宿主都行，见 `test/generic-host.test.js`。
+- **一定要 dsh 吗？** 不需要。任何提供 Cordis `llm` 服务（`registerAdapter`）的宿主都行，见 `test/generic-host.test.js`。
 - **工具调用谁执行？** 默认 Jiuwen 执行，宿主只看到文本 marker（`[jiuwen-tool:name]`），finish=`stop`，不会二次执行。
 - **会话如何保持？** 宿主 `sessionId` 映射到稳定的 Jiuwen `session_id`（`dsh-<hex>`），存于 `mappingPath`；历史/记忆在 Jiuwen 侧。
 - **支持图片/文件吗？** 支持 data URL / 可读路径的图片与文件，转为 `media_items`；仅设备端/离线附件只能发文本占位。

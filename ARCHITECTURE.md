@@ -4,7 +4,7 @@
 
 | Concern | Owner | Notes |
 |---------|--------|------|
-| Cordis plugin load / host ABI | **Host** (DSH, FlyBot, any Cordis app) | Only the standard `llm` service is required |
+| Cordis plugin load / host ABI | **Host** (dsh or any Cordis app) | Only the standard `llm` service is required |
 | Chat / agent loop | **JiuwenSwarm** | Gateway `chat.send` runs the turn end-to-end |
 | Tools / MCP / shell-as-agent | **JiuwenSwarm** | Adapter must **not** hand tool-calls back to DSH agent-loop |
 | Memory | **JiuwenSwarm** | Lives in Jiuwen session; DSH only maps ids |
@@ -18,7 +18,7 @@ DSH is **not** the agent brain. Using DSH `agent-loop` + a raw OpenAI LLM shim w
 
 ```mermaid
 flowchart TB
-  subgraph Host["Any Cordis host (DSH / FlyBot / custom)"]
+  subgraph Host["Any Cordis host (dsh / custom)"]
     PL["Consumer plugin (inject: ['llm'])"] --> LLM["Cordis llm service"]
   end
   LLM -->|"registerAdapter(['jiuwen'])"| AD["adapter.js (LlmAdapter)"]
@@ -29,8 +29,7 @@ flowchart TB
   AD -->|openai diag| OT["openai-transport.js"]
   GT -->|"WS chat.send + E2A RPC"| GW["JiuwenSwarm Gateway"]
   OT -->|SSE| OA["OpenAI-compatible server"]
-  CP["compat/flybot.js (optional)"] -.->|"LlmAdapter base paths"| PLG["plugin.js"]
-  PLG --> AD
+  PLG["plugin.js"] --> AD
 ```
 
 ```mermaid
@@ -55,7 +54,7 @@ sequenceDiagram
 ## Product path (`mode=gateway`, default)
 
 ```
-Any Cordis plugins/host  (DSH, FlyBot, custom; ABI, UI, channels)
+Any Cordis plugins/host  (dsh, custom; ABI, UI, channels)
         │  still talk to ctx.llm / sessions as usual
         ▼
  @dsh-jiuwen/adapter  (thin ABI adapter)
@@ -102,9 +101,8 @@ OpenAI-compatible `/v1/chat/completions` against a Jiuwen (or mock) front.
 
 `openjiuwen/harness_providers/dsh` — Jiuwen hosts DSH as a CLI brain. This package is the inverse.
 
-## Generic core vs. optional compat
+## Generic core
 
-- Core (`src/*.js`): depends only on the Cordis `llm` service (`registerAdapter`) and OpenAI-style messages/tools. `LlmAdapter` base from `@deepseek-ai/dsh-llm` if resolvable (or `llmAdapterModule`), else a duck-typed base.
-- `src/compat/flybot.js`: FlyBot-only glue (monorepo paths for dsh-llm/cordis), loaded only when `compat` is `flybot`, or `auto` and a FlyBot checkout is detected. `compat: 'none'` disables it. No FlyBot session shapes, permission presets, or ds-bot interfaces are used by the core.
+- `src/*.js` depends only on the Cordis `llm` service (`registerAdapter`) and OpenAI-style messages/tools. `LlmAdapter` base: `llmAdapterModule` → `@deepseek-ai/dsh-llm` → global dsh installs → built-in duck-typed base.
 
 Gateway capability inventory and mapping: [docs/gateway.md](./docs/gateway.md). Bare dsh field report: [docs/bare-dsh.md](./docs/bare-dsh.md).

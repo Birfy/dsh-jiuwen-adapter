@@ -4,10 +4,9 @@
 |---|---|---|
 | `npm test` | 单元 + 通用宿主 + gateway 特性（35 项）。`generic-host.test.js`：plain chat、流式、gateway 工具、openai `tool_calls`；`gateway-features.test.js`：推理块/结构化事件/usage/processing_status 过滤/markers 兼容/会话连续性/取消→chat.interrupt/agent·mode·skills·model 选择/多模态 base64Data/attachments 服务/ask_user/本地标题/runtime context 过滤/扩展 RPC | 仅 Node ≥ 22 |
 | `npm run smoke` | mock-openai + mock-gateway 端到端，会话映射持久化 | 无 |
-| `npm run smoke:cordis` | 真实 Cordis `Context` + `LlmRuntime` 加载插件并 stream（openai mock + gateway mock，校验 LlmRuntime 流语法不变式） | `@deepseek-ai/cordis`/`dsh-llm`，或 `DSH_CORDIS_PATH`/`DSH_LLM_PATH`，或 FlyBot checkout |
+| `npm run smoke:cordis` | 真实 Cordis `Context` + `LlmRuntime` 加载插件并 stream（openai mock + gateway mock，校验 LlmRuntime 流语法不变式） | 全局 npm dsh 安装（或 `DSH_NODE_MODULES` / `DSH_LLM_PATH` / `DSH_CORDIS_PATH`） |
 | `npm run smoke:live` | 通用最小宿主连真实 Gateway（默认 `:19000`，不在线则 `SKIP`）：单轮、多轮记忆、工具调用结构化事件、usage、processing_status 不泄漏、取消、session/skills/team/models RPC（13 项） | 运行中的 JiuwenSwarm |
-| `npm run verify:flybot` | FlyBot core/social/tree + 适配器装入 DSH profile（可选兼容） | FlyBot + 已构建 DSH CLI |
-| `npm run bare-dsh` | 安装裸 dsh（npm，无 FlyBot）并配置 headless/web profile，见 [bare-dsh.md](./bare-dsh.md) | npm 网络 |
+| `npm run bare-dsh` | 安装 npm 版 dsh 并配置 headless/web profile，见 [bare-dsh.md](./bare-dsh.md) | npm 网络 |
 | `npm run mock:gateway` / `mock:openai` | 单独启动 mock（端口 `JIUWEN_GATEWAY_MOCK_PORT`，默认 19000） | 无 |
 
 证据输出到 `examples/`（已 gitignore）。

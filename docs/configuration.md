@@ -43,10 +43,8 @@ Precedence: **environment variable > Cordis plugin config > default**（`provide
 | `titleMode` | `JIUWEN_TITLE_MODE` | `local` | `purpose: session-title` answered locally (`local`) or by Jiuwen (`jiuwen`) |
 | `traceFile` | `JIUWEN_TRACE_FILE` | — | Append JSONL trace of turns/events |
 | `serviceName` | — | `jiuwenAdapter` | ctx service name for the helper API (unique per instance) |
-| `compat` | `JIUWEN_COMPAT` | `auto` | `auto` / `flybot` / `none` — optional host glue (`src/compat/`) |
 | `llmAdapterModule` | `JIUWEN_LLM_ADAPTER_MODULE` | — | Explicit module/path exporting `LlmAdapter` |
-| — | `FLYBOT_ROOT` | `/workspace/FlyBot` | FlyBot checkout used by compat detection |
-| — | `DSH_LLM_PATH` / `DSH_CORDIS_PATH` | FlyBot paths | Used by `scripts/cordis-load-smoke.mjs` only |
+| — | `DSH_NODE_MODULES` / `DSH_LLM_PATH` / `DSH_CORDIS_PATH` | global npm dsh install | Used by `scripts/cordis-load-smoke.mjs` only |
 
 Auth resolution order (matches Jiuwen web_proxy): query `access_token`/`token` → `Authorization: Bearer` / `X-Token` → Cookie `access_token` → config/env. Node WS sends both query and headers.
 
@@ -62,7 +60,6 @@ Auth resolution order (matches Jiuwen web_proxy): query `access_token`/`token` �
         gatewayURL: ws://127.0.0.1:19000/ws
         userId: alice
         workMode: agent
-        compat: auto
         requestTimeoutMs: 180000
         models:
           - { id: jiuwen-default, name: Jiuwen Default, contextWindow: 128000, maxTokens: 8192 }

@@ -1,4 +1,4 @@
-# 在裸 dsh 上使用（无 FlyBot）/ Bare dsh guide
+# 在 npm 版 dsh 上使用 / dsh field guide
 
 ## 安装（一条命令）
 
@@ -13,8 +13,6 @@ export DSH_HOME=$HOME/bare-dsh/home PATH=$HOME/bare-dsh/prefix/bin:$PATH
 ```yaml
 - id: agent-default-model
   config: { provider: jiuwen, model: jiuwen-default }
-- id: llm-jiuwen
-  config: { compat: none }
 ```
 
 Mac：`brew install dsh` 亦可（需 ≥ 0.2），之后用 `dsh plugin --profile web add …` 同上。
