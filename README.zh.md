@@ -231,5 +231,5 @@ npm run bare-dsh      # 裸 dsh 安装/配置
 2. **dsh web UI** 已用 npm 版 dsh 0.2.1-rc.2 实测可用（见 docs/bare-dsh.md）。
 3. DSH 附件若仅 device/offloaded、无 data URL / 可读 path，只能发文本占位；Gateway 无法拉取 DSH 私有 attachment store。
 4. Jiuwen 工具/子任务以推理块文本 + 结构化事件呈现；宿主 UI 不会把它们画成原生工具卡片（标准 llm 流语法里工具块意味着宿主执行）。
-6. `ask_user` 默认关闭（`supportsUserInteraction: false`）；开启后问题以文本呈现，回答需调用 `gateway.userAnswer`，宿主 UI 没有原生问答卡。
+6. `ask_user`：默认 `supportsUserInteraction: auto`，宿主有 `ctx.userQuestions` 时走 dsh 原生问答卡并自动回传（`chat.send` resume / `chat.user_answer`）；无答题 UI 时回中性答复。见 [docs/dsh-integration.md](./docs/dsh-integration.md)。
 5. Jiuwen 前端 `channels/web/frontend/dist` 未构建；仅后端/WS 路径已验证。

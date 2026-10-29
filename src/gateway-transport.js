@@ -12,6 +12,8 @@ import {
   SKILLS, AGENTS, TEAM, COMMANDS, EVENTS, normalizeEventName,
 } from './e2a-methods.js'
 
+/** Jiuwen interaction sources that must be answered by a resuming chat.send (see jiuwenswarm runtime/interaction.py). */
+export const INTERRUPT_RESUME_SOURCES = new Set(['confirm_interrupt', 'permission_interrupt', 'ask_user_interrupt', 'evolution_interrupt'])
 
 export class GatewayTransport {
   /**
@@ -130,7 +132,7 @@ export class GatewayTransport {
       }))
 
       mark('chat-send'); turn.traceParams?.(params)
-      yield *this._consume(ws, requestId, signal, { mapping, onEvent: turn.onEvent, onTurnEnd: turn.onTurnEnd, mark })
+      yield *this._consume(ws, requestId, signal, { mapping, onEvent: turn.onEvent, onTurnEnd: turn.onTurnEnd, mark, interact: turn.interact, resumeParams: { session_id: params.session_id, mode, user_id: params.user_id, ...(projectDir ? { project_dir: projectDir, cwd: projectDir } : {}) } })
     } catch (error) {
       yield failureFromError(error, signal)
     } finally {
@@ -324,7 +326,12 @@ export class GatewayTransport {
     let lastActivity = Date.now()
     let usage
     let pendingQuestion = null
-    const deadline = Date.now() + this.requestTimeoutMs
+    let deadline = Date.now() + this.requestTimeoutMs
+    /** chat.send ids of this turn (the original plus interrupt-resume sends). */
+    const turnIds = new Set([requestId])
+    /** True between answering an interaction and the first resumed output (ignore stale completion frames). */
+    let resumePending = false
+    const answeredIds = new Set()
     const queue = []
     let wake
     const push = (item) => { queue.push(item); wake?.() }
@@ -420,7 +427,7 @@ export class GatewayTransport {
         const frame = item.frame
         lastActivity = Date.now()
 
-        if (frame.type === 'res' && frame.id === requestId && frame.ok === false) {
+        if (frame.type === 'res' && turnIds.has(frame.id) && frame.ok === false) {
           const err = frame.error || frame.payload || frame
           throw Object.assign(new Error(typeof err === 'string' ? err : JSON.stringify(err)), { code: 'TRANSPORT' })
         }
@@ -436,6 +443,9 @@ export class GatewayTransport {
           else if (eventType === EVENTS.PROCESSING && payload.is_complete) mark1('status-complete')
         }
         const content = payload.content
+        if (resumePending && (eventType === EVENTS.DELTA || eventType === EVENTS.REASONING || eventType === EVENTS.TOOL_CALL
+          || ((eventType === EVENTS.FINAL || eventType === 'content') && typeof content === 'string' && content))) resumePending = false
+        if (resumePending && (eventType === EVENTS.FINAL || eventType === 'content')) continue
 
         switch (eventType) {
           case EVENTS.DELTA:
@@ -486,7 +496,7 @@ export class GatewayTransport {
           }
           case EVENTS.PROCESSING:
             emitEvent({ type: 'processing_status', isProcessing: payload.is_processing, isComplete: payload.is_complete, raw: payload })
-            if (payload.is_complete === true && (finalSeen || text.body)) { yield *finish({ kind: 'stop' }); return }
+            if (payload.is_complete === true && !resumePending && (finalSeen || text.body)) { yield *finish({ kind: 'stop' }); return }
             if (this.showProcessingStatus) yield *activity(this, `… ${payload.is_processing ? 'processing' : 'idle'}`)
             continue
           case EVENTS.USAGE_SUMMARY:
@@ -514,7 +524,35 @@ export class GatewayTransport {
             }
             continue
           }
-          case EVENTS.ASK_USER: {
+          case EVENTS.ASK_USER:
+          case EVENTS.PLAN_APPROVAL: {
+            // Host-answered interaction (dsh user-questions / approval): reply on the same socket and keep streaming.
+            if (typeof ctx.interact === 'function' && payload.request_id && answeredIds.has(payload.request_id)) continue // duplicate card for an answered request
+            if (typeof ctx.interact === 'function') {
+              let reply = null
+              try { reply = await ctx.interact({ eventType, payload, signal }) } catch { reply = null }
+              if (reply && Array.isArray(reply.answers) && !signal?.aborted) {
+                const rid = payload.request_id
+                const source = payload.source
+                if (rid) answeredIds.add(rid)
+                emitEvent({ type: 'interaction_answered', eventType, source, kind: reply.kind, outcome: reply.outcome, requestIdOfQuestion: rid, answers: reply.answers, raw: payload })
+                if (INTERRUPT_RESUME_SOURCES.has(source) && rid) {
+                  const id = `dsh-resume-${randomUUID()}`
+                  turnIds.add(id)
+                  ws.send(JSON.stringify({ type: 'req', id, method: CHAT.SEND, is_stream: true, params: {
+                    ...(ctx.resumeParams || {}), query: '', content: '', request_id: rid, answers: reply.answers, source, supports_user_interaction: true,
+                  } }))
+                } else {
+                  ws.send(JSON.stringify({ type: 'req', id: `dsh-answer-${randomUUID()}`, method: CHAT.ANSWER, params: {
+                    session_id: ctx.mapping?.jiuwenSessionId, request_id: rid, answers: reply.answers,
+                  } }))
+                }
+                finalSeen = false; terminalFinal = false; resumePending = true
+                deadline = Date.now() + this.requestTimeoutMs
+                if (reply.note) yield *activity(this, reply.note)
+                continue
+              }
+            }
             pendingQuestion = { requestId: payload.request_id || requestId, payload }
             const qs = Array.isArray(payload.questions) ? payload.questions : []
             const rendered = qs.length
@@ -546,12 +584,12 @@ export class GatewayTransport {
             }
             // JiuwenSwarm closes a turn with an empty, request-scoped chat.final (no final_mode) ~0.7 s
             // before processing_status{is_complete}; end on it after a short idle grace.
-            if (content === '' && !payload.final_mode && payload.request_id === requestId && (finalSeen || text.body)) terminalFinal = true
+            if (content === '' && !payload.final_mode && turnIds.has(payload.request_id) && (finalSeen || text.body)) terminalFinal = true
             finalSeen = true
             continue
           }
           case EVENTS.STREAM_END:
-            if (frame.id == null || frame.id === requestId || frame.request_id === requestId) {
+            if (frame.id == null || turnIds.has(frame.id) || turnIds.has(frame.request_id)) {
               yield *finish({ kind: 'stop' }); return
             }
             continue

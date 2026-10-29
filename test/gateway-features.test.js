@@ -233,3 +233,32 @@ test('no idle timer is left pending after a turn (short-lived hosts exit promptl
   await new Promise(r => setImmediate(r))
   assert.ok(timers() <= before, `timers leaked: ${before} -> ${timers()}`)
 })
+
+function hostWith(services, config = {}) {
+  const adapters = new Map()
+  const ctx = {
+    llm: { registerAdapter(ids, a) { ids.forEach(i => adapters.set(i, a)); return () => {} } },
+    logger: { info() {}, warn() {}, error() {} }, provide(n, v) { this[n] = v }, on() {},
+    get: (n) => services[n],
+  }
+  plugin.apply(ctx, { gatewayURL: URL_, mappingPath: join(dir, `w-${Math.random()}.json`), finalGraceMs: 300, ...config })
+  const a = adapters.get('jiuwen')
+  return async (o) => { const cs = []; for await (const c of a.stream({ provider: 'jiuwen', model: 'jiuwen-default', ...o })) cs.push(c); return cs }
+}
+
+test('ask_user → dsh userQuestions.ask → resume chat.send with mapped answer', async () => {
+  const asked = []
+  const run = hostWith({ userQuestions: { async ask(r) { asked.push(r); return { answers: [{ id: r.questions[0].id, selected: ['Blue'] }] } } } })
+  const cs = await run({ sessionId: 'uq', messages: user('please ask me something') })
+  assert.equal(asked[0].questions[0].question, 'Which color?')
+  assert.deepEqual(asked[0].questions[0].options.map(o => o.label), ['Red', 'Blue'])
+  assert.match(txt(cs), /answered ask_user_interrupt: blue/)
+  assert.equal(cs.at(-1).reason.kind, 'stop')
+})
+
+test('ask_user with userQuestions but no answerer → neutral reply, turn continues', async () => {
+  const run = hostWith({ userQuestions: { async ask() { throw Object.assign(new Error('none'), { code: 'NO_PROVIDER' }) } } })
+  const cs = await run({ sessionId: 'uq2', messages: user('please ask me something') })
+  assert.match(txt(cs), /answered ask_user_interrupt: No interactive user/)
+})
+

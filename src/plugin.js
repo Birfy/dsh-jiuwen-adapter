@@ -9,6 +9,7 @@ import { SessionStore } from './session-store.js'
 import { createJiuwenAdapter } from './adapter.js'
 import { createToolBridge } from './tool-bridge.js'
 import { GatewayTransport } from './gateway-transport.js'
+import { createInteractor } from './interaction.js'
 
 export { Config }
 export const name = 'llm-jiuwen'
@@ -46,7 +47,15 @@ export function apply(ctx, config = {}) {
     for (const fn of listeners) { try { fn(e) } catch { /* ignore */ } }
     try { ctx.emit?.('jiuwen/event', e) } catch { /* host may not declare the event */ }
   }
+  const service = (name) => { try { return (typeof ctx.get === 'function' ? ctx.get(name) : undefined) ?? ctx[name] } catch { return undefined } }
+  const interact = createInteractor({
+    config: readConfig,
+    logger,
+    services: () => ({ userQuestions: service('userQuestions'), agents: service('agents') }),
+  })
   const AdapterClass = createJiuwenAdapter(LlmAdapter, {
+    interact,
+    hasUserQuestions: () => Boolean(service('userQuestions')?.ask),
     config: readConfig,
     sessions,
     logger,

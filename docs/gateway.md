@@ -23,7 +23,7 @@
 | `metadata` | 请求元数据 | ✅ 请求级 `metadata` |
 | `media_items` / `attachments` / `files` | 附件（图片 `base64Data`+`mimeType`+`filename`，文档同） | ✅ 见 §5 |
 | `project_dir` / `cwd` / `workspace_dir` / `trusted_dirs` | 工作目录 | ✅ `projectDir` |
-| `supports_user_interaction` | 客户端能否回答 ask_user | ✅ 默认 `false`（`supportsUserInteraction`） |
+| `supports_user_interaction` | 客户端能否回答 ask_user | ✅ 默认 `auto`：宿主有 `ctx.userQuestions` 时为 true（见 dsh-integration.md） |
 | `answers` / `request_id` / `source` / `is_supplement` | 中断续答 / 补充 | ⚪ 未自动使用；可用 `gateway.userAnswer` / `rpc` |
 | `plan_entry_source`, `group_members`, `eternal_conversation_enabled` | UI 内部 | ⚪ 不使用 |
 

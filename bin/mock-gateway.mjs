@@ -14,6 +14,7 @@ const LAST_PARAMS = new Map()
 const CANCEL_AT = new Map()
 const CANCELLED = new Set()
 const INTERRUPTS = []
+const ANSWERS = []
 
 wss.on('connection', (ws, req) => {
   // Echo whether access_token / user_id arrived (query) for auth smoke
@@ -47,7 +48,10 @@ wss.on('connection', (ws, req) => {
       LAST_PARAMS.set(sessionId, params)
       const turns = HISTORY.get(sessionId) || []
       const prior = turns.filter(t => t.role === 'user').length
-      let reply = /ping/i.test(query) ? 'pong-from-gateway-mock' : `gateway-mock: ${query.slice(0, 200)}`
+      const answered = Array.isArray(params.answers) && params.request_id
+      if (answered) ANSWERS.push({ via: 'chat.send', ...params })
+      let reply = answered ? `answered ${params.source}: ${params.answers.map(a => (a.selected_options || []).join('+') || a.custom_input).join(';')}`
+        : /ping/i.test(query) ? 'pong-from-gateway-mock' : `gateway-mock: ${query.slice(0, 200)}`
       if (/echo-params/.test(query)) {
         reply = `params mode=${params.mode} model=${params.model_name ?? '-'} agent=${params.agent_template_name ?? '-'} group=${params.agent_group_name ?? '-'} skills=${(params.skills || []).join('|') || '-'} media=${(params.media_items || []).length} prior=${prior} query=${JSON.stringify(query)}`
       }
@@ -60,7 +64,11 @@ wss.on('connection', (ws, req) => {
       // accepted but never runs. Emulated so the adapter's post-cancel settle stays covered.
       if (Date.now() - (CANCEL_AT.get(sessionId) || 0) < Number(process.env.MOCK_CANCEL_RACE_MS ?? 300)) return
 
-      if (/ask me/i.test(query)) {
+      if (!answered && /ask me/i.test(query) && params.supports_user_interaction) {
+        ev('chat.ask_user_question', { event_type: 'chat.ask_user_question', request_id: 'q-1', source: 'ask_user_interrupt', questions: [{ question: 'Which color?', options: [{ label: 'Red', value: 'red' }, { label: 'Blue', value: 'blue' }] }] })
+        return
+      }
+      if (!answered && /ask me/i.test(query)) {
         ev('chat.ask_user_question', { event_type: 'chat.ask_user_question', questions: [{ question: 'Which color?', options: [{ label: 'red' }, { label: 'blue' }] }] })
         return
       }
@@ -99,6 +107,10 @@ wss.on('connection', (ws, req) => {
       step()
       return
     }
+    if (method === 'chat.user_answer') {
+      ANSWERS.push({ via: 'chat.user_answer', ...params })
+      return ws.send(JSON.stringify({ type: 'res', id: frame.id, ok: true, payload: { accepted: true } }))
+    }
     if (method === 'chat.interrupt') {
       CANCELLED.add(String(params.session_id || ''))
       CANCEL_AT.set(String(params.session_id || ''), Date.now())
@@ -107,7 +119,7 @@ wss.on('connection', (ws, req) => {
     }
     if (method === 'debug.state') {
       return ws.send(JSON.stringify({ type: 'res', id: frame.id, ok: true, payload: {
-        interrupts: INTERRUPTS, last: Object.fromEntries(LAST_PARAMS), history: Object.fromEntries(HISTORY),
+        interrupts: INTERRUPTS, answers: ANSWERS, last: Object.fromEntries(LAST_PARAMS), history: Object.fromEntries(HISTORY),
       } }))
     }
 

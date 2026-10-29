@@ -135,7 +135,16 @@ export function resolveConfig(raw = {}, opts = {}) {
     /** Forward model id as model_name (false → let Jiuwen use its default model). */
     forwardModelName: raw.forwardModelName !== false && env.JIUWEN_FORWARD_MODEL !== '0',
     /** Tell Jiuwen whether the host can answer ask_user questions (default false: Jiuwen proceeds on its own). */
-    supportsUserInteraction: raw.supportsUserInteraction === true || env.JIUWEN_SUPPORTS_USER_INTERACTION === '1',
+    /**
+     * Tell Jiuwen whether the host can answer ask_user questions: 'auto' (default: true when the host has
+     * ctx.userQuestions) | true | false.
+     */
+    supportsUserInteraction: raw.supportsUserInteraction === true || env.JIUWEN_SUPPORTS_USER_INTERACTION === '1' ? true
+      : (raw.supportsUserInteraction === false || env.JIUWEN_SUPPORTS_USER_INTERACTION === '0' ? false : 'auto'),
+    /** Max wait for a dsh user-questions answer (ms; 0 = no limit). */
+    questionTimeoutMs: Number(raw.questionTimeoutMs ?? env.JIUWEN_QUESTION_TIMEOUT_MS ?? 600_000),
+    /** Reply sent to Jiuwen when it asked but no dsh answerer exists. */
+    noUiAnswer: String(raw.noUiAnswer || 'No interactive user is available. Proceed with your best judgment and state your assumptions.'),
     /** Cancel in-flight Jiuwen turn (chat.interrupt intent=cancel) when the host aborts. */
     interruptOnAbort: raw.interruptOnAbort !== false,
     /** Idle grace after chat.final before ending the turn (waits for usage / processing_status). */

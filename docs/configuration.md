@@ -37,7 +37,9 @@ Precedence: **environment variable > Cordis plugin config > default**（`provide
 | `agentGroupName` | `JIUWEN_AGENT_GROUP` | — | Jiuwen expert group for Team (`agent_group_name`) |
 | `skills` | `JIUWEN_SKILLS` (comma list) | — | Selected Jiuwen skills |
 | `forwardModelName` | `JIUWEN_FORWARD_MODEL=0` disables | `true` | Send non-catalog model ids as `model_name` |
-| `supportsUserInteraction` | `JIUWEN_SUPPORTS_USER_INTERACTION=1` | `false` | Allow Jiuwen `ask_user` questions |
+| `supportsUserInteraction` | `JIUWEN_SUPPORTS_USER_INTERACTION=1\|0` | `auto` | `auto`: tell Jiuwen it may ask when the host has `ctx.userQuestions`; questions are answered via dsh user-questions (see [dsh-integration.md](./dsh-integration.md)) |
+| `questionTimeoutMs` | `JIUWEN_QUESTION_TIMEOUT_MS` | `600000` | Max wait for a dsh answer, then `noUiAnswer` |
+| `noUiAnswer` | — | "No interactive user is available…" | Reply sent to Jiuwen when no dsh answerer exists |
 | `interruptOnAbort` | — | `true` | Host abort → `chat.interrupt {intent:'cancel'}` |
 | `finalGraceMs` | `JIUWEN_FINAL_GRACE_MS` | `1500` | Idle grace after `chat.final` (turn normally ends on `processing_status.is_complete`) |
 | `terminalFinalGraceMs` | `JIUWEN_TERMINAL_FINAL_GRACE_MS` | `100` | JiuwenSwarm sends an empty, request-scoped `chat.final` (no `final_mode`) ~0.7 s before `processing_status.is_complete`; the turn ends this long after it if nothing else arrives. Negative = wait for `processing_status`/`finalGraceMs` |

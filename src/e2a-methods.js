@@ -111,6 +111,7 @@ export const EVENTS = Object.freeze({
   TEAM_MEMBER: 'team.member',
   TEAM_MESSAGE: 'team.message',
   OUTPUT_PHASE: 'chat.output_phase',
+  PLAN_APPROVAL: 'plan.approval_required',
 })
 
 /** Legacy wire name → normalized event. */

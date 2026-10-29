@@ -159,6 +159,7 @@ export function createJiuwenAdapter(LlmAdapterBase, deps) {
           )
           options = await hydrateAttachments(options, deps.attachments?.(), deps.logger)
           const overrides = turnOverrides(cfg, options)
+          if (overrides.supportsUserInteraction === 'auto') overrides.supportsUserInteraction = Boolean(deps.hasUserQuestions?.())
           // Auxiliary calls (compaction, jiuwen titles) use a throwaway Jiuwen session + full transcript.
           const aux = Boolean(options.purpose)
           const turnMapping = aux ? { ...mapping, jiuwenSessionId: `${mapping.jiuwenSessionId}-aux-${Date.now().toString(36)}`, turns: 0 } : mapping
@@ -175,8 +176,9 @@ export function createJiuwenAdapter(LlmAdapterBase, deps) {
             mark: (name) => trace({ at: 'mark', name }),
             traceParams: (p) => trace({ at: 'params', params: { ...p, content: undefined, query: String(p.query).slice(0, 300) } }),
             overrides,
+            ...(deps.interact && !aux ? { interact: (q) => deps.interact({ ...q, told: overrides.supportsUserInteraction === true }, dshSessionId) } : {}),
             onEvent: (e) => {
-              trace({ at: 'event', type: e.type, name: e.name, event: e.event })
+              trace({ at: 'event', type: e.type, name: e.name, event: e.event, ...(e.type === 'interaction_answered' ? { eventType: e.eventType, source: e.source, outcome: e.outcome, raw: JSON.stringify(e.raw).slice(0, 1500) } : {}) })
               try { overrides.onEvent?.(e) } catch { /* ignore */ }
               try { deps.onEvent?.({ dshSessionId, ...e }) } catch { /* ignore */ }
             },
