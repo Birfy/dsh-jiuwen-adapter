@@ -262,3 +262,17 @@ test('ask_user with userQuestions but no answerer → neutral reply, turn contin
   assert.match(txt(cs), /answered ask_user_interrupt: No interactive user/)
 })
 
+test('permission_interrupt → ctx.approval; allowed-once → allow_once, no UI → reject', async () => {
+  const agent = { id: 'pa' }
+  const reqs = []
+  const allow = hostWith({ agents: { get: (id) => (id === 'pa' ? agent : undefined) }, approval: { async request(r) { reqs.push(r); return 'allowed-once' } } })
+  assert.match(txt(await allow({ sessionId: 'pa', messages: user('need permission') })), /answered permission_interrupt: allow_once/)
+  assert.equal(reqs[0].agent, agent)
+  assert.equal(reqs[0].toolName, 'bash')
+  const deny = hostWith({})
+  assert.match(txt(await deny({ sessionId: 'pd', messages: user('need permission') })), /answered permission_interrupt: reject/)
+  const st = await debug()
+  assert.ok(st.answers.some(a => a.answers?.[0]?.card_id === 'card-1'))
+  const slow = hostWith({ agents: { get: () => agent }, approval: { request: () => new Promise(() => {}) } }, { approvalTimeoutMs: 200 })
+  assert.match(txt(await slow({ sessionId: 'pt', messages: user('need permission') })), /reject/)
+})

@@ -2,21 +2,44 @@
  * Host-answered Jiuwen interactions.
  *
  *  - chat.ask_user_question (source ask_user_interrupt / plain)  → ctx.userQuestions.ask()  (dsh-user-questions)
+ *  - permission_interrupt / confirm_interrupt / plan.approval_required → ctx.approval.request() (dsh-user-approval)
  *
  * Returns `{ kind, outcome, answers, note }` in Jiuwen's answer shape
  * (`[{ selected_options: [...], custom_input, card_id? }]`), or null to keep the legacy
- * "print the question and end the turn" behaviour.
+ * "print the question and end the turn" behaviour. Approvals never fail open: no UI,
+ * no live agent, timeout or error → reject.
  */
 
+const APPROVAL_SOURCES = new Set(['permission_interrupt', 'confirm_interrupt'])
+const ALLOW_RE = /^(allow_once|allow|approve|approved|yes|execute|implement|accept)$/i
+const REJECT_RE = /^(reject|deny|denied|no|cancel|skip)$/i
 
 /** @param {{ services: () => { userQuestions?: any, approval?: any, agents?: any }, config: () => any, logger?: any }} deps */
 export function createInteractor(deps) {
   return async function interact({ eventType, payload, signal, told }, dshSessionId) {
     const cfg = deps.config()
-    const { userQuestions, agents } = deps.services() || {}
+    const { userQuestions, approval, agents } = deps.services() || {}
     const questions = Array.isArray(payload?.questions) ? payload.questions.filter(q => q && typeof q === 'object') : []
     let agent
     try { agent = agents?.get?.(dshSessionId) } catch { agent = undefined }
+
+    if (eventType === 'plan.approval_required' || APPROVAL_SOURCES.has(payload?.source)) {
+      const q = questions[0] || payload || {}
+      const toolName = String(q.tool_name || payload?.tool_name || (eventType === 'plan.approval_required' || payload?.source === 'confirm_interrupt' ? 'exit_plan_mode' : 'jiuwen-tool'))
+      const reason = String(q.question || q.message || payload?.message || payload?.content || `Jiuwen requests permission: ${toolName}`).slice(0, 2000)
+      let outcome = 'unavailable'
+      if (approval?.request && agent) {
+        outcome = await withTimeout(
+          Promise.resolve(approval.request({ agent, toolName, reason, signal })).catch(() => 'unavailable'),
+          cfg.approvalTimeoutMs, 'timeout', signal)
+      } else if (!approval?.request) outcome = 'no-ui'
+      const allow = outcome === 'allowed-once'
+      return {
+        kind: 'approval', outcome,
+        answers: approvalAnswers(questions.length ? questions : [payload || {}], allow, payload?.plan_actions),
+        note: `• approval ${toolName}: ${allow ? 'allowed once' : 'denied'} (${outcome})`,
+      }
+    }
 
     if (!told || !questions.length) return null
     const items = questions.map((q, i) => ({
@@ -48,6 +71,17 @@ export function createInteractor(deps) {
     }
     return null
   }
+}
+
+export function approvalAnswers(questions, allow, planActions) {
+  return questions.map((q) => {
+    const opts = [...(Array.isArray(q.options) ? q.options : []), ...(Array.isArray(planActions) ? planActions : [])]
+      .map(o => typeof o === 'string' ? { value: o, label: o } : o).filter(Boolean)
+    const re = allow ? ALLOW_RE : REJECT_RE
+    const hit = opts.find(o => re.test(String(o.value ?? ''))) || opts.find(o => re.test(String(o.label ?? '')))
+    const selected = String(hit?.value ?? hit?.label ?? (allow ? 'allow_once' : 'reject'))
+    return { selected_options: [selected], custom_input: allow ? '' : 'Denied by dsh host', ...(q.card_id ? { card_id: q.card_id } : {}) }
+  })
 }
 
 export function questionAnswers(questions, items, answers) {

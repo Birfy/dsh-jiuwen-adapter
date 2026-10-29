@@ -64,6 +64,10 @@ wss.on('connection', (ws, req) => {
       // accepted but never runs. Emulated so the adapter's post-cancel settle stays covered.
       if (Date.now() - (CANCEL_AT.get(sessionId) || 0) < Number(process.env.MOCK_CANCEL_RACE_MS ?? 300)) return
 
+      if (!answered && /need permission/i.test(query)) {
+        ev('chat.ask_user_question', { event_type: 'chat.ask_user_question', request_id: 'perm-1', source: 'permission_interrupt', questions: [{ question: 'Allow bash rm?', tool_name: 'bash', card_id: 'card-1', options: [{ value: 'allow_once', label: '本次允许' }, { value: 'reject', label: '拒绝' }] }] })
+        return
+      }
       if (!answered && /ask me/i.test(query) && params.supports_user_interaction) {
         ev('chat.ask_user_question', { event_type: 'chat.ask_user_question', request_id: 'q-1', source: 'ask_user_interrupt', questions: [{ question: 'Which color?', options: [{ label: 'Red', value: 'red' }, { label: 'Blue', value: 'blue' }] }] })
         return

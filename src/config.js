@@ -137,12 +137,14 @@ export function resolveConfig(raw = {}, opts = {}) {
     /** Tell Jiuwen whether the host can answer ask_user questions (default false: Jiuwen proceeds on its own). */
     /**
      * Tell Jiuwen whether the host can answer ask_user questions: 'auto' (default: true when the host has
-     * ctx.userQuestions) | true | false.
+     * ctx.userQuestions) | true | false. Approvals are always routed to ctx.approval (deny when unavailable).
      */
     supportsUserInteraction: raw.supportsUserInteraction === true || env.JIUWEN_SUPPORTS_USER_INTERACTION === '1' ? true
       : (raw.supportsUserInteraction === false || env.JIUWEN_SUPPORTS_USER_INTERACTION === '0' ? false : 'auto'),
     /** Max wait for a dsh user-questions answer (ms; 0 = no limit). */
     questionTimeoutMs: Number(raw.questionTimeoutMs ?? env.JIUWEN_QUESTION_TIMEOUT_MS ?? 600_000),
+    /** Max wait for a dsh approval decision before denying (ms). */
+    approvalTimeoutMs: Number(raw.approvalTimeoutMs ?? env.JIUWEN_APPROVAL_TIMEOUT_MS ?? 300_000),
     /** Reply sent to Jiuwen when it asked but no dsh answerer exists. */
     noUiAnswer: String(raw.noUiAnswer || 'No interactive user is available. Proceed with your best judgment and state your assumptions.'),
     /** Cancel in-flight Jiuwen turn (chat.interrupt intent=cancel) when the host aborts. */

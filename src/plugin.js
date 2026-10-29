@@ -51,7 +51,7 @@ export function apply(ctx, config = {}) {
   const interact = createInteractor({
     config: readConfig,
     logger,
-    services: () => ({ userQuestions: service('userQuestions'), agents: service('agents') }),
+    services: () => ({ userQuestions: service('userQuestions'), approval: service('approval'), agents: service('agents') }),
   })
   const AdapterClass = createJiuwenAdapter(LlmAdapter, {
     interact,
