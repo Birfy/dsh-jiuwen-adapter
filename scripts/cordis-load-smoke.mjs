@@ -105,6 +105,29 @@ try {
   const text = chunks.filter(c => c.type === 'text-delta').map(c => c.text).join('')
   note('llm.stream via cordis', /cordis-pong/.test(text), text)
 
+  // Gateway mode through the real LlmRuntime (validates stream grammar: reasoning + text + usage).
+  const { spawn } = await import('node:child_process')
+  const gwPort = 19089
+  const gw = spawn(process.execPath, [join(ROOT, 'bin/mock-gateway.mjs')], { env: { ...process.env, JIUWEN_GATEWAY_MOCK_PORT: String(gwPort) }, stdio: ['ignore', 'pipe', 'inherit'] })
+  await new Promise(r => gw.stdout.on('data', d => /listening/.test(String(d)) && r()))
+  try {
+    await ctx.plugin(plugin, {
+      provider: 'jiuwen-gw', serviceName: 'jiuwenAdapterGw', mode: 'gateway', compat: 'none', finalGraceMs: 300,
+      gatewayURL: `ws://127.0.0.1:${gwPort}/ws`, mappingPath: join(dir, 'map-gw.json'),
+      models: [{ id: 'jiuwen-default', name: 'Jiuwen Default' }],
+    })
+    const gwChunks = []
+    for await (const c of ctx.llm.stream({
+      provider: 'jiuwen-gw', model: 'jiuwen-default', sessionId: 'cordis-gw',
+      messages: [{ role: 'user', content: [{ type: 'text', text: 'ping' }] }],
+    })) gwChunks.push(c)
+    const gwText = gwChunks.filter(c => c.type === 'text-delta').map(c => c.text).join('')
+    const gwReasoning = gwChunks.filter(c => c.type === 'reasoning-delta').map(c => c.text).join('')
+    const fin = gwChunks.at(-1)
+    note('gateway stream via real LlmRuntime (grammar ok)', /pong-from-gateway-mock/.test(gwText) && /🔧 bash/.test(gwReasoning) && fin?.reason?.kind === 'stop',
+      `${JSON.stringify(fin?.reason)} usage=${JSON.stringify(gwChunks.find(c => c.type === 'usage')?.usage)}`)
+  } finally { gw.kill() }
+
   server.close()
 } catch (error) {
   note('cordis-load-smoke', false, String(error?.stack || error))

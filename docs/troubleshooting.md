@@ -12,6 +12,12 @@
 | provider `jiuwen` 不出现 | 插件未加载 / 缺 `llm` 服务 | 检查 `inject: ['llm']` 满足；`dsh plugin --profile web add <path>` |
 | 超时 | 长任务超过 `requestTimeoutMs` | 调大 `JIUWEN_TIMEOUT_MS` |
 | 宿主想自己执行工具 | gateway 模式下工具归 Jiuwen | 改 `mode: openai` + `allowDshAgentLoop: true`（仅诊断） |
+| 首轮很慢 / 侧栏标题怪 | 旧版把 dsh 的标题调用当完整 Jiuwen 轮次 | 升级本适配器（`titleMode: local`） |
+| Jiuwen 回答"已收到运行时上下文" | 宿主追加 runtime context 被转发 | 默认已过滤；自定义 `ignoreMessagePatterns` |
+| 回复里出现 `[jiuwen-chat.processing_status] {...}` | 旧版泄漏 | 默认过滤；`showProcessingStatus: true` 可显示 |
+| 想要旧的 `[jiuwen-tool:…]` 文本 | 新默认放在推理块 | `eventDisplay: markers` |
+| 图片发了但 Jiuwen 说看不到 / 重复输出错误 | Jiuwen 模型不支持视觉 | 在 Jiuwen 配置视觉模型（`.env` / `models.upsert`），或 `providerOptions.jiuwen.modelName` |
+| 排查发送内容 | — | `JIUWEN_TRACE_FILE=/tmp/jw.jsonl` |
 | FlyBot 路径被意外探测 | `compat: auto` 检测到 `/workspace/FlyBot` | `compat: none` 或 `JIUWEN_COMPAT=none` |
 
 ## FAQ

@@ -20,7 +20,15 @@ export const SESSION = Object.freeze({
   CREATE: 'session.create',
   DELETE: 'session.delete',
   UPDATE: 'session.update',
+  FORK: 'session.fork',
+  SWITCH: 'session.switch',
+  RENAME: 'session.rename',
 })
+
+export const SKILLS = Object.freeze({ LIST: 'skills.list', INSTALLED: 'skills.installed', GET: 'skills.get', TOGGLE: 'skills.toggle' })
+export const AGENTS = Object.freeze({ LIST: 'agents.list' })
+export const TEAM = Object.freeze({ TEMPLATES_LIST: 'team.templates.list', LIST: 'team.list', HISTORY_GET: 'team.history.get' })
+export const COMMANDS = Object.freeze({ LIST: 'commands.list', COMPACT: 'command.compact', GOAL: 'command.goal' })
 
 export const HISTORY = Object.freeze({
   GET: 'history.get',
@@ -94,6 +102,15 @@ export const EVENTS = Object.freeze({
   SECURITY: 'security.alert',
   STREAM_END: 'stream.end',
   RUNTIME_ACCEPTED: 'runtime.accepted',
+  REASONING: 'chat.reasoning',
+  USAGE_METADATA: 'chat.usage_metadata',
+  USAGE_SUMMARY: 'chat.usage_summary',
+  SUBAGENT_ACTIVITY: 'chat.subagent_activity',
+  CONTEXT_USAGE: 'context.usage',
+  TEAM_TASK: 'team.task',
+  TEAM_MEMBER: 'team.member',
+  TEAM_MESSAGE: 'team.message',
+  OUTPUT_PHASE: 'chat.output_phase',
 })
 
 /** Legacy wire name → normalized event. */

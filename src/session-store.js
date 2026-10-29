@@ -73,6 +73,25 @@ export class SessionStore {
     return mapping
   }
 
+  /**
+   * Record a completed turn (session continuity: later turns send only the new user message).
+   * @param {string} dshSessionId
+   * @param {{ requestId?: string, pendingQuestion?: object | null }} [extra]
+   */
+  recordTurn(dshSessionId, extra = {}) {
+    const mapping = this.byDsh.get(dshSessionId)
+    if (!mapping) return undefined
+    mapping.turns = (mapping.turns || 0) + 1
+    if (extra.requestId) mapping.lastRequestId = extra.requestId
+    if (extra.pendingQuestion !== undefined) {
+      if (extra.pendingQuestion) mapping.pendingQuestion = extra.pendingQuestion
+      else delete mapping.pendingQuestion
+    }
+    mapping.updatedAt = new Date().toISOString()
+    this._save()
+    return mapping
+  }
+
   /** @returns {SessionMapping[]} */
   list() {
     return [...this.byDsh.values()]
@@ -101,6 +120,9 @@ export class SessionStore {
           jiuwenSessionId: String(entry.jiuwenSessionId),
           ...(entry.jiuwenAgentId ? { jiuwenAgentId: String(entry.jiuwenAgentId) } : {}),
           ...(entry.botId ? { botId: String(entry.botId) } : {}),
+          ...(Number.isFinite(entry.turns) ? { turns: entry.turns } : {}),
+          ...(entry.lastRequestId ? { lastRequestId: String(entry.lastRequestId) } : {}),
+          ...(entry.pendingQuestion ? { pendingQuestion: entry.pendingQuestion } : {}),
           updatedAt: String(entry.updatedAt || new Date().toISOString()),
         })
       }

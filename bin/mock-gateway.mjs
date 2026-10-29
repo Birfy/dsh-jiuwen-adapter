@@ -10,6 +10,9 @@ const wss = await WebSocketServer({ port: PORT, host: '127.0.0.1' })
 console.log(`[mock-gateway] listening on ws://127.0.0.1:${PORT}/ws`)
 
 const HISTORY = new Map() // session_id -> turns[]
+const LAST_PARAMS = new Map()
+const CANCELLED = new Set()
+const INTERRUPTS = []
 
 wss.on('connection', (ws, req) => {
   // Echo whether access_token / user_id arrived (query) for auth smoke
@@ -36,47 +39,69 @@ wss.on('connection', (ws, req) => {
     const params = frame.params || {}
 
     if (method === 'chat.send') {
-      const query = String(params.query || params.content || '')
+      const query = String(params.content || params.query || '')
       const sessionId = String(params.session_id || 's')
-      const reply = /ping/i.test(query) ? 'pong-from-gateway-mock' : `gateway-mock: ${query.slice(0, 200)}`
+      const rid = frame.id
+      const ev = (event, payload) => ws.send(JSON.stringify({ type: 'event', event, payload: { session_id: sessionId, request_id: rid, ...payload } }))
+      LAST_PARAMS.set(sessionId, params)
       const turns = HISTORY.get(sessionId) || []
+      const prior = turns.filter(t => t.role === 'user').length
+      let reply = /ping/i.test(query) ? 'pong-from-gateway-mock' : `gateway-mock: ${query.slice(0, 200)}`
+      if (/echo-params/.test(query)) {
+        reply = `params mode=${params.mode} model=${params.model_name ?? '-'} agent=${params.agent_template_name ?? '-'} group=${params.agent_group_name ?? '-'} skills=${(params.skills || []).join('|') || '-'} media=${(params.media_items || []).length} prior=${prior} query=${JSON.stringify(query)}`
+      }
       turns.push({ role: 'user', content: query }, { role: 'assistant', content: reply })
       HISTORY.set(sessionId, turns)
 
-      ws.send(JSON.stringify({ type: 'res', id: frame.id, ok: true, payload: { accepted: true } }))
+      ws.send(JSON.stringify({ type: 'res', id: rid, ok: true, payload: { accepted: true } }))
+      ev('chat.processing_status', { event_type: 'chat.processing_status', is_processing: true, is_complete: false })
 
+      if (/ask me/i.test(query)) {
+        ev('chat.ask_user_question', { event_type: 'chat.ask_user_question', questions: [{ question: 'Which color?', options: [{ label: 'red' }, { label: 'blue' }] }] })
+        return
+      }
       if (params.media_items?.length || params.attachments?.media_items?.length) {
-        ws.send(JSON.stringify({
-          type: 'event', event: 'chat.media',
-          payload: { event_type: 'chat.media', name: 'upload.png', content: 'media-ack' },
-        }))
+        ev('chat.media', { event_type: 'chat.media', name: 'upload.png', content: 'media-ack' })
       }
-      // Simulate a Jiuwen-owned tool hop
-      ws.send(JSON.stringify({
-        type: 'event', event: 'chat.tool_call',
-        payload: { event_type: 'chat.tool_call', name: 'shell', content: '' },
-      }))
-      ws.send(JSON.stringify({
-        type: 'event', event: 'chat.tool_result',
-        payload: { event_type: 'chat.tool_result', name: 'shell', content: 'ok' },
-      }))
-      ws.send(JSON.stringify({
-        type: 'event', event: 'chat.subtask_update',
-        payload: { event_type: 'chat.subtask_update', content: 'swarm-step-1' },
-      }))
+      ev('chat.reasoning', { content: 'thinking about it' })
+      // Jiuwen-owned tool hop (real wire shape: nested tool_call, rendered_result)
+      ev('chat.tool_call', { event_type: 'chat.tool_call', tool_call: { name: 'bash', arguments: '{"command":"echo ok"}', tool_call_id: 'call_1' } })
+      ev('chat.tool_update', { event_type: 'chat.tool_update', tool_name: 'bash', tool_call_id: 'call_1', status: 'in_progress' })
+      ev('chat.tool_result', { event_type: 'chat.tool_result', tool_name: 'bash', tool_call_id: 'call_1', success: true, rendered_result: 'ok', result: 'success=True' })
+      ev('chat.subtask_update', { event_type: 'chat.subtask_update', content: 'swarm-step-1' })
 
-      for (const piece of chunkText(reply, 20)) {
-        ws.send(JSON.stringify({
-          type: 'event', event: 'chat.delta',
-          payload: { event_type: 'chat.delta', content: piece, request_id: frame.id },
-        }))
+      const pieces = chunkText(reply, 20)
+      const slow = /slow/i.test(query)
+      let i = 0
+      const finish = () => {
+        ev('chat.final', { content: reply, final_mode: 'patch_segment' })
+        ev('chat.usage_summary', { event_type: 'chat.usage_summary', usage: { input_tokens: 11, output_tokens: 7, total_tokens: 18 }, model: 'mock' })
+        ev('chat.final', { content: '' })
+        ev('chat.processing_status', { event_type: 'chat.processing_status', is_processing: false, is_complete: true })
+        if (process.env.MOCK_STREAM_END === '1') ws.send(JSON.stringify({ type: 'event', event: 'stream.end', id: rid }))
       }
-      ws.send(JSON.stringify({
-        type: 'event', event: 'chat.final',
-        payload: { event_type: 'chat.final', content: reply, request_id: frame.id, is_complete: true },
-      }))
-      ws.send(JSON.stringify({ type: 'event', event: 'stream.end', id: frame.id }))
+      const step = () => {
+        if (CANCELLED.has(sessionId)) {
+          CANCELLED.delete(sessionId)
+          ev('chat.interrupt_result', { event_type: 'chat.interrupt_result', intent: 'cancel' })
+          return
+        }
+        if (i >= pieces.length) return finish()
+        ev('chat.delta', { content: pieces[i++] })
+        if (slow) setTimeout(step, 300); else step()
+      }
+      step()
       return
+    }
+    if (method === 'chat.interrupt') {
+      CANCELLED.add(String(params.session_id || ''))
+      INTERRUPTS.push(params)
+      return ws.send(JSON.stringify({ type: 'res', id: frame.id, ok: true, payload: { accepted: true, intent: params.intent } }))
+    }
+    if (method === 'debug.state') {
+      return ws.send(JSON.stringify({ type: 'res', id: frame.id, ok: true, payload: {
+        interrupts: INTERRUPTS, last: Object.fromEntries(LAST_PARAMS), history: Object.fromEntries(HISTORY),
+      } }))
     }
 
     // Unary RPCs
@@ -93,6 +118,12 @@ wss.on('connection', (ws, req) => {
     if (method === 'session.get_metadata') {
       return ok({ session_id: params.session_id, runtime: { mode: 'agent' }, mock_auth: urlAuth })
     }
+    if (method === 'skills.list') return ok({ skills: [{ name: 'mock-skill', description: 'mock' }] })
+    if (method === 'agents.list') return ok({ agents: [{ name: 'mock-agent' }] })
+    if (method === 'team.templates.list') return ok({ templates: [{ template_id: 'jiuwen_team' }] })
+    if (method === 'session.list') return ok({ sessions: [...HISTORY.keys()].map(id => ({ session_id: id, message_count: HISTORY.get(id).length })) })
+    if (method === 'session.create') return ok({ session_id: `web_mock_${Date.now()}` })
+    if (method === 'commands.list') return ok({ commands: [{ name: 'compact' }] })
     if (method === 'models.list') {
       return ok({
         models: [

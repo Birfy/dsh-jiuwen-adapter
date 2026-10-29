@@ -136,10 +136,10 @@ await jw.gateway.chatCancel(sessionId)
 
 ## 7. 行为说明
 
-- **流式**：Gateway `chat.delta` → `text-delta`；`chat.final` / `stream.end` → `finish`；错误 → `finish` + `kind: error`。
-- **工具**：gateway 模式下工具归 Jiuwen；`chat.tool_call`/`chat.tool_result`/`chat.subtask_update` 以文本 marker 呈现（`surfaceGatewayToolEvents: false` 关闭），不会让宿主二次执行。
+- **流式**：`chat.delta` → `text-delta`，`chat.reasoning` → `reasoning-delta`；`chat.processing_status.is_complete` / `stream.end` / `chat.final`+宽限 → `finish`；`chat.error` → `finish {kind: error, code: JIUWEN_ERROR}`（不可重试）；取消 → `aborted`。
+- **工具**：gateway 模式下工具归 Jiuwen；`chat.tool_call`/`chat.tool_result`/`chat.subtask_update` 默认进入 `reasoning` 块（`eventDisplay: markers` 为旧文本 marker，`none` 隐藏），并作为结构化事件发出，不会让宿主二次执行。
 - **多模态**：消息中 image/file（data URL 或可读路径）→ `media_items` / `attachments`；不可读附件只发文本占位。
-- **会话**：宿主 `sessionId` → 稳定 Jiuwen `session_id`（`dsh-<hex>`），持久化到 `mappingPath`；历史与记忆在 Jiuwen。未传 sessionId 时归为 `anonymous`。
+- **会话**：宿主 `sessionId` → 稳定 Jiuwen `session_id`（`dsh-<hex>`，记录轮数），持久化到 `mappingPath`；第二轮起只发新消息；历史与记忆在 Jiuwen。未传 sessionId 时归为 `anonymous`。
 - **模型**：`model` 作为 `model_name` 转发；`listModels` 返回配置中的目录。
 
 ## 8. 可选 FlyBot 兼容
@@ -149,13 +149,39 @@ await jw.gateway.chatCancel(sessionId)
 - `compat: flybot` / `JIUWEN_COMPAT=flybot`：强制启用；`compat: none`：关闭。
 - 原有 `cordis.patch.yml`（`llm-jiuwen`、`jiuwen-default`）与 `agent-default-model` 配置保持不变；`npm run verify:flybot` 验证。
 
+## 8.5 Gateway 进阶能力（主力模式）
+
+完整能力清单见 [docs/gateway.md](./docs/gateway.md)。要点：
+
+- **结构化事件**：Jiuwen 推理、工具调用（🔧 名称+参数）、工具结果（✓/✗）、子任务/团队活动进入标准 `reasoning` 块；文本只含最终回答。`ctx.jiuwenAdapter.onEvent(fn)` / `providerOptions.jiuwen.onEvent` / Cordis 事件 `jiuwen/event` 拿到结构化事件（`tool_call`、`tool_result`、`usage`、`ask_user`…）。`eventDisplay: markers` 恢复旧文本 marker。
+- **usage**：`chat.usage_summary` → 标准 `usage` chunk。
+- **processing_status 不再泄漏**（`showProcessingStatus` 可开）。
+- **会话连续性**：第二轮起只发新用户消息，Jiuwen 保有历史/记忆；宿主 runtime context 块自动剔除。
+- **取消**：宿主 abort → `chat.interrupt {intent: cancel}`。
+- **选择 agent/team/model/skills**：配置 `chatMode / agentTemplateName / agentGroupName / skills`，目录模型条目 `modelName / chatMode`（`jiuwen-swarm` = `team.work.normal`），或每次请求 `providerOptions.jiuwen.{chatMode, agentTemplateName, agentGroupName, skills, modelName, projectDir, sessionId}`。
+- **附件**：图片/文件以 `base64Data` 发送；宿主有 `attachments` 服务（DSH）时自动解析内容寻址附件。
+- **辅助调用**：`session-title` 本地即时生成，`compaction` 用一次性 Jiuwen 会话。
+- **更多 RPC**：`gateway.sessionList/sessionFork/skillsList/agentsList/teamTemplatesList/commandsList/interrupt/userAnswer/compact/rpc(...)`。
+
+```js
+for await (const c of ctx.llm.stream({ provider: 'jiuwen', model: 'jiuwen-swarm', sessionId: 'u1',
+  messages: [{ role: 'user', content: '帮我调研三家竞品并写总结' }],
+  providerOptions: { jiuwen: { skills: ['pptx-generator'], onEvent: e => e.type === 'tool_call' && console.log('tool', e.name) } },
+})) { if (c.type === 'reasoning-delta') process.stderr.write(c.text); if (c.type === 'text-delta') process.stdout.write(c.text) }
+```
+
+## 8.6 在裸 dsh 上运行（无 FlyBot）
+
+`BARE=$HOME/bare-dsh npm run bare-dsh` 一键安装 npm 版 dsh 并配置 headless/web profile；之后 `dsh --profile headless "…"` 或 `dsh --profile web --no-open --port 3291`。实测记录与 UX 观察见 [docs/bare-dsh.md](./docs/bare-dsh.md)。
+
 ## 9. 测试
 
 ```bash
 npm test              # 单元 + 通用宿主（mock gateway）
 npm run smoke         # mock openai + gateway
 npm run smoke:cordis  # 真实 Cordis Context 加载
-npm run smoke:live    # 真实 gateway :19000，不在线则 SKIP
+npm run smoke:live    # 真实 gateway :19000（13 项），不在线则 SKIP
+npm run bare-dsh      # 裸 dsh 安装/配置
 npm run verify:flybot # 可选 FlyBot 兼容
 ```
 详见 [docs/testing.md](./docs/testing.md)。
@@ -187,8 +213,9 @@ npm run verify:flybot # 可选 FlyBot 兼容
 
 ## 当前缺口（诚实）
 
-1. **Live chat 需真实模型**：本机 `:19000` 已通过 `npm run smoke:live`（2026-10-29）；未配置模型时 `chat.send` 返回「还没有配置可用的模型…」。live 输出可能夹带 `[jiuwen-chat.processing_status]` 等状态 marker。
+1. **Live chat 需真实模型**：本机 `:19000` 已通过 `npm run smoke:live` 13/13（2026-10-29）；未配置模型时 `chat.send` 返回「还没有配置可用的模型…」。图片需要 Jiuwen 侧视觉模型。
 2. **完整 `dsh web` UI**（`verify:flybot` 中 web boot 一项在本机因 FlyBot 宿主缺 `connection` 服务失败，改造前后一致）：`apps/cli/lib/bin.js` 可用（定向 `tsc`+`tsdown`）；全量 `pnpm run build:lib` 仍因 host/client tsdown 缺 entry（如 `onboarding-config.js`）失败，verify 跳过 UI boot。
 3. DSH 附件若仅 device/offloaded、无 data URL / 可读 path，只能发文本占位；Gateway 无法拉取 DSH 私有 attachment store。
-4. Swarm 子任务/工具事件以文本 marker 回灌 DSH，不做完整 DSH 卡片 UI 映射。
+4. Jiuwen 工具/子任务以推理块文本 + 结构化事件呈现；宿主 UI 不会把它们画成原生工具卡片（标准 llm 流语法里工具块意味着宿主执行）。
+6. `ask_user` 默认关闭（`supportsUserInteraction: false`）；开启后问题以文本呈现，回答需调用 `gateway.userAnswer`，宿主 UI 没有原生问答卡。
 5. Jiuwen 前端 `channels/web/frontend/dist` 未构建；仅后端/WS 路径已验证。

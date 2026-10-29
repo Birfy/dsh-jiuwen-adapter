@@ -52,10 +52,14 @@ for await (const c of ctx.llm.stream({
 }
 ```
 
-- **Tools**: gateway mode strips host `tools`; Jiuwen runs its own and you see `[jiuwen-tool:name]` markers, finish `stop`. `mode: 'openai', allowDshAgentLoop: true` forwards tools and returns `tool-call-delta` chunks, finish `tool-calls`.
+- **Tools**: gateway mode strips host `tools`; Jiuwen runs its own; activity appears in the reasoning block (`eventDisplay: markers` for legacy text markers), finish `stop`. `mode: 'openai', allowDshAgentLoop: true` forwards tools and returns `tool-call-delta` chunks, finish `tool-calls`.
 - **Multimodal**: image/file parts (data URL or readable path) → `media_items`.
 - **Sessions**: host `sessionId` → stable Jiuwen `session_id`, persisted at `mappingPath`.
 - **E2A helpers**: `ctx.jiuwenAdapter.gateway.{historyGet, modelsList, mcpList, memoryList, filesList, chatCancel, workflows}`.
+
+## Gateway features (primary mode)
+
+Structured Jiuwen activity (reasoning, 🔧 tool calls, ✓ results, subtasks) streams as a standard `reasoning` block plus structured events (`ctx.jiuwenAdapter.onEvent`, `providerOptions.jiuwen.onEvent`, Cordis `jiuwen/event`); `usage` chunks; `processing_status` filtered; session continuity (only new user text after turn 1, host runtime-context stripped); abort → `chat.interrupt cancel`; agent/team/model/skills selection via config, catalog entries or `providerOptions.jiuwen`; images/files as `base64Data` (host `attachments` service supported); local session titles; extra RPCs (sessions, skills, agents, team templates, commands, interrupt, userAnswer, compact, generic `rpc`). Full list: [docs/gateway.md](./docs/gateway.md). Bare dsh (no FlyBot) guide + field report: [docs/bare-dsh.md](./docs/bare-dsh.md) (`npm run bare-dsh`).
 
 ## Optional FlyBot compat
 

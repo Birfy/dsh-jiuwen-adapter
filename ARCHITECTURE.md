@@ -43,12 +43,13 @@ sequenceDiagram
   L->>A: prepareCall → stream(options)
   A->>A: map sessionId, strip tools (gateway), build media_items
   A->>G: chat.send {session_id, query, model_name, work_mode}
-  G-->>A: chat.tool_call / tool_result / subtask_update
-  A-->>P: text-delta "[jiuwen-tool:…]"
+  G-->>A: chat.reasoning / tool_call / tool_result / subtask_update
+  A-->>P: reasoning-delta "🔧 bash …" (+ onEvent)
   G-->>A: chat.delta ×N
   A-->>P: text-delta ×N
-  G-->>A: chat.final / stream.end
-  A-->>P: finish {kind:'stop'}
+  G-->>A: chat.final, usage_summary, processing_status{is_complete}
+  A-->>P: usage, finish {kind:'stop'}
+  Note over P,G: host abort → chat.interrupt{intent:cancel} → finish aborted
 ```
 
 ## Product path (`mode=gateway`, default)
@@ -105,3 +106,5 @@ OpenAI-compatible `/v1/chat/completions` against a Jiuwen (or mock) front.
 
 - Core (`src/*.js`): depends only on the Cordis `llm` service (`registerAdapter`) and OpenAI-style messages/tools. `LlmAdapter` base from `@deepseek-ai/dsh-llm` if resolvable (or `llmAdapterModule`), else a duck-typed base.
 - `src/compat/flybot.js`: FlyBot-only glue (monorepo paths for dsh-llm/cordis), loaded only when `compat` is `flybot`, or `auto` and a FlyBot checkout is detected. `compat: 'none'` disables it. No FlyBot session shapes, permission presets, or ds-bot interfaces are used by the core.
+
+Gateway capability inventory and mapping: [docs/gateway.md](./docs/gateway.md). Bare dsh field report: [docs/bare-dsh.md](./docs/bare-dsh.md).

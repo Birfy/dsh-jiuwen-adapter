@@ -98,7 +98,9 @@ test('generic host: OpenAI-style tools in gateway mode are Jiuwen-owned (observe
     tools: [{ name: 'shell', description: 'run', parameters: { type: 'object', properties: {} } }],
   })) chunks.push(c)
   assert.ok(!chunks.some(c => c.type === 'tool-call-delta'))
-  assert.match(text(chunks), /jiuwen-tool(-result)?:shell/)
+  const reasoning = chunks.filter(c => c.type === 'reasoning-delta').map(c => c.text).join('')
+  assert.match(reasoning, /🔧 bash/)
+  assert.doesNotMatch(text(chunks), /jiuwen-tool/)
   assert.equal(chunks.at(-1).reason?.kind, 'stop')
 })
 

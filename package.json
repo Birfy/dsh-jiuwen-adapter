@@ -35,7 +35,8 @@
     "mock:openai": "node bin/mock-openai.mjs",
     "mock:gateway": "node bin/mock-gateway.mjs",
     "smoke:cordis": "node scripts/cordis-load-smoke.mjs",
-    "smoke:live": "node scripts/live-gateway-smoke.mjs"
+    "smoke:live": "node scripts/live-gateway-smoke.mjs",
+    "bare-dsh": "bash scripts/bare-dsh.sh"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "*",

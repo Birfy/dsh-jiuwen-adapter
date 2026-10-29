@@ -17,7 +17,7 @@ Precedence: **environment variable > Cordis plugin config > default**（`provide
 | `authorization` | `JIUWEN_AUTHORIZATION` | — | Raw `Authorization` header |
 | `xToken` | `JIUWEN_X_TOKEN` | — | `X-Token` header |
 | `userId` | `JIUWEN_USER_ID` | `dsh-adapter` | Gateway `user_id` |
-| `models` | — | `jiuwen-default`, `jiuwen-swarm` (128k ctx, 8192 max) | Advertised catalog `[{id,name,contextWindow,maxTokens}]` |
+| `models` | — | `jiuwen-default`, `jiuwen-swarm` (128k ctx, 8192 max; swarm → `chatMode: team.work.normal`) | Catalog `[{id,name,contextWindow,maxTokens, modelName?, chatMode?, agentTemplateName?, agentGroupName?}]` |
 | `defaultModel` | — | first model id | |
 | `mappingPath` | `JIUWEN_SESSION_MAP` | `$DSH_HOME/jiuwen-adapter/session-map.json` (`DSH_HOME`→`ctx path.home`→`HOME`→cwd) | Host session ↔ Jiuwen session map |
 | `workMode` | `JIUWEN_WORK_MODE` | `agent` | `chat.send` `work_mode` |
@@ -26,6 +26,23 @@ Precedence: **environment variable > Cordis plugin config > default**（`provide
 | `allowDshAgentLoop` | `JIUWEN_ALLOW_DSH_AGENT_LOOP=1` | `false` | openai mode: forward host tools, return `tool-call` chunks |
 | `exposeJiuwenTools` | `JIUWEN_EXPOSE_TOOLS=1` | `false` | Enable `bridge.listJiuwenTools()` discovery |
 | `surfaceGatewayToolEvents` | — | `true` | Render Jiuwen tool/subtask events as text markers |
+| `eventDisplay` | `JIUWEN_EVENT_DISPLAY` | `reasoning` (`none` if `surfaceGatewayToolEvents: false`) | Jiuwen tool/subtask activity: `reasoning` block / legacy text `markers` / `none` |
+| `forwardReasoning` | `JIUWEN_FORWARD_REASONING=0` disables | `true` | `chat.reasoning` → `reasoning-delta` |
+| `showProcessingStatus` | `JIUWEN_SHOW_PROCESSING_STATUS=1` | `false` | Show `chat.processing_status` (filtered by default) |
+| `emitUsage` | — | `true` | Emit `usage` chunk from `chat.usage_summary` |
+| `historyMode` | `JIUWEN_HISTORY_MODE` | `gateway` | `gateway`: after turn 1 send only new user text; `transcript`: always recent transcript |
+| `ignoreMessagePatterns` | — | `['^Current runtime context\\.']` | Regexes; matching user blocks (from match onward) are not forwarded |
+| `chatMode` | `JIUWEN_CHAT_MODE` | = `workMode` | chat.send `mode` (`agent`, `agent.plan`, `agent.fast`, `agent.work.normal`, `agent.code.normal`, `team`, `team.work.normal`, …) |
+| `agentTemplateName` | `JIUWEN_AGENT_TEMPLATE` | — | Jiuwen expert (`agent_template_name`) |
+| `agentGroupName` | `JIUWEN_AGENT_GROUP` | — | Jiuwen expert group for Team (`agent_group_name`) |
+| `skills` | `JIUWEN_SKILLS` (comma list) | — | Selected Jiuwen skills |
+| `forwardModelName` | `JIUWEN_FORWARD_MODEL=0` disables | `true` | Send non-catalog model ids as `model_name` |
+| `supportsUserInteraction` | `JIUWEN_SUPPORTS_USER_INTERACTION=1` | `false` | Allow Jiuwen `ask_user` questions |
+| `interruptOnAbort` | — | `true` | Host abort → `chat.interrupt {intent:'cancel'}` |
+| `finalGraceMs` | `JIUWEN_FINAL_GRACE_MS` | `1500` | Idle grace after `chat.final` (turn normally ends on `processing_status.is_complete`) |
+| `titleMode` | `JIUWEN_TITLE_MODE` | `local` | `purpose: session-title` answered locally (`local`) or by Jiuwen (`jiuwen`) |
+| `traceFile` | `JIUWEN_TRACE_FILE` | — | Append JSONL trace of turns/events |
+| `serviceName` | — | `jiuwenAdapter` | ctx service name for the helper API (unique per instance) |
 | `compat` | `JIUWEN_COMPAT` | `auto` | `auto` / `flybot` / `none` — optional host glue (`src/compat/`) |
 | `llmAdapterModule` | `JIUWEN_LLM_ADAPTER_MODULE` | — | Explicit module/path exporting `LlmAdapter` |
 | — | `FLYBOT_ROOT` | `/workspace/FlyBot` | FlyBot checkout used by compat detection |
@@ -70,3 +87,17 @@ Never commit this file. Fields:
 | `OPENROUTER_API_KEY` / `TYPESAFE_API_KEY` | Optional browser-decision credentials |
 
 Other settings: `~/.jiuwenswarm/config/config.yaml`.
+
+## Per-request options
+
+Any `GenerateOptions` may carry `providerOptions.jiuwen` (or `metadata.jiuwen` / `jiuwen`):
+
+```js
+ctx.llm.stream({ provider: 'jiuwen', model: 'jiuwen-default', messages, providerOptions: { jiuwen: {
+  chatMode: 'agent.plan', agentTemplateName: 'coder', agentGroupName: 'g1', skills: ['pptx-generator'],
+  pluginNames: [], modelName: 'doubao-seed-2.0-mini', projectDir: '/repo', sessionId: 'existing-jiuwen-session',
+  historyMode: 'transcript', supportsUserInteraction: true, metadata: {}, onEvent: e => console.log(e),
+} } })
+```
+
+Precedence: request > catalog model entry > plugin config.

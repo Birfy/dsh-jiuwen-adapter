@@ -38,10 +38,20 @@ export function apply(ctx, config = {}) {
   const logger = ctx.logger ?? console
   const LlmAdapter = loadLlmAdapter(logger, resolved)
 
+  const listeners = new Set()
+  const onEvent = (e) => {
+    for (const fn of listeners) { try { fn(e) } catch { /* ignore */ } }
+    try { ctx.emit?.('jiuwen/event', e) } catch { /* host may not declare the event */ }
+  }
   const AdapterClass = createJiuwenAdapter(LlmAdapter, {
     config: readConfig,
     sessions,
     logger,
+    onEvent,
+    // Optional host attachment store (generic Cordis service name `attachments`).
+    attachments: () => {
+      try { return (typeof ctx.get === 'function' ? ctx.get('attachments') : undefined) ?? ctx.attachments } catch { return undefined }
+    },
   })
   const adapter = new AdapterClass()
   const cfg = readConfig()
@@ -64,35 +74,48 @@ export function apply(ctx, config = {}) {
       surfaceToolEvents: c.surfaceGatewayToolEvents,
     })
   }
+  /** Accept a host session id (mapped) or a raw Jiuwen session id. */
+  const jw = (sid) => sessions.get(String(sid))?.jiuwenSessionId || sid
   const api = {
     sessions,
     bridge,
     config: readConfig,
     provider: cfg.provider,
+    /** Subscribe to structured Jiuwen events ({type, name, ...}); returns unsubscribe. */
+    onEvent(fn) { listeners.add(fn); return () => listeners.delete(fn) },
+    /** Jiuwen session id for a host session id (creates mapping). */
+    jiuwenSessionId: (sid) => sessions.ensure(String(sid)).jiuwenSessionId,
     /** Unary E2A helpers (history/models/mcp/memory/files/swarm) — brain stays on Jiuwen. */
     gateway: {
-      historyGet: (sid, extra) => gatewayFor().historyGet(sid, extra),
-      historyListTurns: (sid, extra) => gatewayFor().historyListTurns(sid, extra),
-      sessionMetadata: (sid, extra) => gatewayFor().sessionMetadata(sid, extra),
+      rpc: (method, params, opts) => gatewayFor().rpc(method, params, opts),
+      historyGet: (sid, extra) => gatewayFor().historyGet(jw(sid), extra),
+      historyListTurns: (sid, extra) => gatewayFor().historyListTurns(jw(sid), extra),
+      sessionMetadata: (sid, extra) => gatewayFor().sessionMetadata(jw(sid), extra),
+      sessionList: (extra) => gatewayFor().sessionList(extra),
+      sessionCreate: (extra) => gatewayFor().sessionCreate(extra),
+      sessionDelete: (sid, extra) => gatewayFor().sessionDelete(jw(sid), extra),
+      sessionFork: (sid, extra) => gatewayFor().sessionFork(jw(sid), extra),
+      skillsList: (extra) => gatewayFor().skillsList(extra),
+      agentsList: (extra) => gatewayFor().agentsList(extra),
+      teamTemplatesList: (extra) => gatewayFor().teamTemplatesList(extra),
+      commandsList: (extra) => gatewayFor().commandsList(extra),
+      compact: (sid, extra) => gatewayFor().compact(jw(sid), extra),
+      interrupt: (sid, intent, extra) => gatewayFor().chatInterrupt(jw(sid), intent, extra),
+      userAnswer: (sid, answers, extra) => gatewayFor().userAnswer(jw(sid), answers, {
+        ...(sessions.get(String(sid))?.pendingQuestion?.requestId ? { request_id: sessions.get(String(sid)).pendingQuestion.requestId } : {}),
+        ...extra,
+      }),
+      chatResume: (sid, extra) => gatewayFor().chatResume(jw(sid), extra),
       modelsList: (extra) => gatewayFor().modelsList(extra),
       mcpList: (filter) => gatewayFor().mcpList(filter),
-      memoryList: (sid, extra) => gatewayFor().memoryList(sid, extra),
-      memoryStatus: (sid, extra) => gatewayFor().memoryStatus(sid, extra),
-      filesList: (sid, extra) => gatewayFor().filesList(sid, extra),
-      chatCancel: (sid, extra) => gatewayFor().chatCancel(sid, extra),
-      workflows: (sid, action, extra) => gatewayFor().workflows(sid, action, extra),
+      memoryList: (sid, extra) => gatewayFor().memoryList(jw(sid), extra),
+      memoryStatus: (sid, extra) => gatewayFor().memoryStatus(jw(sid), extra),
+      filesList: (sid, extra) => gatewayFor().filesList(jw(sid), extra),
+      chatCancel: (sid, extra) => gatewayFor().chatInterrupt(jw(sid), 'cancel', extra),
+      workflows: (sid, action, extra) => gatewayFor().workflows(jw(sid), action, extra),
     },
   }
-  if (typeof ctx.provide === 'function') {
-    try { ctx.provide('jiuwenAdapter', api) }
-    catch {
-      try { ctx.set?.('jiuwenAdapter', api) } catch { ctx.jiuwenAdapter = api }
-    }
-  } else if (typeof ctx.set === 'function') {
-    try { ctx.set('jiuwenAdapter', api) } catch { ctx.jiuwenAdapter = api }
-  } else {
-    ctx.jiuwenAdapter = api
-  }
+  exposeService(ctx, cfg.serviceName, api, logger)
 
   if (typeof ctx.effect === 'function') {
     ctx.effect(function* () {
@@ -116,7 +139,23 @@ export function apply(ctx, config = {}) {
  * (FlyBot only when enabled) → duck-typed base (works with any Cordis `llm` service
  * exposing registerAdapter()).
  */
-export function loadLlmAdapter(logger, cfg = {}, env = process.env) {
+export /** Expose the helper API on ctx under `serviceName` (generic across Cordis versions). */
+function exposeService(ctx, serviceName, api, logger) {
+  const attempts = [
+    () => ctx.provide?.(serviceName, api),
+    () => ctx.set?.(serviceName, api),
+    () => { ctx[serviceName] = api },
+  ]
+  for (const attempt of attempts) {
+    try {
+      attempt()
+      if (ctx[serviceName] === api || typeof ctx.provide === 'function') return
+    } catch { /* try next */ }
+  }
+  logger.warn?.(`[dsh-jiuwen] could not expose ctx.${serviceName} (another instance owns it?); set config.serviceName to a unique name`)
+}
+
+function loadLlmAdapter(logger, cfg = {}, env = process.env) {
   const home = env.HOME || ''
   const candidates = [
     ...(cfg.llmAdapterModule ? [cfg.llmAdapterModule] : []),

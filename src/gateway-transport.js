@@ -4,20 +4,14 @@
  */
 import { randomUUID } from 'node:crypto'
 import { toGatewayQuery } from './messages.js'
-import { emitTextDelta, finishText, failureFromError } from './stream-emit.js'
+import { failureFromError } from './stream-emit.js'
 import { resolveAuthMaterials, buildGatewayWsUrl } from './auth.js'
 import { extractMediaFromOptions, attachMediaToChatParams } from './multimodal.js'
 import {
   CHAT, HISTORY, MEMORY, MODELS, MCP, FILES, MEDIA, SESSION, SWARM,
-  EVENTS, normalizeEventName,
+  SKILLS, AGENTS, TEAM, COMMANDS, EVENTS, normalizeEventName,
 } from './e2a-methods.js'
 
-const FINAL_EVENTS = new Set([
-  EVENTS.FINAL,
-  EVENTS.ERROR,
-  'content',
-  'error',
-])
 
 export class GatewayTransport {
   /**
@@ -42,6 +36,13 @@ export class GatewayTransport {
     this.projectDir = opts.projectDir
     this.requestTimeoutMs = opts.requestTimeoutMs ?? 180_000
     this.surfaceToolEvents = opts.surfaceToolEvents !== false
+    this.chatMode = opts.chatMode
+    this.eventDisplay = opts.eventDisplay || (this.surfaceToolEvents ? 'reasoning' : 'none')
+    this.forwardReasoning = opts.forwardReasoning !== false
+    this.showProcessingStatus = opts.showProcessingStatus === true
+    this.emitUsage = opts.emitUsage !== false
+    this.interruptOnAbort = opts.interruptOnAbort !== false
+    this.finalGraceMs = Number.isFinite(opts.finalGraceMs) ? opts.finalGraceMs : 1500
     this.WebSocketImpl = opts.WebSocketImpl ?? globalThis.WebSocket
     this.auth = resolveAuthMaterials({
       userId: opts.userId || 'dsh-adapter',
@@ -56,19 +57,23 @@ export class GatewayTransport {
   /**
    * Stream one agent turn (Jiuwen brain).
    * @param {import('@deepseek-ai/dsh-llm').GenerateOptions} options
-   * @param {{ jiuwenSessionId: string }} mapping
+   * @param {{ jiuwenSessionId: string, turns?: number }} mapping
+   * @param {{ query?: string, overrides?: Record<string, unknown>, onEvent?: (e: object) => void, onTurnEnd?: (info: object) => void }} [turn]
    */
-  async *stream(options, mapping) {
+  async *stream(options, mapping, turn = {}) {
     const signal = options.signal
     if (!this.WebSocketImpl) {
       yield failureFromError(new Error('WebSocket is not available; cannot use gateway brain'), signal)
       return
     }
 
-    const query = toGatewayQuery(options)
+    const query = turn.query ?? toGatewayQuery(options)
     const media = extractMediaFromOptions(options)
     const requestId = `dsh-${randomUUID()}`
     const url = buildGatewayWsUrl(this.gatewayURL, this.auth)
+    const o = { ...(turn.overrides || {}) }
+    const projectDir = o.projectDir || this.projectDir
+    const mode = o.chatMode || this.chatMode || this.workMode
 
     let ws
     try {
@@ -79,15 +84,21 @@ export class GatewayTransport {
         session_id: mapping.jiuwenSessionId,
         content: query,
         query,
-        mode: this.workMode,
+        mode,
         work_mode: this.workMode,
-        model_name: options.model,
+        ...(o.modelName ? { model_name: o.modelName } : {}),
         user_id: this.auth.userId,
-        ...(this.projectDir ? {
-          project_dir: this.projectDir,
-          cwd: this.projectDir,
-          workspace_dir: this.projectDir,
-          trusted_dirs: [this.projectDir],
+        ...(o.agentTemplateName !== undefined ? { agent_template_name: o.agentTemplateName } : {}),
+        ...(o.agentGroupName ? { agent_group_name: o.agentGroupName } : {}),
+        ...(Array.isArray(o.skills) ? { skills: o.skills } : {}),
+        ...(Array.isArray(o.pluginNames) ? { plugin_names: o.pluginNames } : {}),
+        ...(o.metadata && typeof o.metadata === 'object' ? { metadata: o.metadata } : {}),
+        supports_user_interaction: o.supportsUserInteraction ?? false,
+        ...(projectDir ? {
+          project_dir: projectDir,
+          cwd: projectDir,
+          workspace_dir: projectDir,
+          trusted_dirs: [projectDir],
         } : {}),
       }
       params = attachMediaToChatParams(params, media)
@@ -103,7 +114,7 @@ export class GatewayTransport {
         params,
       }))
 
-      yield *this._consume(ws, requestId, signal)
+      yield *this._consume(ws, requestId, signal, { mapping, onEvent: turn.onEvent, onTurnEnd: turn.onTurnEnd })
     } catch (error) {
       yield failureFromError(error, signal)
     } finally {
@@ -161,6 +172,24 @@ export class GatewayTransport {
   swarmflowResume(sessionId, extra = {}) {
     return this.rpc(SWARM.RESUME, { session_id: sessionId, ...extra })
   }
+  chatInterrupt(sessionId, intent = 'cancel', extra = {}) {
+    return this.rpc(CHAT.CANCEL, { session_id: sessionId, intent, ...extra })
+  }
+  userAnswer(sessionId, answers, extra = {}) {
+    return this.rpc(CHAT.ANSWER, { session_id: sessionId, answers, ...extra })
+  }
+  chatResume(sessionId, extra = {}) {
+    return this.rpc(CHAT.RESUME, { session_id: sessionId, ...extra })
+  }
+  sessionList(extra = {}) { return this.rpc(SESSION.LIST, { ...extra }) }
+  sessionCreate(extra = {}) { return this.rpc(SESSION.CREATE, { ...extra }) }
+  sessionDelete(sessionId, extra = {}) { return this.rpc(SESSION.DELETE, { session_id: sessionId, ...extra }) }
+  sessionFork(sessionId, extra = {}) { return this.rpc(SESSION.FORK, { session_id: sessionId, ...extra }) }
+  skillsList(extra = {}) { return this.rpc(SKILLS.LIST, { ...extra }) }
+  agentsList(extra = {}) { return this.rpc(AGENTS.LIST, { ...extra }) }
+  teamTemplatesList(extra = {}) { return this.rpc(TEAM.TEMPLATES_LIST, { ...extra }) }
+  commandsList(extra = {}) { return this.rpc(COMMANDS.LIST, { ...extra }) }
+  compact(sessionId, extra = {}) { return this.rpc(COMMANDS.COMPACT, { session_id: sessionId, ...extra }) }
   workflows(sessionId, action = 'list', extra = {}) {
     return this.rpc(SWARM.WORKFLOWS, { session_id: sessionId, action, ...extra })
   }
@@ -244,13 +273,25 @@ export class GatewayTransport {
     })
   }
 
-  async *_consume(ws, requestId, signal) {
-    const state = { started: false }
-    let text = ''
+  /**
+   * Consume one chat.send turn. Ends on chat.processing_status{is_complete},
+   * stream.end, chat.error, interrupt_result, or `finalGraceMs` idle after chat.final.
+   */
+  async *_consume(ws, requestId, signal, ctx = {}) {
+    const text = { index: 0, started: false, body: '' }
+    const reasoning = { index: 1, started: false, body: '' }
+    let nextIndex = 2
+    let finalSeen = false
+    let lastActivity = Date.now()
+    let usage
+    let pendingQuestion = null
     const deadline = Date.now() + this.requestTimeoutMs
     const queue = []
     let wake
     const push = (item) => { queue.push(item); wake?.() }
+    const emitEvent = (e) => {
+      try { ctx.onEvent?.({ requestId, sessionId: ctx.mapping?.jiuwenSessionId, ...e }) } catch { /* ignore */ }
+    }
 
     const onMessage = (event) => {
       try { push({ ok: true, frame: JSON.parse(String(event.data)) }) }
@@ -258,108 +299,211 @@ export class GatewayTransport {
     }
     const onClose = () => push({ ok: false, error: Object.assign(new Error('Gateway WebSocket closed'), { code: 'TRANSPORT' }) })
     const onError = () => push({ ok: false, error: Object.assign(new Error('Gateway WebSocket error'), { code: 'TRANSPORT' }) })
-    const onAbort = () => push({ ok: false, error: Object.assign(new Error('aborted'), { code: 'ABORTED' }) })
+    const onAbort = () => push({ ok: false, abort: true })
 
     ws.addEventListener('message', onMessage)
     ws.addEventListener('close', onClose)
     ws.addEventListener('error', onError)
     signal?.addEventListener('abort', onAbort, { once: true })
 
+    const textDelta = function *(delta) {
+      if (!delta) return
+      if (!text.started) { text.started = true; yield { type: 'block-start', index: text.index, blockType: 'text' } }
+      text.body += delta
+      yield { type: 'text-delta', index: text.index, text: delta }
+    }
+    const reasoningDelta = function *(delta) {
+      if (!delta) return
+      if (!reasoning.started) { reasoning.started = true; yield { type: 'block-start', index: reasoning.index, blockType: 'reasoning' } }
+      reasoning.body += delta
+      yield { type: 'reasoning-delta', index: reasoning.index, text: delta }
+    }
+    /** Activity line (tool/subtask/status) per eventDisplay. */
+    const activity = function *(self, line) {
+      if (self.eventDisplay === 'none' || !line) return
+      if (self.eventDisplay === 'markers') { yield *textDelta(`${line}\n`); return }
+      yield *reasoningDelta(`${reasoning.body && !reasoning.body.endsWith('\n') ? '\n' : ''}${line}\n`)
+    }
+    const self = this
+    const finish = function *(reason) {
+      if (reasoning.started) yield { type: 'block-end', index: reasoning.index, block: { type: 'reasoning', text: reasoning.body } }
+      if (text.started) yield { type: 'block-end', index: text.index, block: { type: 'text', text: text.body } }
+      if (usage && self.emitUsage && reason.kind !== 'error' && reason.kind !== 'aborted') yield { type: 'usage', usage }
+      try { ctx.onTurnEnd?.({ requestId, reason, pendingQuestion, text: text.body }) } catch { /* ignore */ }
+      yield { type: 'finish', reason }
+    }
+
     try {
-      while (Date.now() < deadline) {
+      while (true) {
+        if (Date.now() > deadline) {
+          throw Object.assign(new Error(`Jiuwen Gateway turn timed out after ${this.requestTimeoutMs}ms`), { code: 'TIMEOUT' })
+        }
         if (queue.length === 0) {
+          const waitMs = finalSeen ? Math.max(1, this.finalGraceMs - (Date.now() - lastActivity)) : 1000
           await new Promise((resolve) => {
             wake = resolve
-            setTimeout(resolve, Math.min(1000, Math.max(1, deadline - Date.now())))
+            setTimeout(resolve, Math.min(waitMs, Math.max(1, deadline - Date.now())))
           })
           wake = undefined
           if (queue.length === 0) {
-            if (signal?.aborted) throw Object.assign(new Error('aborted'), { code: 'ABORTED' })
-            continue
+            if (signal?.aborted) queue.push({ ok: false, abort: true })
+            else if (finalSeen && Date.now() - lastActivity >= this.finalGraceMs) {
+              yield *finish({ kind: 'stop' }); return
+            } else continue
           }
         }
         const item = queue.shift()
-        if (!item.ok) throw item.error
+        if (item.abort) {
+          if (this.interruptOnAbort) {
+            try {
+              ws.send(JSON.stringify({
+                type: 'req', id: `cancel-${randomUUID()}`, method: CHAT.CANCEL,
+                params: { session_id: ctx.mapping?.jiuwenSessionId, intent: 'cancel', request_id: requestId },
+              }))
+              emitEvent({ type: 'interrupt', intent: 'cancel' })
+              await new Promise(r => setTimeout(r, 150))
+            } catch { /* ignore */ }
+          }
+          yield *finish({ kind: 'aborted', failure: { message: 'aborted', code: 'ABORTED' } })
+          return
+        }
+        if (!item.ok) {
+          if (finalSeen) { yield *finish({ kind: 'stop' }); return }
+          throw item.error
+        }
         const frame = item.frame
+        lastActivity = Date.now()
 
         if (frame.type === 'res' && frame.id === requestId && frame.ok === false) {
           const err = frame.error || frame.payload || frame
           throw Object.assign(new Error(typeof err === 'string' ? err : JSON.stringify(err)), { code: 'TRANSPORT' })
         }
+        if (frame.type === 'res') continue
 
         const payload = frame.payload && typeof frame.payload === 'object' ? frame.payload : {}
-        const eventType = normalizeEventName(payload.event_type || frame.event)
+        const eventType = normalizeEventName(frame.event || payload.event_type)
         const content = payload.content
 
-        if (eventType === EVENTS.DELTA && typeof content === 'string') {
-          text += content
-          yield *emitTextDelta(0, content, state)
-          continue
-        }
-
-        // Media / file from Jiuwen — surface as text markers (bytes stay on Jiuwen).
-        if (eventType === EVENTS.MEDIA || eventType === EVENTS.FILE) {
-          const kind = eventType === EVENTS.MEDIA ? 'media' : 'file'
-          const name = payload.name || payload.filename || payload.path || kind
-          const note = `[jiuwen-${kind}:${name}]\n`
-          text += note
-          yield *emitTextDelta(0, note, state)
-          continue
-        }
-
-        if (eventType === EVENTS.SUBTASK_UPDATE || eventType === EVENTS.PROCESSING || eventType === EVENTS.TODO) {
-          const note = `[jiuwen-${eventType}] ${typeof content === 'string' ? content.slice(0, 120) : JSON.stringify(payload).slice(0, 120)}\n`
-          text += note
-          yield *emitTextDelta(0, note, state)
-          continue
-        }
-
-        // Jiuwen-owned tools: observe only.
-        if (this.surfaceToolEvents && (
-          eventType === EVENTS.TOOL_CALL || eventType === EVENTS.TOOL_RESULT || eventType === EVENTS.TOOL_UPDATE
-        )) {
-          const name = payload.name || payload.tool_name || payload.tool || 'tool'
-          const note = (eventType === EVENTS.TOOL_RESULT
-            ? `[jiuwen-tool-result:${name}] ${typeof content === 'string' ? content.slice(0, 200) : ''}`
-            : `[jiuwen-tool:${name}]`).trim() + '\n'
-          text += note
-          yield *emitTextDelta(0, note, state)
-          continue
-        }
-
-        if (FINAL_EVENTS.has(eventType) || eventType === EVENTS.ASK_USER || eventType === EVENTS.INTERRUPT_RESULT) {
-          if (typeof content === 'string' && content && content !== text) {
-            if (!text || content.startsWith(text) || content.length >= text.length) {
-              const extra = content.startsWith(text) ? content.slice(text.length) : (text ? '' : content)
-              if (!text) {
-                text = content
-                yield *emitTextDelta(0, content, state)
-              } else if (extra) {
-                text = content
-                yield *emitTextDelta(0, extra, state)
-              } else if (content !== text) {
-                text = content
+        switch (eventType) {
+          case EVENTS.DELTA:
+            if (typeof content === 'string') yield *textDelta(content)
+            continue
+          case EVENTS.REASONING:
+            emitEvent({ type: 'reasoning', text: content })
+            if (this.forwardReasoning && typeof content === 'string') {
+              if (this.eventDisplay === 'markers') continue // legacy: reasoning not shown
+              yield *reasoningDelta(content)
+            }
+            continue
+          case EVENTS.TOOL_CALL: {
+            const tc = payload.tool_call || payload
+            const name = tc.name || tc.tool_name || payload.tool_name || payload.name || 'tool'
+            const args = typeof tc.arguments === 'string' ? tc.arguments : JSON.stringify(tc.arguments ?? {})
+            emitEvent({ type: 'tool_call', name, id: tc.tool_call_id || tc.id, arguments: args, raw: payload })
+            yield *activity(this, this.eventDisplay === 'markers'
+              ? `[jiuwen-tool:${name}]`
+              : `🔧 ${name} ${truncate(args, 300)}`)
+            continue
+          }
+          case EVENTS.TOOL_UPDATE:
+            emitEvent({ type: 'tool_update', name: payload.tool_name || payload.name, id: payload.tool_call_id, status: payload.status, raw: payload })
+            continue
+          case EVENTS.TOOL_RESULT: {
+            const name = payload.tool_name || payload.name || 'tool'
+            const result = payload.rendered_result ?? payload.result ?? content ?? ''
+            const resultText = typeof result === 'string' ? result : JSON.stringify(result)
+            emitEvent({ type: 'tool_result', name, id: payload.tool_call_id, success: payload.success, result: resultText, raw: payload })
+            yield *activity(this, this.eventDisplay === 'markers'
+              ? `[jiuwen-tool-result:${name}] ${truncate(resultText, 200)}`.trim()
+              : `${payload.success === false ? '✗' : '✓'} ${name}: ${truncate(resultText, 400)}`)
+            continue
+          }
+          case EVENTS.SUBTASK_UPDATE:
+          case EVENTS.SUBAGENT_ACTIVITY:
+          case EVENTS.TODO:
+          case EVENTS.TEAM_TASK:
+          case EVENTS.TEAM_MEMBER:
+          case EVENTS.TEAM_MESSAGE: {
+            const summary = typeof content === 'string' && content ? content : summarize(payload)
+            emitEvent({ type: eventType.replace(/^chat\./, ''), summary, raw: payload })
+            yield *activity(this, this.eventDisplay === 'markers'
+              ? `[jiuwen-${eventType}] ${truncate(summary, 120)}`
+              : `• ${eventType.replace(/^chat\./, '')}: ${truncate(summary, 200)}`)
+            continue
+          }
+          case EVENTS.PROCESSING:
+            emitEvent({ type: 'processing_status', isProcessing: payload.is_processing, isComplete: payload.is_complete, raw: payload })
+            if (payload.is_complete === true && (finalSeen || text.body)) { yield *finish({ kind: 'stop' }); return }
+            if (this.showProcessingStatus) yield *activity(this, `… ${payload.is_processing ? 'processing' : 'idle'}`)
+            continue
+          case EVENTS.USAGE_SUMMARY:
+          case EVENTS.USAGE_METADATA: {
+            const u = payload.usage || payload.metadata?.usage_metadata
+            if (u && (eventType === EVENTS.USAGE_SUMMARY || !usage)) {
+              usage = {
+                inputTokens: Number(u.input_tokens || 0),
+                outputTokens: Number(u.output_tokens || 0),
+                ...(u.total_tokens ? { totalTokens: Number(u.total_tokens) } : {}),
+                ...(u.cache_tokens ? { cacheReadTokens: Number(u.cache_tokens) } : {}),
               }
             }
+            emitEvent({ type: 'usage', usage, model: payload.model, raw: payload })
+            continue
           }
-          if (eventType === EVENTS.ERROR) {
-            const message = typeof content === 'string' && content ? content : (payload.error || 'Jiuwen chat.error')
-            yield *finishText(0, text, state, {
-              kind: 'error',
-              failure: { message: String(message), code: 'TRANSPORT' },
-            })
+          case EVENTS.MEDIA:
+          case EVENTS.FILE: {
+            const kind = eventType === EVENTS.MEDIA ? 'media' : 'file'
+            const files = Array.isArray(payload.files) ? payload.files : [payload]
+            for (const f of files) {
+              const name = f.name || f.filename || f.path || kind
+              emitEvent({ type: kind, name, path: f.path, url: f.url, raw: f })
+              yield *textDelta(`\n[jiuwen-${kind}:${name}]\n`)
+            }
+            continue
+          }
+          case EVENTS.ASK_USER: {
+            pendingQuestion = { requestId: payload.request_id || requestId, payload }
+            const qs = Array.isArray(payload.questions) ? payload.questions : []
+            const rendered = qs.length
+              ? qs.map((q, i) => `${i + 1}. ${q.question || q.text || q.header || ''}${Array.isArray(q.options) ? `\n   ${q.options.map(op => op.label || op).join(' / ')}` : ''}`).join('\n')
+              : (typeof content === 'string' ? content : summarize(payload))
+            emitEvent({ type: 'ask_user', questions: qs, raw: payload })
+            yield *textDelta(`${text.body ? '\n\n' : ''}❓ ${rendered}\n`)
+            yield *finish({ kind: 'stop' })
             return
           }
-          yield *finishText(0, text, state, { kind: 'stop' })
-          return
-        }
-
-        if (frame.event === EVENTS.STREAM_END && (frame.id == null || frame.id === requestId || frame.request_id === requestId)) {
-          yield *finishText(0, text, state, { kind: 'stop' })
-          return
+          case EVENTS.ERROR: {
+            const message = typeof content === 'string' && content ? content : (payload.error || 'Jiuwen chat.error')
+            emitEvent({ type: 'error', message: String(message), raw: payload })
+            // Agent-level failure after Jiuwen accepted the turn: not retryable (a host retry would
+            // re-send the user message into the same Jiuwen session).
+            yield *finish({ kind: 'error', failure: { message: String(message), code: 'JIUWEN_ERROR' } })
+            return
+          }
+          case EVENTS.INTERRUPT_RESULT:
+            emitEvent({ type: 'interrupt_result', raw: payload })
+            yield *finish({ kind: signal?.aborted ? 'aborted' : 'stop' })
+            return
+          case EVENTS.FINAL:
+          case 'content': {
+            // Segment finals may repeat streamed text; only append an unseen tail.
+            if (typeof content === 'string' && content) {
+              if (!text.body) yield *textDelta(content)
+              else if (content.startsWith(text.body) && content.length > text.body.length) yield *textDelta(content.slice(text.body.length))
+            }
+            finalSeen = true
+            continue
+          }
+          case EVENTS.STREAM_END:
+            if (frame.id == null || frame.id === requestId || frame.request_id === requestId) {
+              yield *finish({ kind: 'stop' }); return
+            }
+            continue
+          default:
+            emitEvent({ type: 'raw', event: eventType, raw: payload })
+            continue
         }
       }
-      throw Object.assign(new Error(`Jiuwen Gateway turn timed out after ${this.requestTimeoutMs}ms`), { code: 'TIMEOUT' })
     } finally {
       ws.removeEventListener('message', onMessage)
       ws.removeEventListener('close', onClose)
@@ -369,4 +513,14 @@ export class GatewayTransport {
   }
 }
 
-export { CHAT, HISTORY, MEMORY, MODELS, MCP, FILES, MEDIA, SESSION, SWARM, EVENTS }
+function truncate(s, n) {
+  const v = String(s ?? '')
+  return v.length > n ? `${v.slice(0, n)}…` : v
+}
+
+function summarize(payload) {
+  const { runtime_event, output_order, ...rest } = payload || {}
+  return JSON.stringify(rest).slice(0, 300)
+}
+
+export { CHAT, HISTORY, MEMORY, MODELS, MCP, FILES, MEDIA, SESSION, SWARM, SKILLS, AGENTS, TEAM, COMMANDS, EVENTS }

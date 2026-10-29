@@ -12,7 +12,7 @@
 
 const DEFAULT_MODELS = [
   { id: 'jiuwen-default', name: 'Jiuwen Default', contextWindow: 128_000, maxTokens: 8192 },
-  { id: 'jiuwen-swarm', name: 'Jiuwen Swarm', contextWindow: 128_000, maxTokens: 8192 },
+  { id: 'jiuwen-swarm', name: 'Jiuwen Swarm', contextWindow: 128_000, maxTokens: 8192, chatMode: 'team.work.normal' },
 ]
 
 /** @typedef {{
@@ -85,6 +85,8 @@ export function resolveConfig(raw = {}, opts = {}) {
   return {
     provider: String(raw.provider || 'jiuwen'),
     displayName: String(raw.displayName || 'JiuwenSwarm'),
+    /** ctx service name for the helper API (ctx.jiuwenAdapter). */
+    serviceName: String(raw.serviceName || 'jiuwenAdapter'),
     mode,
     brainOwnership: 'jiuwen',
     baseURL: stripTrailingSlash(String(
@@ -114,10 +116,47 @@ export function resolveConfig(raw = {}, opts = {}) {
     allowDshAgentLoop,
     exposeJiuwenTools: raw.exposeJiuwenTools === true || env.JIUWEN_EXPOSE_TOOLS === '1',
     surfaceGatewayToolEvents: raw.surfaceGatewayToolEvents !== false,
+    // ── Gateway features ──
+    /** How Jiuwen tool/subtask/status activity is shown: reasoning | markers | none */
+    eventDisplay: pickEnum(env.JIUWEN_EVENT_DISPLAY || raw.eventDisplay, ['reasoning', 'markers', 'none'],
+      raw.surfaceGatewayToolEvents === false ? 'none' : 'reasoning'),
+    /** Forward Jiuwen chat.reasoning as reasoning-delta. */
+    forwardReasoning: raw.forwardReasoning !== false && env.JIUWEN_FORWARD_REASONING !== '0',
+    /** Show chat.processing_status (filtered by default; it is UI state, not content). */
+    showProcessingStatus: raw.showProcessingStatus === true || env.JIUWEN_SHOW_PROCESSING_STATUS === '1',
+    /** Emit a usage chunk from chat.usage_summary / usage_metadata. */
+    emitUsage: raw.emitUsage !== false,
+    /** gateway: after the first turn send only the newest user message (Jiuwen keeps history). transcript: always send recent transcript. */
+    historyMode: pickEnum(env.JIUWEN_HISTORY_MODE || raw.historyMode, ['gateway', 'transcript'], 'gateway'),
+    /** chat.send `mode` (e.g. agent.work.normal, agent.plan, agent.fast, code.normal, team). Defaults to workMode. */
+    chatMode: firstNonEmpty(env.JIUWEN_CHAT_MODE, typeof raw.chatMode === 'string' ? raw.chatMode : undefined),
+    agentTemplateName: firstNonEmpty(env.JIUWEN_AGENT_TEMPLATE, typeof raw.agentTemplateName === 'string' ? raw.agentTemplateName : undefined),
+    agentGroupName: firstNonEmpty(env.JIUWEN_AGENT_GROUP, typeof raw.agentGroupName === 'string' ? raw.agentGroupName : undefined),
+    skills: Array.isArray(raw.skills) ? raw.skills.map(String) : (env.JIUWEN_SKILLS ? env.JIUWEN_SKILLS.split(',').map(x => x.trim()).filter(Boolean) : undefined),
+    /** Forward model id as model_name (false → let Jiuwen use its default model). */
+    forwardModelName: raw.forwardModelName !== false && env.JIUWEN_FORWARD_MODEL !== '0',
+    /** Tell Jiuwen whether the host can answer ask_user questions (default false: Jiuwen proceeds on its own). */
+    supportsUserInteraction: raw.supportsUserInteraction === true || env.JIUWEN_SUPPORTS_USER_INTERACTION === '1',
+    /** Cancel in-flight Jiuwen turn (chat.interrupt intent=cancel) when the host aborts. */
+    interruptOnAbort: raw.interruptOnAbort !== false,
+    /** Idle grace after chat.final before ending the turn (waits for usage / processing_status). */
+    finalGraceMs: Number(raw.finalGraceMs ?? env.JIUWEN_FINAL_GRACE_MS ?? 1500),
+    /** Host auxiliary calls (GenerateOptions.purpose): session-title → 'local' (instant heuristic) | 'jiuwen'. */
+    titleMode: pickEnum(env.JIUWEN_TITLE_MODE || raw.titleMode, ['local', 'jiuwen'], 'local'),
+    /** User-message blocks matching these regexes are not forwarded (default: DSH runtime-context snapshot; Jiuwen has its own runtime). */
+    ignoreMessagePatterns: (Array.isArray(raw.ignoreMessagePatterns) ? raw.ignoreMessagePatterns : ['^Current runtime context\\.'])
+      .map(p => { try { return new RegExp(String(p), 'm') } catch { return null } }).filter(Boolean),
+    /** Append JSONL trace of turns/events here (debugging). */
+    traceFile: firstNonEmpty(env.JIUWEN_TRACE_FILE, typeof raw.traceFile === 'string' ? raw.traceFile : undefined),
     /** 'auto' | 'none' | 'flybot' — optional host-compat glue (src/compat/). */
     compat: String(env.JIUWEN_COMPAT || raw.compat || 'auto').toLowerCase(),
     llmAdapterModule: firstNonEmpty(env.JIUWEN_LLM_ADAPTER_MODULE, typeof raw.llmAdapterModule === 'string' ? raw.llmAdapterModule : undefined),
   }
+}
+
+function pickEnum(value, allowed, fallback) {
+  const v = String(value || '').toLowerCase()
+  return allowed.includes(v) ? v : fallback
 }
 
 function normalizeModel(m) {
@@ -127,6 +166,11 @@ function normalizeModel(m) {
     name: String(m.name || id),
     contextWindow: Number(m.contextWindow || 128_000),
     maxTokens: Number(m.maxTokens || 8192),
+    // Optional Jiuwen-side routing for this catalog entry.
+    ...(m.modelName ? { modelName: String(m.modelName) } : {}),
+    ...(m.chatMode ? { chatMode: String(m.chatMode) } : (id === 'jiuwen-swarm' ? { chatMode: 'team.work.normal' } : {})),
+    ...(m.agentTemplateName ? { agentTemplateName: String(m.agentTemplateName) } : {}),
+    ...(m.agentGroupName ? { agentGroupName: String(m.agentGroupName) } : {}),
   }
 }
 
