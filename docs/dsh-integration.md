@@ -76,3 +76,29 @@ When the host provides `ctx.commands` (`@deepseek-ai/dsh-commands`; web UI, ACP 
 Live (dsh 0.2.1-rc.2, via `ctx.commands.execute(agent, …)` inside headless): registry lists `compact, feedback, goal, jiuwen, permission, plan`; `/jiuwen status`, `models`, `model doubao-seed-2.0-mini`, `model nosuch` (rejected with the available list) and `skills` all returned from the live gateway.
 
 中文：在 dsh 命令注册表上注册 `/jiuwen <子命令>`，映射到 Jiuwen 的 status / models / 模型切换 / compact / interrupt / sessions / skills / agents / mcp。
+
+## 6. `jiuwen/event` (declared Cordis event)
+
+The adapter emits every structured Jiuwen activity as the Cordis event **`jiuwen/event`** (constant `JIUWEN_EVENT`), also available as `ctx.jiuwenAdapter.onEvent(fn)` and per request via `providerOptions.jiuwen.onEvent`. Types ship in [`index.d.ts`](../index.d.ts) (module augmentation of `@deepseek-ai/cordis` `Events` and `Context.jiuwenAdapter`).
+
+```ts
+import type { JiuwenEvent } from '@dsh-jiuwen/adapter'
+ctx.on('jiuwen/event', (e: JiuwenEvent) => { if (e.type === 'tool_call') console.log(e.dshSessionId, e.name) })
+```
+
+| `type` | fields |
+|---|---|
+| `reasoning` | `text` |
+| `tool_call` / `tool_update` / `tool_result` | `name`, `id`, `arguments` / `status` / `success`, `result` |
+| `subtask_update`, `subagent_activity`, `todo.updated`, `team.task`, `team.member`, `team.message` | `summary` |
+| `processing_status` | `isProcessing`, `isComplete` |
+| `usage` | `usage {inputTokens,outputTokens,totalTokens}`, `model` |
+| `media` / `file` | `name`, `path`, `url` |
+| `ask_user` | `questions` (legacy text path) |
+| `interaction_answered` | `eventType`, `source`, `kind: question\|approval`, `outcome`, `answers` |
+| `error`, `interrupt`, `interrupt_result` | `message` / `intent` |
+| `raw` | `event` (any other Jiuwen event name, e.g. `context.usage`, `chat.output_phase`) |
+
+All events carry `dshSessionId`, `sessionId` (Jiuwen) and `requestId`; `raw` is the untouched Jiuwen payload (owned by JiuwenSwarm, may change). Live check: a co-loaded plugin's `ctx.on('jiuwen/event')` received events with `dshSessionId` (used by the command test in §5).
+
+中文：`jiuwen/event` 现已在 index.d.ts 中声明（Cordis Events 扩展），字段如上表；其他插件可直接 `ctx.on('jiuwen/event')` 订阅。

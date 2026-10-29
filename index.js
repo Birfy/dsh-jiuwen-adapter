@@ -2,7 +2,7 @@
  * @dsh-jiuwen/adapter — Cordis plugin entry.
  * DSH = Cordis ABI/shell; JiuwenSwarm = agent brain (ARCHITECTURE.md).
  */
-export { name, inject, Config, apply, JiuwenLlmAdapter } from './src/plugin.js'
+export { name, inject, Config, apply, JiuwenLlmAdapter, JIUWEN_EVENT } from './src/plugin.js'
 export { SessionStore } from './src/session-store.js'
 export { OpenAiTransport } from './src/openai-transport.js'
 export { GatewayTransport } from './src/gateway-transport.js'

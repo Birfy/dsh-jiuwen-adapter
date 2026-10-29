@@ -14,11 +14,15 @@
   "type": "module",
   "main": "index.js",
   "exports": {
-    ".": "./index.js",
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
     "index.js",
+    "index.d.ts",
     "src/",
     "bin/",
     "cordis.patch.yml",
@@ -58,5 +62,6 @@
   },
   "engines": {
     "node": ">=22"
-  }
+  },
+  "types": "index.d.ts"
 }

@@ -15,6 +15,8 @@ import { createJiuwenCommand } from './commands.js'
 
 export { Config }
 export const name = 'llm-jiuwen'
+/** Cordis event carrying structured Jiuwen activity (see index.d.ts / docs/dsh-integration.md). */
+export const JIUWEN_EVENT = 'jiuwen/event'
 export const inject = ['llm']
 
 export { createJiuwenAdapter as JiuwenLlmAdapter }
@@ -47,7 +49,7 @@ export function apply(ctx, config = {}) {
   const listeners = new Set()
   const onEvent = (e) => {
     for (const fn of listeners) { try { fn(e) } catch { /* ignore */ } }
-    try { ctx.emit?.('jiuwen/event', e) } catch { /* host may not declare the event */ }
+    try { ctx.emit?.(JIUWEN_EVENT, e) } catch { /* host may not declare the event */ }
   }
   const service = (name) => { try { return (typeof ctx.get === 'function' ? ctx.get(name) : undefined) ?? ctx[name] } catch { return undefined } }
   const interact = createInteractor({
