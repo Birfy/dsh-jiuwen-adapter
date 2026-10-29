@@ -44,7 +44,7 @@ export class GatewayTransport {
     this.interruptOnAbort = opts.interruptOnAbort !== false
     this.finalGraceMs = Number.isFinite(opts.finalGraceMs) ? opts.finalGraceMs : 1500
     /** Idle grace after the terminal (empty, request-scoped) chat.final. Negative disables the early end. */
-    this.terminalFinalGraceMs = Number.isFinite(opts.terminalFinalGraceMs) && opts.terminalFinalGraceMs >= 0 ? opts.terminalFinalGraceMs : (opts.terminalFinalGraceMs < 0 ? this.finalGraceMs : 250)
+    this.terminalFinalGraceMs = Number.isFinite(opts.terminalFinalGraceMs) && opts.terminalFinalGraceMs >= 0 ? opts.terminalFinalGraceMs : (opts.terminalFinalGraceMs < 0 ? this.finalGraceMs : 100)
     /**
      * JiuwenSwarm accepts a chat.send issued within a few hundred ms of a chat.interrupt on the same
      * session but never runs it (the request hangs until another one arrives). Delay the next send on a
@@ -87,9 +87,13 @@ export class GatewayTransport {
 
     let ws
     try {
+      const mark = turn.mark || (() => {})
       await this._settleAfterCancel(mapping, signal)
+      mark('ws-connect')
       ws = await this._connect(url, signal)
+      mark('ws-open')
       await this._awaitAck(ws, Math.min(15_000, this.requestTimeoutMs), signal)
+      mark('ws-ack')
 
       let params = {
         session_id: mapping.jiuwenSessionId,
@@ -125,7 +129,8 @@ export class GatewayTransport {
         params,
       }))
 
-      yield *this._consume(ws, requestId, signal, { mapping, onEvent: turn.onEvent, onTurnEnd: turn.onTurnEnd })
+      mark('chat-send'); turn.traceParams?.(params)
+      yield *this._consume(ws, requestId, signal, { mapping, onEvent: turn.onEvent, onTurnEnd: turn.onTurnEnd, mark })
     } catch (error) {
       yield failureFromError(error, signal)
     } finally {
@@ -359,7 +364,10 @@ export class GatewayTransport {
       yield *reasoningDelta(`${reasoning.body && !reasoning.body.endsWith('\n') ? '\n' : ''}${line}\n`)
     }
     const self = this
+    const marked = new Set()
+    const mark1 = (n) => { if (!marked.has(n)) { marked.add(n); ctx.mark?.(n) } }
     const finish = function *(reason) {
+      mark1('finish')
       if (reasoning.started) yield { type: 'block-end', index: reasoning.index, block: { type: 'reasoning', text: reasoning.body } }
       if (text.started) yield { type: 'block-end', index: text.index, block: { type: 'text', text: text.body } }
       if (usage && self.emitUsage && reason.kind !== 'error' && reason.kind !== 'aborted') yield { type: 'usage', usage }
@@ -375,10 +383,12 @@ export class GatewayTransport {
         if (queue.length === 0) {
           const grace = terminalFinal ? this.terminalFinalGraceMs : this.finalGraceMs
           const waitMs = finalSeen ? Math.max(1, grace - (Date.now() - lastActivity)) : 1000
+          let idle
           await new Promise((resolve) => {
             wake = resolve
-            setTimeout(resolve, Math.min(waitMs, Math.max(1, deadline - Date.now())))
+            idle = setTimeout(resolve, Math.min(waitMs, Math.max(1, deadline - Date.now())))
           })
+          clearTimeout(idle) // a pending idle timer would keep a short-lived host (dsh headless) alive up to 1 s
           wake = undefined
           if (queue.length === 0) {
             if (signal?.aborted) queue.push({ ok: false, abort: true })
@@ -418,6 +428,13 @@ export class GatewayTransport {
 
         const payload = frame.payload && typeof frame.payload === 'object' ? frame.payload : {}
         const eventType = normalizeEventName(frame.event || payload.event_type)
+        if (ctx.mark) {
+          mark1('first-frame')
+          if (eventType === EVENTS.REASONING) mark1('first-reasoning')
+          else if (eventType === EVENTS.DELTA) mark1('first-delta')
+          else if (eventType === EVENTS.FINAL) mark1(payload.content ? 'final' : 'terminal-final')
+          else if (eventType === EVENTS.PROCESSING && payload.is_complete) mark1('status-complete')
+        }
         const content = payload.content
 
         switch (eventType) {

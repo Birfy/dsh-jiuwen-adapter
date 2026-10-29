@@ -40,7 +40,7 @@ Precedence: **environment variable > Cordis plugin config > default**（`provide
 | `supportsUserInteraction` | `JIUWEN_SUPPORTS_USER_INTERACTION=1` | `false` | Allow Jiuwen `ask_user` questions |
 | `interruptOnAbort` | — | `true` | Host abort → `chat.interrupt {intent:'cancel'}` |
 | `finalGraceMs` | `JIUWEN_FINAL_GRACE_MS` | `1500` | Idle grace after `chat.final` (turn normally ends on `processing_status.is_complete`) |
-| `terminalFinalGraceMs` | `JIUWEN_TERMINAL_FINAL_GRACE_MS` | `250` | JiuwenSwarm sends an empty, request-scoped `chat.final` (no `final_mode`) ~0.7 s before `processing_status.is_complete`; the turn ends this long after it if nothing else arrives. Negative = wait for `processing_status`/`finalGraceMs` |
+| `terminalFinalGraceMs` | `JIUWEN_TERMINAL_FINAL_GRACE_MS` | `100` | JiuwenSwarm sends an empty, request-scoped `chat.final` (no `final_mode`) ~0.7 s before `processing_status.is_complete`; the turn ends this long after it if nothing else arrives. Negative = wait for `processing_status`/`finalGraceMs` |
 | `postCancelSettleMs` | `JIUWEN_POST_CANCEL_SETTLE_MS` | `1000` | After a cancel, delay the next `chat.send` on that session until this long after the cancel (JiuwenSwarm drops a send that arrives within ~300 ms of `chat.interrupt`). `0` disables |
 | `titleMode` | `JIUWEN_TITLE_MODE` | `local` | `purpose: session-title` answered locally (`local`) or by Jiuwen (`jiuwen`) |
 | `traceFile` | `JIUWEN_TRACE_FILE` | — | Append JSONL trace of turns/events |

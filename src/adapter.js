@@ -172,6 +172,8 @@ export function createJiuwenAdapter(LlmAdapterBase, deps) {
           request = { ...request, messages: options.messages }
           yield *this._gatewayTransport().stream(request, turnMapping, {
             query,
+            mark: (name) => trace({ at: 'mark', name }),
+            traceParams: (p) => trace({ at: 'params', params: { ...p, content: undefined, query: String(p.query).slice(0, 300) } }),
             overrides,
             onEvent: (e) => {
               trace({ at: 'event', type: e.type, name: e.name, event: e.event })
@@ -346,7 +348,7 @@ export function localTitle(options, ignore = []) {
 function makeTrace(file) {
   if (!file) return () => {}
   return (rec) => {
-    try { appendFileSync(file, `${JSON.stringify({ t: new Date().toISOString(), ...rec })}\n`) } catch { /* ignore */ }
+    try { appendFileSync(file, `${JSON.stringify({ t: new Date().toISOString(), up: Math.round(performance.now()), ...rec })}\n`) } catch { /* ignore */ }
   }
 }
 

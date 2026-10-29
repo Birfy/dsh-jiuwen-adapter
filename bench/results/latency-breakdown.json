@@ -1,0 +1,280 @@
+{
+ "before_timerfix_grace100": {
+  "A": {
+   "apply": 719,
+   "turnStart": 1201,
+   "wsAck": 13,
+   "sendToFirstFrame": 3,
+   "sendToToken": 2696,
+   "tokenToTerminal": 426,
+   "terminalToFinish": 101,
+   "finishToStdoutFinal": 13,
+   "stdoutFinalToExit": 1404,
+   "total": 5882
+  },
+  "C": {
+   "wsAck": 4,
+   "sendToToken": 3915,
+   "tokenToTerminal": 428,
+   "terminalToComplete": 703,
+   "total": 4976
+  },
+  "rawA": [
+   {
+    "apply": 855,
+    "turnStart": 1488,
+    "wsAck": 14,
+    "sendToFirstFrame": 4,
+    "sendToToken": 2483,
+    "tokenToTerminal": 378,
+    "terminalToFinish": 100,
+    "finishToStdoutFinal": 13,
+    "stdoutFinalToExit": 1404,
+    "total": 5882
+   },
+   {
+    "apply": 710,
+    "turnStart": 1215,
+    "wsAck": 14,
+    "sendToFirstFrame": 3,
+    "sendToToken": 2427,
+    "tokenToTerminal": 469,
+    "terminalToFinish": 100,
+    "finishToStdoutFinal": 14,
+    "stdoutFinalToExit": 1402,
+    "total": 5643
+   },
+   {
+    "apply": 684,
+    "turnStart": 1174,
+    "wsAck": 13,
+    "sendToFirstFrame": 2,
+    "sendToToken": 3251,
+    "tokenToTerminal": 426,
+    "terminalToFinish": 101,
+    "finishToStdoutFinal": 13,
+    "stdoutFinalToExit": 1404,
+    "total": 6383
+   },
+   {
+    "apply": 719,
+    "turnStart": 1195,
+    "wsAck": 13,
+    "sendToFirstFrame": 3,
+    "sendToToken": 2696,
+    "tokenToTerminal": 360,
+    "terminalToFinish": 101,
+    "finishToStdoutFinal": 13,
+    "stdoutFinalToExit": 1401,
+    "total": 5781
+   },
+   {
+    "apply": 675,
+    "turnStart": 1171,
+    "wsAck": 13,
+    "sendToFirstFrame": 2,
+    "sendToToken": 2669,
+    "tokenToTerminal": 387,
+    "terminalToFinish": 101,
+    "finishToStdoutFinal": 12,
+    "stdoutFinalToExit": 1402,
+    "total": 5757
+   },
+   {
+    "apply": 726,
+    "turnStart": 1201,
+    "wsAck": 12,
+    "sendToFirstFrame": 3,
+    "sendToToken": 3057,
+    "tokenToTerminal": 573,
+    "terminalToFinish": 101,
+    "finishToStdoutFinal": 12,
+    "stdoutFinalToExit": 1406,
+    "total": 6364
+   }
+  ],
+  "rawC": [
+   {
+    "wsAck": 9,
+    "sendToToken": 3221,
+    "tokenToTerminal": 428,
+    "terminalToComplete": 702,
+    "total": 4360
+   },
+   {
+    "wsAck": 4,
+    "sendToToken": 3943,
+    "tokenToTerminal": 328,
+    "terminalToComplete": 702,
+    "total": 4976
+   },
+   {
+    "wsAck": 4,
+    "sendToToken": 3915,
+    "tokenToTerminal": 413,
+    "terminalToComplete": 702,
+    "total": 5034
+   },
+   {
+    "wsAck": 3,
+    "sendToToken": 2777,
+    "tokenToTerminal": 527,
+    "terminalToComplete": 705,
+    "total": 4012
+   },
+   {
+    "wsAck": 4,
+    "sendToToken": 3487,
+    "tokenToTerminal": 583,
+    "terminalToComplete": 703,
+    "total": 4778
+   },
+   {
+    "wsAck": 3,
+    "sendToToken": 4196,
+    "tokenToTerminal": 379,
+    "terminalToComplete": 704,
+    "total": 5282
+   }
+  ]
+ },
+ "after": {
+  "A": {
+   "apply": 714,
+   "turnStart": 1204,
+   "wsAck": 13,
+   "sendToFirstFrame": 3,
+   "sendToToken": 3844,
+   "tokenToTerminal": 599,
+   "terminalToFinish": 101,
+   "finishToStdoutFinal": 12,
+   "stdoutFinalToExit": 41,
+   "total": 5692
+  },
+  "C": {
+   "wsAck": 4,
+   "sendToToken": 3089,
+   "tokenToTerminal": 524,
+   "terminalToComplete": 703,
+   "total": 4373
+  },
+  "rawA": [
+   {
+    "apply": 718,
+    "turnStart": 1191,
+    "wsAck": 13,
+    "sendToFirstFrame": 2,
+    "sendToToken": 2912,
+    "tokenToTerminal": 599,
+    "terminalToFinish": 101,
+    "finishToStdoutFinal": 11,
+    "stdoutFinalToExit": 41,
+    "total": 4870
+   },
+   {
+    "apply": 715,
+    "turnStart": 1213,
+    "wsAck": 14,
+    "sendToFirstFrame": 3,
+    "sendToToken": 3910,
+    "tokenToTerminal": 357,
+    "terminalToFinish": 101,
+    "finishToStdoutFinal": 12,
+    "stdoutFinalToExit": 58,
+    "total": 5665
+   },
+   {
+    "apply": 700,
+    "turnStart": 1184,
+    "wsAck": 13,
+    "sendToFirstFrame": 3,
+    "sendToToken": 4425,
+    "tokenToTerminal": 658,
+    "terminalToFinish": 101,
+    "finishToStdoutFinal": 13,
+    "stdoutFinalToExit": 53,
+    "total": 6448
+   },
+   {
+    "apply": 714,
+    "turnStart": 1204,
+    "wsAck": 13,
+    "sendToFirstFrame": 3,
+    "sendToToken": 2114,
+    "tokenToTerminal": 467,
+    "terminalToFinish": 100,
+    "finishToStdoutFinal": 12,
+    "stdoutFinalToExit": 38,
+    "total": 3949
+   },
+   {
+    "apply": 700,
+    "turnStart": 1180,
+    "wsAck": 13,
+    "sendToFirstFrame": 2,
+    "sendToToken": 3844,
+    "tokenToTerminal": 499,
+    "terminalToFinish": 101,
+    "finishToStdoutFinal": 13,
+    "stdoutFinalToExit": 41,
+    "total": 5692
+   },
+   {
+    "apply": 706,
+    "turnStart": 1209,
+    "wsAck": 13,
+    "sendToFirstFrame": 2,
+    "sendToToken": 3834,
+    "tokenToTerminal": 712,
+    "terminalToFinish": 101,
+    "finishToStdoutFinal": 12,
+    "stdoutFinalToExit": 39,
+    "total": 5922
+   }
+  ],
+  "rawC": [
+   {
+    "wsAck": 11,
+    "sendToToken": 2345,
+    "tokenToTerminal": 414,
+    "terminalToComplete": 702,
+    "total": 3472
+   },
+   {
+    "wsAck": 4,
+    "sendToToken": 3197,
+    "tokenToTerminal": 550,
+    "terminalToComplete": 704,
+    "total": 4454
+   },
+   {
+    "wsAck": 4,
+    "sendToToken": 2365,
+    "tokenToTerminal": 524,
+    "terminalToComplete": 702,
+    "total": 3595
+   },
+   {
+    "wsAck": 3,
+    "sendToToken": 2280,
+    "tokenToTerminal": 261,
+    "terminalToComplete": 703,
+    "total": 3247
+   },
+   {
+    "wsAck": 3,
+    "sendToToken": 3192,
+    "tokenToTerminal": 475,
+    "terminalToComplete": 703,
+    "total": 4373
+   },
+   {
+    "wsAck": 3,
+    "sendToToken": 3089,
+    "tokenToTerminal": 914,
+    "terminalToComplete": 704,
+    "total": 4711
+   }
+  ]
+ }
+}

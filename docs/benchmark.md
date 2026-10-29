@@ -81,3 +81,39 @@ BENCH_SUITES=gsm8k,humaneval BENCH_PATHS=A BENCH_OUT=bench/results/qA npm run be
 ```
 
 结果会增量写入 `$BENCH_OUT/results.json`，中断后可以续跑；`runs.csv` 记录每一次运行。本次的原始结果在 `bench/results/`。
+
+## 延迟拆解：A 为什么比 C 慢（commit 见 git log）
+
+测法：打开 `JIUWEN_TRACE_FILE`，trace 记录 `up`（进程启动后的毫秒数），以及适配器各阶段的标记：
+`plugin-apply`、`turn-start`、`ws-connect/open/ack`、`chat-send`、`first-frame`、`first-reasoning`、`final`、`terminal-final`、`finish`。
+另外记录 dsh stdout 输出 final 的时刻和进程退出的时刻。
+C 用同样的 prompt、全新会话，交替各跑 6 次（脚本 `scripts/latency-breakdown.mjs`，结果在 `bench/results/latency-breakdown.json`）。
+
+| 阶段（中位数 ms） | A 修复前 | A 修复后 | C |
+|---|---|---|---|
+| 进程启动 → 插件 apply（dsh/cordis 加载） | 719 | 714 | — |
+| apply → 适配器 stream()（dsh 会话/回合准备） | 482 | 490 | — |
+| WS 连接 + connection.ack | 13 | 13 | 4 |
+| chat.send → 首个网关帧 | 3 | 3 | — |
+| chat.send → 首 token（Jiuwen 与模型） | 2696 | 3844 | 3089–3915 |
+| 首 token → 终止 chat.final | 426 | 599 | 428–524 |
+| 终止 final → 回合结束 | 250（宽限） | 101 | 703（等 processing_status） |
+| 回合结束 → dsh 退出 | **1404** | **41** | — |
+| **结构性开销（不含 Jiuwen 与模型时间）** | 约 2.9 s | 约 1.37 s | 约 0.7 s |
+
+根因：
+1. **适配器的空闲定时器没有清除（已修复）。** `_consume` 的等待循环每次都留下一个最长 1 s 的 `setTimeout`，回合结束后它仍挂在事件循环上，让 dsh headless 进程晚约 1.0–1.4 s 才退出。
+   - 修复：每次唤醒后 `clearTimeout`，进程退出从约 1404 ms 降到约 41 ms。
+   - 回归测试：检查回合结束后没有残留的 Timeout。
+2. **终止 final 的宽限时间从 250 ms 降到 100 ms。** 同时适配器不再等约 0.7 s 后才到的 `processing_status`。直连 C 要付这 0.7 s，A 不用。
+3. **dsh 冷启动约 1.2 s，在适配器控制之外。** 其中模块加载到插件 apply 约 0.7 s，会话准备约 0.5 s；B 路径同样要付。
+   - 推测：长驻的 `dsh web` 或 ACP 进程只付一次启动成本（未实测）。
+
+排除的嫌疑：
+- 每回合新建 WS + ack 只要 13 ms，复用连接收益可以忽略。
+- chat.send 之前没有额外 RPC，dsh 的标题请求在本地回答，不打到 Jiuwen。
+- 请求参数与 C 一致（只多了 user_id）。
+- 按 user_id 分别测（dsh-adapter / bench / 全新），Jiuwen 首 token 的差别都在噪声范围内。
+- Jiuwen 与模型的首 token 本身有 2.2–4 s 的抖动（偶尔 13 s），它掩盖了小于 0.5 s 的差异。
+
+修复后单轮 pong 的端到端延迟：A 4.2–5.7 s，C 4.4–5.0 s，两者已经基本持平。

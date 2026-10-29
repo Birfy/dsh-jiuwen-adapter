@@ -223,3 +223,13 @@ test('turn ends on the terminal (empty, request-scoped) chat.final without waiti
   await slow.run({ sessionId: 'late2', messages: user('ping late-status') })
   assert.ok(Date.now() - t1 >= 2900, 'disabled: waits for processing_status')
 })
+
+test('no idle timer is left pending after a turn (short-lived hosts exit promptly)', async () => {
+  const h = host()
+  const timers = () => process.getActiveResourcesInfo().filter(r => r === 'Timeout').length
+  await h.run({ sessionId: 'timers', messages: user('ping') })
+  const before = timers()
+  await h.run({ sessionId: 'timers', messages: user('ping') })
+  await new Promise(r => setImmediate(r))
+  assert.ok(timers() <= before, `timers leaked: ${before} -> ${timers()}`)
+})

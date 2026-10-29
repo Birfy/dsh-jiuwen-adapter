@@ -1,3 +1,4 @@
+import { appendFileSync } from 'node:fs'
 /**
  * Cordis plugin: registers provider route `jiuwen` on ctx.llm.
  */
@@ -22,6 +23,9 @@ const require = createRequire(import.meta.url)
  * @param {Record<string, unknown>} config
  */
 export function apply(ctx, config = {}) {
+  if (process.env.JIUWEN_TRACE_FILE) {
+    try { appendFileSync(process.env.JIUWEN_TRACE_FILE, `${JSON.stringify({ t: new Date().toISOString(), up: Math.round(performance.now()), at: 'plugin-apply' })}\n`) } catch { /* ignore */ }
+  }
   const dshHome = process.env.DSH_HOME
     || (typeof ctx.get === 'function' ? ctx.get('path')?.home : undefined)
     || undefined
