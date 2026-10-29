@@ -153,6 +153,18 @@ export function createJiuwenAdapter(LlmAdapterBase, deps) {
           yield *emitTextReply(title)
           return
         }
+        if (cfg.mode === 'gateway' && options.purpose === 'compaction' && cfg.compactionMode !== 'jiuwen') {
+          // Jiuwen owns the real history (historyMode=gateway sends only new user text), so dsh's checkpoint
+          // only needs to be a faithful local digest — no throwaway Jiuwen agent turn (~7 s + a new Jiuwen session).
+          const summary = localCompaction(options, cfg.ignoreMessagePatterns, mapping.jiuwenSessionId)
+          let compacted
+          if (cfg.compactionMode === 'local+jiuwen' && mapping.turns > 0) {
+            try { await this._gatewayTransport().rpc('command.compact', { session_id: mapping.jiuwenSessionId }, { timeoutMs: 60_000 }); compacted = true } catch (error) { compacted = String(error?.message || error).slice(0, 200) }
+          }
+          makeTrace(cfg.traceFile)({ at: 'local-compaction', chars: summary.length, jiuwenCompact: compacted })
+          yield *emitTextReply(summary)
+          return
+        }
         if (cfg.mode === 'gateway') {
           deps.logger?.info?.(
             `[dsh-jiuwen] brain=jiuwen gateway chat.send kind=${kind} dsh=${dshSessionId} jiuwen=${mapping.jiuwenSessionId} model=${options.model}`,
@@ -333,6 +345,30 @@ export async function hydrateAttachments(options, store, logger) {
     messages.push({ ...m, content })
   }
   return changed ? { ...options, messages } : options
+}
+
+/**
+ * Local compaction digest: the conversation as role-tagged lines, newest kept when over budget.
+ * The trailing compaction instruction (last user message) is dropped.
+ */
+export function localCompaction(options, ignore = [], jiuwenSessionId, budget = 6000) {
+  const msgs = [...(options.messages || [])]
+  if (msgs.at(-1)?.role === 'user') msgs.pop()
+  const lines = []
+  for (const m of msgs) {
+    if (m.role !== 'user' && m.role !== 'assistant') continue
+    const t = stripIgnored(m.content, ignore).replace(/\s+/g, ' ').trim()
+    if (t) lines.push(`- ${m.role}: ${t.length > 600 ? `${t.slice(0, 600)}…` : t}`)
+  }
+  const kept = []
+  let size = 0
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (size + lines[i].length > budget && kept.length) break
+    kept.unshift(lines[i]); size += lines[i].length
+  }
+  const head = `Conversation checkpoint (local digest${jiuwenSessionId ? `; JiuwenSwarm session ${jiuwenSessionId} keeps the full history` : ''}).`
+  const omitted = lines.length - kept.length
+  return [head, ...(omitted > 0 ? [`(${omitted} earlier message(s) omitted)`] : []), ...kept].join('\n')
 }
 
 /** Instant session title from the first user message. */

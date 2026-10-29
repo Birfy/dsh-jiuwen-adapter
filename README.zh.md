@@ -232,4 +232,5 @@ npm run bare-dsh      # 裸 dsh 安装/配置
 3. DSH 附件若仅 device/offloaded、无 data URL / 可读 path，只能发文本占位；Gateway 无法拉取 DSH 私有 attachment store。
 4. dsh 工具默认不交给 Jiuwen；可选 `toolPassthrough: mcp` + `toolAllowlist` 把 dsh（含其他插件/MCP）工具以本地 MCP 暴露给 Jiuwen（dsh 执行 + dsh 审批）。Jiuwen 工具/子任务以推理块文本 + 结构化事件呈现；宿主 UI 不会把它们画成原生工具卡片（标准 llm 流语法里工具块意味着宿主执行）。
 6. `ask_user`：默认 `supportsUserInteraction: auto`，宿主有 `ctx.userQuestions` 时走 dsh 原生问答卡并自动回传（`chat.send` resume / `chat.user_answer`）；无答题 UI 时回中性答复。Jiuwen 工具权限 / 计划审批走 dsh `ctx.approval`，默认拒绝（无 UI/超时）。见 [docs/dsh-integration.md](./docs/dsh-integration.md)。
+7. dsh 的标题/压缩辅助调用默认本地处理（`titleMode`/`compactionMode: local`），不消耗 Jiuwen 回合。
 5. Jiuwen 前端 `channels/web/frontend/dist` 未构建；仅后端/WS 路径已验证。

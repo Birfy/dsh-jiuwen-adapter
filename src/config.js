@@ -163,6 +163,11 @@ export function resolveConfig(raw = {}, opts = {}) {
     postCancelSettleMs: Number(raw.postCancelSettleMs ?? env.JIUWEN_POST_CANCEL_SETTLE_MS ?? 1000),
     /** Host auxiliary calls (GenerateOptions.purpose): session-title → 'local' (instant heuristic) | 'jiuwen'. */
     titleMode: pickEnum(env.JIUWEN_TITLE_MODE || raw.titleMode, ['local', 'jiuwen'], 'local'),
+    /**
+     * purpose=compaction: 'local' (default; local digest, no Jiuwen call) | 'local+jiuwen' (also send
+     * command.compact to the mapped Jiuwen session) | 'jiuwen' (legacy: full Jiuwen turn in a throwaway session).
+     */
+    compactionMode: pickEnum(env.JIUWEN_COMPACTION_MODE || raw.compactionMode, ['local', 'local+jiuwen', 'jiuwen'], 'local'),
     /** User-message blocks matching these regexes are not forwarded (default: DSH runtime-context snapshot; Jiuwen has its own runtime). */
     ignoreMessagePatterns: (Array.isArray(raw.ignoreMessagePatterns) ? raw.ignoreMessagePatterns : ['^Current runtime context\\.'])
       .map(p => { try { return new RegExp(String(p), 'm') } catch { return null } }).filter(Boolean),

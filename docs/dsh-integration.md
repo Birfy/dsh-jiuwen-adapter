@@ -47,3 +47,13 @@ Notes / risks:
 - Live (dsh 0.2.1-rc.2): allowlist `working_directory` → Jiuwen called `mcp_dshtest_working_directory`, got `{"cwd":"/tmp/qs-KbEo"}`; with approval rejected Jiuwen received `dsh denied working_directory (rejected)`. Registration adds ~1–2 s on the first turn of a process.
 
 中文：默认仍剥离 dsh 工具；设 `toolPassthrough: mcp` + `toolAllowlist` 后，dsh（含其他插件/MCP）工具以本地 MCP 服务注册给 Jiuwen，由 dsh 执行、每次调用需 dsh 审批（默认拒绝）。
+
+## 4. dsh auxiliary calls (titles, compaction) don't run Jiuwen turns
+
+Verified first: dsh `dsh-compaction-basic` calls `ctx.llm.stream({ purpose: 'compaction' })`; before this change the adapter ran a **full Jiuwen agent turn in a throwaway session** (`<jiuwen-session>-aux-<ts>`, full transcript) — live ~7.4–9.4 s and one extra Jiuwen session per compaction. Session titles (`purpose: 'session-title'`) were already local (`titleMode: local`).
+
+- `compactionMode` (`JIUWEN_COMPACTION_MODE`), default **`local`**: return a local role-tagged digest of the conversation (newest kept, ~6000 chars) instantly (live: 1 ms). Jiuwen keeps the real history (`historyMode: gateway` only sends new user text), so the dsh checkpoint doesn't need an LLM summary.
+- `local+jiuwen`: same, plus `command.compact {session_id}` on the mapped Jiuwen session (live: `{"result":"compressed",…}`, ~15 s, only when the session has turns).
+- `jiuwen`: legacy throwaway-session turn.
+
+中文：dsh 压缩默认本地生成摘要，不再为压缩起一个 Jiuwen 回合；`local+jiuwen` 额外让 Jiuwen 压缩自己的会话。

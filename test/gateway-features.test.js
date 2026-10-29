@@ -276,3 +276,17 @@ test('permission_interrupt → ctx.approval; allowed-once → allow_once, no UI 
   const slow = hostWith({ agents: { get: () => agent }, approval: { request: () => new Promise(() => {}) } }, { approvalTimeoutMs: 200 })
   assert.match(txt(await slow({ sessionId: 'pt', messages: user('need permission') })), /reject/)
 })
+
+test('compaction is answered locally by default (no Jiuwen turn); compactionMode=jiuwen keeps the aux turn', async () => {
+  const { localCompaction } = await import('../src/adapter.js')
+  const msgs = [{ role: 'user', content: 'alpha' }, { role: 'assistant', content: [{ type: 'text', text: 'beta' }] }, { role: 'user', content: 'COMPACT NOW' }]
+  const d = localCompaction({ messages: msgs }, [], 'jw-1')
+  assert.match(d, /- user: alpha\n- assistant: beta$/)
+  assert.doesNotMatch(d, /COMPACT NOW/)
+  const before = Object.keys((await debug()).history).length
+  const cs = await host().run({ sessionId: 'cmp', purpose: 'compaction', messages: msgs })
+  assert.match(txt(cs), /local digest/)
+  assert.equal(Object.keys((await debug()).history).length, before)
+  const cs2 = await host({ compactionMode: 'jiuwen' }).run({ sessionId: 'cmp2', purpose: 'compaction', messages: msgs })
+  assert.doesNotMatch(txt(cs2), /local digest/)
+})
