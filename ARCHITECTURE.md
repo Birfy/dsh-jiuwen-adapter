@@ -4,7 +4,7 @@
 
 | Concern | Owner | Notes |
 |---------|--------|------|
-| Cordis plugin load / FlyBot package ABI | **DSH** | `@flybot/*`, `ds-bot`, patches, web/desktop shell |
+| Cordis plugin load / host ABI | **Host** (DSH, FlyBot, any Cordis app) | Only the standard `llm` service is required |
 | Chat / agent loop | **JiuwenSwarm** | Gateway `chat.send` runs the turn end-to-end |
 | Tools / MCP / shell-as-agent | **JiuwenSwarm** | Adapter must **not** hand tool-calls back to DSH agent-loop |
 | Memory | **JiuwenSwarm** | Lives in Jiuwen session; DSH only maps ids |
@@ -14,10 +14,47 @@
 
 DSH is **not** the agent brain. Using DSH `agent-loop` + a raw OpenAI LLM shim would put tools/memory/loop back on DSH — that path is a **diagnostics fallback only** (`mode=openai` / `allowDshAgentLoop`).
 
+## Diagrams
+
+```mermaid
+flowchart TB
+  subgraph Host["Any Cordis host (DSH / FlyBot / custom)"]
+    PL["Consumer plugin (inject: ['llm'])"] --> LLM["Cordis llm service"]
+  end
+  LLM -->|"registerAdapter(['jiuwen'])"| AD["adapter.js (LlmAdapter)"]
+  AD --> AB["agent-brain.js + tool-bridge.js<br/>tool ownership"]
+  AD --> SS["session-store.js<br/>host session ↔ Jiuwen session"]
+  AD --> MM["messages.js / multimodal.js"]
+  AD -->|gateway| GT["gateway-transport.js + auth.js"]
+  AD -->|openai diag| OT["openai-transport.js"]
+  GT -->|"WS chat.send + E2A RPC"| GW["JiuwenSwarm Gateway"]
+  OT -->|SSE| OA["OpenAI-compatible server"]
+  CP["compat/flybot.js (optional)"] -.->|"LlmAdapter base paths"| PLG["plugin.js"]
+  PLG --> AD
+```
+
+```mermaid
+sequenceDiagram
+  participant P as Consumer plugin
+  participant L as ctx.llm
+  participant A as jiuwen adapter
+  participant G as Jiuwen Gateway
+  P->>L: stream({provider:'jiuwen', messages, tools?})
+  L->>A: prepareCall → stream(options)
+  A->>A: map sessionId, strip tools (gateway), build media_items
+  A->>G: chat.send {session_id, query, model_name, work_mode}
+  G-->>A: chat.tool_call / tool_result / subtask_update
+  A-->>P: text-delta "[jiuwen-tool:…]"
+  G-->>A: chat.delta ×N
+  A-->>P: text-delta ×N
+  G-->>A: chat.final / stream.end
+  A-->>P: finish {kind:'stop'}
+```
+
 ## Product path (`mode=gateway`, default)
 
 ```
-FlyBot / Cordis plugins  (ABI, UI, roster, channels)
+Any Cordis plugins/host  (DSH, FlyBot, custom; ABI, UI, channels)
         │  still talk to ctx.llm / sessions as usual
         ▼
  @dsh-jiuwen/adapter  (thin ABI adapter)
@@ -63,3 +100,8 @@ OpenAI-compatible `/v1/chat/completions` against a Jiuwen (or mock) front.
 ## Wrong direction (do not extend)
 
 `openjiuwen/harness_providers/dsh` — Jiuwen hosts DSH as a CLI brain. This package is the inverse.
+
+## Generic core vs. optional compat
+
+- Core (`src/*.js`): depends only on the Cordis `llm` service (`registerAdapter`) and OpenAI-style messages/tools. `LlmAdapter` base from `@deepseek-ai/dsh-llm` if resolvable (or `llmAdapterModule`), else a duck-typed base.
+- `src/compat/flybot.js`: FlyBot-only glue (monorepo paths for dsh-llm/cordis), loaded only when `compat` is `flybot`, or `auto` and a FlyBot checkout is detected. `compat: 'none'` disables it. No FlyBot session shapes, permission presets, or ds-bot interfaces are used by the core.

@@ -9,9 +9,15 @@ import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { pathToFileURL } from 'node:url'
+import { flybotPaths } from '../src/compat/flybot.js'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
-const require = createRequire(join('/workspace/FlyBot/deepseek-harness/packages/llm/llm/lib/index.js'))
+// Generic: resolve cordis/dsh-llm from DSH_LLM_PATH / DSH_CORDIS_PATH, then node resolution,
+// then (optional compat) a FlyBot checkout.
+const FB = flybotPaths()
+const LLM_PATH = process.env.DSH_LLM_PATH || FB.llm
+const CORDIS_PATH = process.env.DSH_CORDIS_PATH || FB.cordis
+const require = createRequire(join(ROOT, 'package.json'))
 
 const out = { at: new Date().toISOString(), steps: [] }
 const note = (step, ok, detail) => {
@@ -44,17 +50,17 @@ try {
     ;({ default: LlmRuntime } = require('@deepseek-ai/dsh-llm'))
   } catch (error) {
     // Path imports
-    const cordis = await import('/workspace/FlyBot/deepseek-harness/vendor/cordis/lib/index.js')
+    const cordis = await import(pathToFileURL(CORDIS_PATH).href)
     Context = cordis.Context
-    const llm = await import('/workspace/FlyBot/deepseek-harness/packages/llm/llm/lib/index.js')
+    const llm = await import(pathToFileURL(LLM_PATH).href)
     LlmRuntime = llm.default || llm.LlmRuntime
     note('import cordis+llm via path', !!(Context && LlmRuntime), error?.message)
   }
   if (!Context || !LlmRuntime) {
     // try path only
-    const cordis = await import(pathToFileURL('/workspace/FlyBot/deepseek-harness/vendor/cordis/lib/index.js').href)
+    const cordis = await import(pathToFileURL(CORDIS_PATH).href)
     Context = cordis.Context
-    const llm = await import(pathToFileURL('/workspace/FlyBot/deepseek-harness/packages/llm/llm/lib/index.js').href)
+    const llm = await import(pathToFileURL(LLM_PATH).href)
     LlmRuntime = llm.default
   }
   note('Context+LlmRuntime loaded', !!(Context && LlmRuntime))

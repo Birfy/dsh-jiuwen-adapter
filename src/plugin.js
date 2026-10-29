@@ -8,6 +8,7 @@ import { SessionStore } from './session-store.js'
 import { createJiuwenAdapter } from './adapter.js'
 import { createToolBridge } from './tool-bridge.js'
 import { GatewayTransport } from './gateway-transport.js'
+import * as flybotCompat from './compat/flybot.js'
 
 export { Config }
 export const name = 'llm-jiuwen'
@@ -35,7 +36,7 @@ export function apply(ctx, config = {}) {
   }
 
   const logger = ctx.logger ?? console
-  const LlmAdapter = loadLlmAdapter(logger)
+  const LlmAdapter = loadLlmAdapter(logger, resolved)
 
   const AdapterClass = createJiuwenAdapter(LlmAdapter, {
     config: readConfig,
@@ -108,17 +109,25 @@ export function apply(ctx, config = {}) {
   logger.info?.(`[dsh-jiuwen] registered provider "${cfg.provider}" brain=${cfg.brainOwnership} mode=${cfg.mode} mapping=${cfg.mappingPath}`)
 }
 
-function loadLlmAdapter(logger) {
-  const home = process.env.HOME || ''
+/**
+ * Resolve the standard `LlmAdapter` base class from @deepseek-ai/dsh-llm.
+ * Generic order: explicit module (config.llmAdapterModule / JIUWEN_LLM_ADAPTER_MODULE)
+ * → package resolution → common global DSH installs → optional compat candidates
+ * (FlyBot only when enabled) → duck-typed base (works with any Cordis `llm` service
+ * exposing registerAdapter()).
+ */
+export function loadLlmAdapter(logger, cfg = {}, env = process.env) {
+  const home = env.HOME || ''
   const candidates = [
+    ...(cfg.llmAdapterModule ? [cfg.llmAdapterModule] : []),
     '@deepseek-ai/dsh-llm',
-    // When adapter is pnpm-linked outside the profile tree, createRequire(adapter)
-    // cannot see dsh's nested node_modules — probe known Mac/Linux install paths.
     `${home}/.dsh/profiles/web/node_modules/@deepseek-ai/dsh-llm`,
     '/opt/homebrew/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-llm',
     '/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-llm',
-    '/workspace/FlyBot/deepseek-harness/packages/llm/llm/lib/index.js',
   ]
+  if (flybotCompat.isFlybotCompatEnabled(cfg.compat, env)) {
+    candidates.push(...flybotCompat.llmAdapterCandidates(env))
+  }
   for (const id of candidates) {
     try {
       const mod = require(id)
@@ -127,20 +136,16 @@ function loadLlmAdapter(logger) {
       // try next
     }
   }
-  // Also try require.resolve from the web profile directory.
   try {
     const resolved = require.resolve('@deepseek-ai/dsh-llm', {
-      paths: [
-        `${home}/.dsh/profiles/web`,
-        '/opt/homebrew/lib/node_modules/@deepseek-ai/dsh',
-      ],
+      paths: [`${home}/.dsh/profiles/web`, '/opt/homebrew/lib/node_modules/@deepseek-ai/dsh'],
     })
     const mod = require(resolved)
     if (mod?.LlmAdapter) return mod.LlmAdapter
   } catch {
     // fall through
   }
-  logger.warn?.('[dsh-jiuwen] @deepseek-ai/dsh-llm not resolvable via createRequire; using duck-typed base')
+  logger.info?.('[dsh-jiuwen] @deepseek-ai/dsh-llm not resolvable; using duck-typed LlmAdapter base')
   return null
 }
 

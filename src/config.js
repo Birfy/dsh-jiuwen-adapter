@@ -39,6 +39,8 @@ const DEFAULT_MODELS = [
  *   allowDshAgentLoop: boolean,
  *   exposeJiuwenTools: boolean,
  *   surfaceGatewayToolEvents: boolean,
+ *   compat: string,
+ *   llmAdapterModule: string | undefined,
  * }} ResolvedConfig */
 
 /**
@@ -112,6 +114,9 @@ export function resolveConfig(raw = {}, opts = {}) {
     allowDshAgentLoop,
     exposeJiuwenTools: raw.exposeJiuwenTools === true || env.JIUWEN_EXPOSE_TOOLS === '1',
     surfaceGatewayToolEvents: raw.surfaceGatewayToolEvents !== false,
+    /** 'auto' | 'none' | 'flybot' — optional host-compat glue (src/compat/). */
+    compat: String(env.JIUWEN_COMPAT || raw.compat || 'auto').toLowerCase(),
+    llmAdapterModule: firstNonEmpty(env.JIUWEN_LLM_ADAPTER_MODULE, typeof raw.llmAdapterModule === 'string' ? raw.llmAdapterModule : undefined),
   }
 }
 

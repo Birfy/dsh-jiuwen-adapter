@@ -36,7 +36,7 @@ test('adapter openai mode end-to-end against mock', async () => {
     for await (const c of adapter.stream({
       provider: 'jiuwen',
       model: 'jiuwen-default',
-      sessionId: 'flybot-sess-1',
+      sessionId: 'host-sess-1',
       messages: [{ role: 'user', content: 'ping' }],
     })) chunks.push(c)
     assert.match(chunks.filter(c => c.type === 'text-delta').map(c => c.text).join(''), /adapter-ok/)
