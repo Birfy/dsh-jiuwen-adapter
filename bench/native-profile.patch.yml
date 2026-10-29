@@ -1,0 +1,16 @@
+# Path B profile ($DSH_HOME/profiles/native/cordis.patch.yml; package.json bundles: dsh-base + dsh-headless)
+- id: llm-pi-ai
+  config:
+    providers:
+      ark:
+        displayName: Volcengine Ark Coding
+        apiKeyEnv: ARK_API_KEY
+        api: openai-completions
+        baseURL: https://ark.cn-beijing.volces.com/api/coding/v3
+        models:
+          - id: doubao-seed-2.0-mini
+            contextWindow: 256000
+- id: agent-default-model
+  config:
+    provider: ark
+    model: doubao-seed-2.0-mini

@@ -1,0 +1,497 @@
+{
+ "perf": {
+  "A0": {
+   "n": 5,
+   "ok": 5,
+   "totalMed": 6985,
+   "blockTtftMed": 5472,
+   "tokTtftMed": 4348,
+   "startupMed": 1139,
+   "inTok": 23081,
+   "outTok": 34,
+   "mt": [
+    true,
+    true,
+    true
+   ],
+   "mtTurnMed": [
+    6769,
+    6107,
+    6247,
+    7029
+   ],
+   "mtIn": [
+    23087,
+    23202,
+    23317,
+    23432
+   ],
+   "cancel": [
+    {
+     "cancelMs": 179,
+     "exitAfter": 8187,
+     "cont": true,
+     "contMs": 25421
+    },
+    {
+     "cancelMs": 178,
+     "exitAfter": 8185,
+     "cont": true,
+     "contMs": 6819
+    },
+    {
+     "cancelMs": 181,
+     "exitAfter": 8188,
+     "cont": true,
+     "contMs": 7836
+    }
+   ],
+   "conc": {
+    "wall": 7820,
+    "ok": 5,
+    "med": 7419
+   }
+  },
+  "A": {
+   "n": 5,
+   "ok": 5,
+   "totalMed": 7249,
+   "blockTtftMed": 5987,
+   "tokTtftMed": 5436,
+   "startupMed": 1184,
+   "inTok": 23084,
+   "outTok": 46,
+   "mt": [
+    true,
+    true,
+    true
+   ],
+   "mtTurnMed": [
+    5546,
+    6178,
+    5903,
+    6401
+   ],
+   "mtIn": [
+    23090,
+    23205,
+    23320,
+    23435
+   ],
+   "cancel": [
+    {
+     "cancelMs": 181,
+     "exitAfter": 8190,
+     "cont": true,
+     "contMs": 11669
+    },
+    {
+     "cancelMs": 179,
+     "exitAfter": 8188,
+     "cont": true,
+     "contMs": 55843
+    },
+    {
+     "cancelMs": 178,
+     "exitAfter": 8186,
+     "cont": true,
+     "contMs": 8271
+    }
+   ],
+   "conc": {
+    "wall": 8139,
+    "ok": 5,
+    "med": 7749
+   }
+  },
+  "B": {
+   "n": 5,
+   "ok": 5,
+   "totalMed": 3965,
+   "blockTtftMed": 3223,
+   "tokTtftMed": null,
+   "startupMed": null,
+   "inTok": 5873,
+   "outTok": 35,
+   "mt": [
+    true,
+    true,
+    true
+   ],
+   "mtTurnMed": [
+    4149,
+    3766,
+    3518,
+    3580
+   ],
+   "mtIn": [
+    192,
+    5906,
+    244,
+    5958
+   ],
+   "cancel": [
+    {
+     "cancelMs": 41,
+     "exitAfter": 8044,
+     "cont": true,
+     "contMs": 4852
+    },
+    {
+     "cancelMs": 40,
+     "exitAfter": 8045,
+     "cont": true,
+     "contMs": 4043
+    },
+    {
+     "cancelMs": 41,
+     "exitAfter": 8045,
+     "cont": true,
+     "contMs": 3667
+    }
+   ],
+   "conc": {
+    "wall": 6077,
+    "ok": 5,
+    "med": 4687
+   }
+  },
+  "C": {
+   "n": 5,
+   "ok": 5,
+   "totalMed": 4526,
+   "blockTtftMed": 3193,
+   "tokTtftMed": 3193,
+   "startupMed": 0,
+   "inTok": 23084,
+   "outTok": 48,
+   "mt": [
+    true,
+    true,
+    true
+   ],
+   "mtTurnMed": [
+    4840,
+    4941,
+    3424,
+    4370
+   ],
+   "mtIn": [
+    23090,
+    23205,
+    23320,
+    23435
+   ],
+   "cancel": [
+    {
+     "cancelMs": 3,
+     "exitAfter": 8012,
+     "cont": false,
+     "contMs": 90011
+    },
+    {
+     "cancelMs": 3,
+     "exitAfter": 8006,
+     "cont": false,
+     "contMs": 90008
+    },
+    {
+     "cancelMs": 3,
+     "exitAfter": 8041,
+     "cont": false,
+     "contMs": 90001
+    }
+   ],
+   "conc": {
+    "wall": 12282,
+    "ok": 5,
+    "med": 5774
+   }
+  }
+ },
+ "gsm": {
+  "A": {
+   "n": 30,
+   "correct": 30,
+   "err": 0,
+   "latMed": 9374,
+   "latAvg": 9750,
+   "inAvg": 23179,
+   "outAvg": 319,
+   "wrong": []
+  },
+  "B": {
+   "n": 30,
+   "correct": 29,
+   "err": 0,
+   "latMed": 6502,
+   "latAvg": 6494,
+   "inAvg": 2552,
+   "outAvg": 263,
+   "wrong": [
+    "gsm8k-test-306:5/10"
+   ]
+  },
+  "C": {
+   "n": 30,
+   "correct": 30,
+   "err": 0,
+   "latMed": 6297,
+   "latAvg": 6889,
+   "inAvg": 23179,
+   "outAvg": 300,
+   "wrong": []
+  }
+ },
+ "he": {
+  "A": {
+   "n": 20,
+   "passed": 19,
+   "latMed": 13845,
+   "outAvg": 897,
+   "fails": [
+    "HumanEval/149:SyntaxError: unterminated triple-quoted string literal (dete"
+   ]
+  },
+  "B": {
+   "n": 20,
+   "passed": 20,
+   "latMed": 11537,
+   "outAvg": 1176,
+   "fails": []
+  },
+  "C": {
+   "n": 20,
+   "passed": 20,
+   "latMed": 10746,
+   "outAvg": 874,
+   "fails": []
+  }
+ },
+ "ux": {
+  "A0": [
+   {
+    "name": "lang-zh",
+    "ok": true,
+    "note": "cjk=83",
+    "ms": 8749,
+    "leak": false,
+    "dup": false,
+    "text": "长城是中国古代规模宏大的军事防御工程，始建于西周时期，秦代统一后连接修缮，明代大规模增筑形成如今绵延万里的格局。它不仅是世界知名的文化遗产，更承载着古代中国的军事智慧与民族精神。"
+   },
+   {
+    "name": "lang-en",
+    "ok": true,
+    "note": "cjk=0 thinkingCjk=110",
+    "ms": 8828,
+    "leak": false,
+    "dup": false,
+    "text": "The Great Wall of China is one of the most iconic architectural wonders in the world, stre"
+   },
+   {
+    "name": "tool-bash",
+    "ok": true,
+    "note": "",
+    "ms": 10755,
+    "leak": false,
+    "dup": false,
+    "text": "56211"
+   },
+   {
+    "name": "tool-file",
+    "ok": true,
+    "note": "",
+    "ms": 14553,
+    "leak": false,
+    "dup": false,
+    "text": "The contents of the file `bench_note.txt` are:\n```\nzebra\n```"
+   },
+   {
+    "name": "identity",
+    "ok": true,
+    "note": "manual review",
+    "ms": 8972,
+    "leak": false,
+    "dup": false,
+    "text": "我是由JiuwenSwarm创建的个人智能体，当前由doubao-seed-2.0-mini模型提供支持。"
+   },
+   {
+    "name": "exact-json",
+    "ok": true,
+    "note": "",
+    "ms": 7609,
+    "leak": false,
+    "dup": false,
+    "text": "{\"a\":1,\"b\":[2,3]}"
+   }
+  ],
+  "A": [
+   {
+    "name": "lang-zh",
+    "ok": true,
+    "note": "cjk=104",
+    "ms": 8283,
+    "leak": false,
+    "dup": false,
+    "text": "长城是中国古代的军事防御工程，也是世界文化遗产之一。它始建于西周时期，秦统一后将各段城墙连接修缮，明朝是最后一次大规模修缮的朝代，如今我们常见的八达岭长城多为明长城遗存。长城不仅是"
+   },
+   {
+    "name": "lang-en",
+    "ok": true,
+    "note": "cjk=0 thinkingCjk=110",
+    "ms": 9879,
+    "leak": false,
+    "dup": false,
+    "text": "The Great Wall of China is a legendary series of ancient fortifications built along the no"
+   },
+   {
+    "name": "tool-bash",
+    "ok": true,
+    "note": "",
+    "ms": 9428,
+    "leak": false,
+    "dup": false,
+    "text": "56211"
+   },
+   {
+    "name": "tool-file",
+    "ok": true,
+    "note": "",
+    "ms": 15066,
+    "leak": false,
+    "dup": false,
+    "text": "已在当前目录创建文件 `bench_note.txt`，其内容为：\n```\nzebra\n```"
+   },
+   {
+    "name": "identity",
+    "ok": true,
+    "note": "manual review",
+    "ms": 9729,
+    "leak": false,
+    "dup": false,
+    "text": "我是由JiuwenSwarm创建的个人智能体，当前由doubao-seed-2.0-mini模型提供支持。"
+   },
+   {
+    "name": "exact-json",
+    "ok": true,
+    "note": "",
+    "ms": 6981,
+    "leak": false,
+    "dup": false,
+    "text": "{\"a\":1,\"b\":[2,3]}"
+   }
+  ],
+  "B": [
+   {
+    "name": "lang-zh",
+    "ok": true,
+    "note": "cjk=79",
+    "ms": 5502,
+    "leak": false,
+    "dup": false,
+    "text": "长城是中国古代的军事防御工程，是世界上修建时间最长、工程量最大的防御工事之一。它东起鸭绿江，西至嘉峪关，绵延上万公里，是中华民族的标志性文化符号之一，于1987年被列入《世界遗产名"
+   },
+   {
+    "name": "lang-en",
+    "ok": true,
+    "note": "cjk=0 thinkingCjk=0",
+    "ms": 6580,
+    "leak": false,
+    "dup": false,
+    "text": "The Great Wall of China is an iconic ancient fortification system that winds across northe"
+   },
+   {
+    "name": "tool-bash",
+    "ok": true,
+    "note": "",
+    "ms": 9149,
+    "leak": false,
+    "dup": false,
+    "text": "56211"
+   },
+   {
+    "name": "tool-file",
+    "ok": true,
+    "note": "",
+    "ms": 10740,
+    "leak": false,
+    "dup": false,
+    "text": "The exact contents of `bench_note.txt` are:\n```\nzebra\n```"
+   },
+   {
+    "name": "identity",
+    "ok": true,
+    "note": "manual review",
+    "ms": 5727,
+    "leak": false,
+    "dup": false,
+    "text": "I am Doubao, an AI assistant developed and powered by ByteDance's large language model bac"
+   },
+   {
+    "name": "exact-json",
+    "ok": true,
+    "note": "",
+    "ms": 6486,
+    "leak": false,
+    "dup": false,
+    "text": "{\"a\":1,\"b\":[2,3]}"
+   }
+  ],
+  "C": [
+   {
+    "name": "lang-zh",
+    "ok": true,
+    "note": "cjk=87",
+    "ms": 8215,
+    "leak": false,
+    "dup": false,
+    "text": "长城是中国古代的军事防御工程，也是世界文化遗产之一。它凝聚着中国古代劳动人民的智慧与汗水，是中华民族的重要精神象征，如今以其宏伟的工程规模和深厚的历史底蕴，吸引着世界各地的游客前来"
+   },
+   {
+    "name": "lang-en",
+    "ok": true,
+    "note": "cjk=0 thinkingCjk=101",
+    "ms": 4591,
+    "leak": false,
+    "dup": false,
+    "text": "The Great Wall of China, one of the most iconic architectural feats in human history, is a"
+   },
+   {
+    "name": "tool-bash",
+    "ok": true,
+    "note": "",
+    "ms": 8092,
+    "leak": false,
+    "dup": false,
+    "text": "56211"
+   },
+   {
+    "name": "tool-file",
+    "ok": true,
+    "note": "",
+    "ms": 15321,
+    "leak": false,
+    "dup": false,
+    "text": "The exact content of the file `bench_note.txt` is:  \n`zebra`"
+   },
+   {
+    "name": "identity",
+    "ok": true,
+    "note": "manual review",
+    "ms": 6080,
+    "leak": false,
+    "dup": false,
+    "text": "我是由JiuwenSwarm创建的个人智能体，当前基于豆包的doubao-seed-2.0-mini模型运行。"
+   },
+   {
+    "name": "exact-json",
+    "ok": true,
+    "note": "",
+    "ms": 3514,
+    "leak": false,
+    "dup": false,
+    "text": "{\"a\":1,\"b\":[2,3]}"
+   }
+  ]
+ }
+}
