@@ -166,6 +166,11 @@ export function createJiuwenAdapter(LlmAdapterBase, deps) {
           if (aux) overrides.historyMode = 'transcript'
           const query = buildQuery(options, turnMapping, cfg, overrides)
           const trace = makeTrace(cfg.traceFile)
+          if (!aux && cfg.toolPassthrough === 'mcp' && deps.mcpBridge && options.tools?.length) {
+            const r = await deps.mcpBridge.prepare(options.tools, dshSessionId)
+            trace({ at: 'mcp-passthrough', exposed: deps.mcpBridge.exposed(), error: r?.error })
+            if (r && !r.error) overrides.mcp = [...(overrides.mcp || []), cfg.mcpServerName]
+          }
           trace({ at: 'turn-start', dshSessionId, jiuwen: turnMapping.jiuwenSessionId, purpose: options.purpose, query: query.slice(0, 500), messages: (options.messages || []).length,
             blocks: JSON.stringify((options.messages || []).flatMap(m => Array.isArray(m.content) ? m.content.filter(b => b?.type !== 'text') : [])).slice(0, 1500) })
           let recorded = false
@@ -230,6 +235,7 @@ export function turnOverrides(cfg, options) {
     agentGroupName: pick('agentGroupName'),
     skills: req.skills ?? cfg.skills,
     pluginNames: req.pluginNames,
+    ...(Array.isArray(req.mcp) ? { mcp: req.mcp.map(String) } : {}),
     metadata: req.metadata,
     projectDir: req.projectDir,
     supportsUserInteraction: req.supportsUserInteraction ?? cfg.supportsUserInteraction,

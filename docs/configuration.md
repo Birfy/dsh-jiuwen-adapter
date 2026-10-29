@@ -40,6 +40,11 @@ Precedence: **environment variable > Cordis plugin config > default**（`provide
 | `supportsUserInteraction` | `JIUWEN_SUPPORTS_USER_INTERACTION=1\|0` | `auto` | `auto`: tell Jiuwen it may ask when the host has `ctx.userQuestions`; questions are answered via dsh user-questions (see [dsh-integration.md](./dsh-integration.md)) |
 | `questionTimeoutMs` | `JIUWEN_QUESTION_TIMEOUT_MS` | `600000` | Max wait for a dsh answer, then `noUiAnswer` |
 | `approvalTimeoutMs` | `JIUWEN_APPROVAL_TIMEOUT_MS` | `300000` | Max wait for a dsh approval decision on Jiuwen permission / plan approval, then **deny** |
+| `toolPassthrough` | `JIUWEN_TOOL_PASSTHROUGH` | `off` | `mcp`: expose allowlisted dsh tools to Jiuwen as a local MCP server ([dsh-integration.md](./dsh-integration.md#3-dsh-tools--jiuwen-opt-in-mcp-passthrough)) |
+| `toolAllowlist` | `JIUWEN_TOOL_ALLOWLIST` (comma) | `[]` | Tool names / `prefix*` / `*` |
+| `toolApproval` | `JIUWEN_TOOL_APPROVAL` | `dsh` | Gate each passthrough call with `ctx.approval` (deny when unavailable); `none` |
+| `toolCallTimeoutMs` | `JIUWEN_TOOL_CALL_TIMEOUT_MS` | `120000` | Abort a passthrough dsh tool call |
+| `mcpServerName` | `JIUWEN_MCP_SERVER_NAME` | `dsh-tools` | MCP server name registered in Jiuwen |
 | `noUiAnswer` | — | "No interactive user is available…" | Reply sent to Jiuwen when no dsh answerer exists |
 | `interruptOnAbort` | — | `true` | Host abort → `chat.interrupt {intent:'cancel'}` |
 | `finalGraceMs` | `JIUWEN_FINAL_GRACE_MS` | `1500` | Idle grace after `chat.final` (turn normally ends on `processing_status.is_complete`) |

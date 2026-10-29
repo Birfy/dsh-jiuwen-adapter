@@ -24,3 +24,26 @@ Verified live on npm `@deepseek-ai/dsh@0.2.1-rc.2` + local JiuwenSwarm Gateway `
 - Live (dsh 0.2.1-rc.2, `JIUWEN_CHAT_MODE=code.plan`): rejected → Jiuwen did not execute the plan (file not created); `allowed-once` → plan executed (`/tmp/jwplan.txt` = `hi`).
 
 中文：Jiuwen 的工具权限卡 / 计划审批统一交给 dsh `ctx.approval`；只有 `allowed-once` 才放行，其余（无 UI、超时、出错）一律拒绝。
+
+## 3. dsh tools → Jiuwen (opt-in MCP passthrough)
+
+Default stays **`toolPassthrough: off`**: dsh tool schemas are stripped and Jiuwen only uses its own tools (no double execution, no DSH agent-loop re-entry).
+
+With `toolPassthrough: mcp` the adapter serves the allowlisted tool schemas of each dsh turn (`GenerateOptions.tools`: built-ins, other plugins' tools, `dsh-mcp-client` tools) as a minimal Streamable-HTTP MCP server on `127.0.0.1:<random>` with a random bearer token, registers it in Jiuwen (`mcp.register_custom` + `mcp.connect`, name `mcpServerName`) and enables it per turn (`chat.send` param `mcp: [name]`). Jiuwen calls it as `mcp_<name>_<tool>`; dsh executes `ctx.tools.get(tool).execute()` in-process.
+
+```yaml
+- id: llm-jiuwen
+  config:
+    toolPassthrough: mcp             # JIUWEN_TOOL_PASSTHROUGH
+    toolAllowlist: [web_fetch, working_directory, 'my_plugin_*']   # JIUWEN_TOOL_ALLOWLIST (comma); '*' = all — empty = none
+    toolApproval: dsh                # every call needs ctx.approval allowed-once (deny on no UI/timeout); 'none' to skip
+    toolCallTimeoutMs: 120000
+    mcpServerName: dsh-tools
+```
+
+Notes / risks:
+- Registration is written to Jiuwen's MCP state; on plugin dispose the adapter sends `mcp.disconnect` + `mcp.delete_custom`. A killed host may leave a dead entry; the next start overwrites it (same name).
+- Calls run outside dsh's tool scheduler (no dsh tool cards / pre-/post-execute hooks); approval is the gate. Prefer narrow allowlists; do not allowlist tools Jiuwen already has (bash/read/write…) unless you mean it.
+- Live (dsh 0.2.1-rc.2): allowlist `working_directory` → Jiuwen called `mcp_dshtest_working_directory`, got `{"cwd":"/tmp/qs-KbEo"}`; with approval rejected Jiuwen received `dsh denied working_directory (rejected)`. Registration adds ~1–2 s on the first turn of a process.
+
+中文：默认仍剥离 dsh 工具；设 `toolPassthrough: mcp` + `toolAllowlist` 后，dsh（含其他插件/MCP）工具以本地 MCP 服务注册给 Jiuwen，由 dsh 执行、每次调用需 dsh 审批（默认拒绝）。

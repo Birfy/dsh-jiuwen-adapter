@@ -145,6 +145,14 @@ export function resolveConfig(raw = {}, opts = {}) {
     questionTimeoutMs: Number(raw.questionTimeoutMs ?? env.JIUWEN_QUESTION_TIMEOUT_MS ?? 600_000),
     /** Max wait for a dsh approval decision before denying (ms). */
     approvalTimeoutMs: Number(raw.approvalTimeoutMs ?? env.JIUWEN_APPROVAL_TIMEOUT_MS ?? 300_000),
+    /** dsh tools → Jiuwen: 'off' (default; Jiuwen uses only its own tools) | 'mcp' (serve allowlisted dsh tools as an MCP server registered in Jiuwen). */
+    toolPassthrough: pickEnum(env.JIUWEN_TOOL_PASSTHROUGH || raw.toolPassthrough, ['off', 'mcp'], 'off'),
+    /** Tool names (exact, prefix*, or '*') exposed when toolPassthrough=mcp. Empty = none. */
+    toolAllowlist: Array.isArray(raw.toolAllowlist) ? raw.toolAllowlist.map(String) : (env.JIUWEN_TOOL_ALLOWLIST ? env.JIUWEN_TOOL_ALLOWLIST.split(',').map(x => x.trim()).filter(Boolean) : []),
+    /** 'dsh' (default): every passthrough call needs ctx.approval allowed-once (deny when unavailable) | 'none'. */
+    toolApproval: pickEnum(env.JIUWEN_TOOL_APPROVAL || raw.toolApproval, ['dsh', 'none'], 'dsh'),
+    toolCallTimeoutMs: Number(raw.toolCallTimeoutMs ?? env.JIUWEN_TOOL_CALL_TIMEOUT_MS ?? 120_000),
+    mcpServerName: String(raw.mcpServerName || env.JIUWEN_MCP_SERVER_NAME || 'dsh-tools'),
     /** Reply sent to Jiuwen when it asked but no dsh answerer exists. */
     noUiAnswer: String(raw.noUiAnswer || 'No interactive user is available. Proceed with your best judgment and state your assumptions.'),
     /** Cancel in-flight Jiuwen turn (chat.interrupt intent=cancel) when the host aborts. */

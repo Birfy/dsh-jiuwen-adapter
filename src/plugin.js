@@ -10,6 +10,7 @@ import { createJiuwenAdapter } from './adapter.js'
 import { createToolBridge } from './tool-bridge.js'
 import { GatewayTransport } from './gateway-transport.js'
 import { createInteractor } from './interaction.js'
+import { createMcpBridge } from './mcp-bridge.js'
 
 export { Config }
 export const name = 'llm-jiuwen'
@@ -53,8 +54,15 @@ export function apply(ctx, config = {}) {
     logger,
     services: () => ({ userQuestions: service('userQuestions'), approval: service('approval'), agents: service('agents') }),
   })
+  const mcpBridge = createMcpBridge({
+    config: readConfig,
+    logger,
+    services: () => ({ tools: service('tools'), approval: service('approval'), agents: service('agents') }),
+    rpc: (method, params, opts) => gatewayFor().rpc(method, params, opts),
+  })
   const AdapterClass = createJiuwenAdapter(LlmAdapter, {
     interact,
+    mcpBridge,
     hasUserQuestions: () => Boolean(service('userQuestions')?.ask),
     config: readConfig,
     sessions,
@@ -133,6 +141,7 @@ export function apply(ctx, config = {}) {
     ctx.effect(function* () {
       yield () => {
         try { registration() } catch { /* already disposed */ }
+        mcpBridge.dispose().catch(() => {})
       }
     }, 'llm-jiuwen')
   } else {

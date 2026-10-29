@@ -109,6 +109,7 @@ export class GatewayTransport {
         ...(o.agentGroupName ? { agent_group_name: o.agentGroupName } : {}),
         ...(Array.isArray(o.skills) ? { skills: o.skills } : {}),
         ...(Array.isArray(o.pluginNames) ? { plugin_names: o.pluginNames } : {}),
+        ...(Array.isArray(o.mcp) && o.mcp.length ? { mcp: o.mcp } : {}),
         ...(o.metadata && typeof o.metadata === 'object' ? { metadata: o.metadata } : {}),
         supports_user_interaction: o.supportsUserInteraction ?? false,
         ...(projectDir ? {
