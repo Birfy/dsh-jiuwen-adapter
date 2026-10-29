@@ -44,7 +44,9 @@ Precedence: **environment variable > Cordis plugin config > default**（`provide
 | `toolAllowlist` | `JIUWEN_TOOL_ALLOWLIST` (comma) | `[]` | Tool names / `prefix*` / `*` |
 | `toolApproval` | `JIUWEN_TOOL_APPROVAL` | `dsh` | Gate each passthrough call with `ctx.approval` (deny when unavailable); `none` |
 | `toolCallTimeoutMs` | `JIUWEN_TOOL_CALL_TIMEOUT_MS` | `120000` | Abort a passthrough dsh tool call |
-| `mcpServerName` | `JIUWEN_MCP_SERVER_NAME` | `dsh-tools` | MCP server name registered in Jiuwen |
+| `mcpServerName` | `JIUWEN_MCP_SERVER_NAME` | `dsh-tools` | Name of the stable stdio MCP proxy registered once in Jiuwen (experimental) |
+| `mcpStateDir` | `JIUWEN_MCP_STATE_DIR` | `~/.cache/dsh-jiuwen/mcp/<name>` | Shared dir: `schemas.json` + `ep-<pid>.json` read by the proxy |
+| `mcpRpcTimeoutMs` | `JIUWEN_MCP_RPC_TIMEOUT_MS` | `30000` | Timeout for `mcp.register_custom` / `connect` / `disconnect` |
 | `noUiAnswer` | — | "No interactive user is available…" | Reply sent to Jiuwen when no dsh answerer exists |
 | `interruptOnAbort` | — | `true` | Host abort → `chat.interrupt {intent:'cancel'}` |
 | `finalGraceMs` | `JIUWEN_FINAL_GRACE_MS` | `1500` | Idle grace after `chat.final` (turn normally ends on `processing_status.is_complete`) |

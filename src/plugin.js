@@ -144,7 +144,7 @@ export function apply(ctx, config = {}) {
   exposeService(ctx, cfg.serviceName, api, logger)
 
   // `/jiuwen <sub>` slash command when the host has a command registry (dsh-commands).
-  const command = createJiuwenCommand({ sessions, gateway: gatewayFor, config: readConfig })
+  const command = createJiuwenCommand({ sessions, gateway: gatewayFor, config: readConfig, mcpBridge })
   api.command = command.run
   if (cfg.registerCommands !== false && typeof ctx.inject === 'function') {
     try {

@@ -3,7 +3,7 @@
  * A single namespaced command avoids clashing with dsh built-ins (/compact, /goal, …).
  */
 
-export const SUBCOMMANDS = 'status | models | model <name|default> | compact | interrupt | sessions | skills | agents | mcp'
+export const SUBCOMMANDS = 'status | models | model <name|default> | compact | interrupt | sessions | skills | agents | mcp | mcp-reset'
 
 /**
  * @param {{ sessions: import('./session-store.js').SessionStore, gateway: () => import('./gateway-transport.js').GatewayTransport, config: () => any }} deps
@@ -60,6 +60,12 @@ export function createJiuwenCommand(deps) {
       case 'skills': { const r = await g.skillsList(); return `Jiuwen skills: ${names(r?.skills || r?.items).join(', ') || 'none'}` }
       case 'agents': { const r = await g.agentsList(); return `Jiuwen agents: ${names(r?.agents || r?.items).join(', ') || 'none'}` }
       case 'mcp': { const r = await g.mcpList(); return `Jiuwen MCP servers: ${(r?.items || []).map(x => `${x.name}${x.connection_state ? ` (${x.connection_state})` : ''}`).join(', ') || 'none'}` }
+      case 'mcp-reset': {
+        if (!deps.mcpBridge?.unregister) return 'dsh tool passthrough is not available'
+        const r = await deps.mcpBridge.unregister()
+        const ok = (x) => (x && typeof x === 'object' ? (x.ok === false ? 'failed' : 'ok') : String(x))
+        return `Removed Jiuwen MCP registration "${deps.config().mcpServerName}" (disconnect: ${ok(r.disconnect)}, delete: ${ok(r.delete)}); the next passthrough turn re-registers it`
+      }
       default: return `Unknown subcommand "${sub}". Usage: /jiuwen ${SUBCOMMANDS}`
     }
   }
@@ -67,7 +73,7 @@ export function createJiuwenCommand(deps) {
     run,
     definition: {
       name: 'jiuwen',
-      description: 'JiuwenSwarm: status, models, model switch, compact, interrupt, sessions, skills, agents, mcp',
+      description: 'JiuwenSwarm: status, models, model switch, compact, interrupt, sessions, skills, agents, mcp, mcp-reset',
       input: { hint: SUBCOMMANDS },
       async handler(invocation) {
         try {

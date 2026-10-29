@@ -25,11 +25,16 @@ Verified live on npm `@deepseek-ai/dsh@0.2.1-rc.2` + local JiuwenSwarm Gateway `
 
 中文：Jiuwen 的工具权限卡 / 计划审批统一交给 dsh `ctx.approval`；只有 `allowed-once` 才放行，其余（无 UI、超时、出错）一律拒绝。
 
-## 3. dsh tools → Jiuwen (opt-in MCP passthrough)
+## 3. dsh tools → Jiuwen (opt-in MCP passthrough) — **experimental**
 
 Default stays **`toolPassthrough: off`**: dsh tool schemas are stripped and Jiuwen only uses its own tools (no double execution, no DSH agent-loop re-entry).
 
-With `toolPassthrough: mcp` the adapter serves the allowlisted tool schemas of each dsh turn (`GenerateOptions.tools`: built-ins, other plugins' tools, `dsh-mcp-client` tools) as a minimal Streamable-HTTP MCP server on `127.0.0.1:<random>` with a random bearer token, registers it in Jiuwen (`mcp.register_custom` + `mcp.connect`, name `mcpServerName`) and enables it per turn (`chat.send` param `mcp: [name]`). Jiuwen calls it as `mcp_<name>_<tool>`; dsh executes `ctx.tools.get(tool).execute()` in-process.
+With `toolPassthrough: mcp` each dsh process serves the allowlisted tool schemas of its turns (`GenerateOptions.tools`: built-ins, other plugins' tools, `dsh-mcp-client` tools) on a private `127.0.0.1:<random>` endpoint with a random bearer token. Jiuwen does **not** connect to that endpoint: it talks to one stable stdio MCP server, `bin/jiuwen-mcp-proxy.mjs`, registered once per Jiuwen backend under `mcpServerName` (`mcp.register_custom` transport `stdio` + `mcp.connect`) and owned by Jiuwen. Each dsh process drops `ep-<pid>.json` (0600) into the shared state dir (`mcpStateDir`, default `~/.cache/dsh-jiuwen/mcp/<mcpServerName>/`) and merges its schemas into `schemas.json`; the proxy forwards `tools/call` to the newest live process that serves the tool and answers `isError` "dsh is not running" otherwise. The turn enables it via `chat.send` param `mcp: [name]`; Jiuwen calls `mcp_<name>_<tool>`; dsh executes `ctx.tools.get(tool).execute()` in-process.
+
+Why the proxy: JiuwenSwarm's worker spins at 100 % CPU forever when it closes a streamable-http MCP client whose server already exited ([known-issues.md](./known-issues.md#1-jiuwen-worker-spins-at-100-cpu-after-an-mcp-server-disappears)). dsh processes are short-lived and may be killed (`kill -9`), so per-process register/remove — the first implementation — reliably wedged the backend. Now:
+- no `mcp.disconnect` / `mcp.delete_custom` per process; dispose / exit only removes `ep-<pid>.json` (a stale file of a killed process is ignored by pid liveness);
+- an existing connected proxy record is reused without any RPC (read from Jiuwen's `agent/workspace/mcp/state.json`); new tool names trigger a disconnect + connect **while the proxy is alive** (safe);
+- RPCs time out after `mcpRpcTimeoutMs` (30 s); registration failure only disables passthrough for that turn.
 
 ```yaml
 - id: llm-jiuwen
@@ -39,14 +44,18 @@ With `toolPassthrough: mcp` the adapter serves the allowlisted tool schemas of e
     toolApproval: dsh                # every call needs ctx.approval allowed-once (deny on no UI/timeout); 'none' to skip
     toolCallTimeoutMs: 120000
     mcpServerName: dsh-tools
+    # mcpStateDir: ~/.cache/dsh-jiuwen/mcp/dsh-tools   # JIUWEN_MCP_STATE_DIR
+    # mcpRpcTimeoutMs: 30000                            # JIUWEN_MCP_RPC_TIMEOUT_MS
 ```
 
 Notes / risks:
-- Registration is written to Jiuwen's MCP state; on plugin dispose the adapter sends `mcp.disconnect` + `mcp.delete_custom`. A killed host may leave a dead entry; the next start overwrites it (same name).
+- Requires dsh and Jiuwen on the same host/user (the proxy reads the state dir). Concurrent dsh processes share one registration; a call goes to the newest live process exposing that tool.
 - Calls run outside dsh's tool scheduler (no dsh tool cards / pre-/post-execute hooks); approval is the gate. Prefer narrow allowlists; do not allowlist tools Jiuwen already has (bash/read/write…) unless you mean it.
-- Live (dsh 0.2.1-rc.2): allowlist `working_directory` → Jiuwen called `mcp_dshtest_working_directory`, got `{"cwd":"/tmp/qs-KbEo"}`; with approval rejected Jiuwen received `dsh denied working_directory (rejected)`. Registration adds ~1–2 s on the first turn of a process.
+- Upgrading from the old per-process streamable-http registration: the first re-register replaces the old record; if that old server is gone Jiuwen may wedge once (see recovery).
+- **Recovery** if the Jiuwen worker sits at ~100 % CPU while idle / all turns get slower: `/jiuwen mcp-reset` (disconnect + delete while the proxy answers) and restart the JiuwenSwarm agentserver **and** gateway (killing the old worker process; it does not exit on SIGTERM when wedged). See known-issues.md.
+- Live (dsh 0.2.1-rc.2, first implementation): allowlist `working_directory` → Jiuwen called `mcp_dsh-tools_working_directory`, got the dsh cwd; with approval rejected Jiuwen received `dsh denied working_directory (rejected)`.
 
-中文：默认仍剥离 dsh 工具；设 `toolPassthrough: mcp` + `toolAllowlist` 后，dsh（含其他插件/MCP）工具以本地 MCP 服务注册给 Jiuwen，由 dsh 执行、每次调用需 dsh 审批（默认拒绝）。
+中文（实验性）：默认仍剥离 dsh 工具；设 `toolPassthrough: mcp` + `toolAllowlist` 后，Jiuwen 只连接一个由它自己托管、常驻的 stdio MCP 代理（`bin/jiuwen-mcp-proxy.mjs`，每个 Jiuwen 后端注册一次），代理把调用转发给当前存活的 dsh 进程（`ep-<pid>.json`）；dsh 进程退出或被 kill -9 只会留下无效端点文件，不再逐进程 disconnect/delete，从而避开 Jiuwen 在关闭"服务端已消失"的 MCP 客户端时 worker 100% CPU 空转的 bug。每次调用仍需 dsh 审批（默认拒绝）。出现空转时：`/jiuwen mcp-reset` 后重启 Jiuwen agentserver + gateway。
 
 ## 4. dsh auxiliary calls (titles, compaction) don't run Jiuwen turns
 

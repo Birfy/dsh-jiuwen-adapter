@@ -2,13 +2,38 @@
  * Opt-in dsh → Jiuwen tool passthrough over MCP (toolPassthrough: 'mcp').
  *
  * Serves the allowlisted dsh tool schemas of the current turn (GenerateOptions.tools — built-ins,
- * other plugins' tools, dsh MCP-client tools) as a minimal Streamable-HTTP MCP server on 127.0.0.1
- * with a random bearer token, registers it in JiuwenSwarm (mcp.register_custom + mcp.connect), and
- * executes tools/call inside dsh via ctx.tools.get(name).execute(). Each call is gated by dsh
- * approval unless toolApproval: 'none' (deny when unavailable).
+ * other plugins' tools, dsh MCP-client tools) on a private 127.0.0.1 HTTP endpoint (random bearer
+ * token) and executes tools/call inside dsh via ctx.tools.get(name).execute(). Each call is gated
+ * by dsh approval unless toolApproval: 'none' (deny when unavailable).
+ *
+ * Jiuwen never connects to that endpoint directly. JiuwenSwarm spins its worker at 100 % CPU when
+ * it closes a streamable-http MCP client whose server already exited (docs/known-issues.md), and a
+ * dsh process can exit or be killed at any time. Instead one stable stdio MCP server,
+ * bin/jiuwen-mcp-proxy.mjs, is registered once per Jiuwen backend under `mcpServerName` and owned
+ * by Jiuwen; every dsh process only drops an endpoint file (ep-<pid>.json) into the shared state
+ * dir and removes it on exit. No mcp.disconnect / delete_custom per process.
  */
 import { createServer } from 'node:http'
 import { randomBytes, randomUUID } from 'node:crypto'
+import { mkdirSync, writeFileSync, readFileSync, renameSync, unlinkSync } from 'node:fs'
+import { join, dirname } from 'node:path'
+import { homedir } from 'node:os'
+import { fileURLToPath } from 'node:url'
+
+export const PROXY_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'jiuwen-mcp-proxy.mjs')
+const readJson = (f, d) => { try { return JSON.parse(readFileSync(f, 'utf8')) } catch { return d } }
+const writeAtomic = (f, data, mode = 0o600) => { const t = `${f}.${process.pid}.tmp`; writeFileSync(t, data, { mode }); renameSync(t, f) }
+
+/** Desired Jiuwen registration for the stable proxy. */
+export function proxyRegistration(name, stateDir, callTimeoutMs) {
+  return { name, transport: 'stdio', command: process.execPath, args: [PROXY_PATH, stateDir], timeout_s: Math.ceil(callTimeoutMs / 1000) }
+}
+
+/** Is Jiuwen's persisted record already our connected proxy (same command/args)? */
+export function isProxyConnected(record, reg) {
+  return Boolean(record && record.state === 'connected' && record.transport === 'stdio'
+    && record.command === reg.command && JSON.stringify(record.args || []) === JSON.stringify(reg.args))
+}
 
 export function matchesAllowlist(name, list) {
   return (list || []).some((p) => {
@@ -85,6 +110,40 @@ export function createMcpBridge({ config, services, rpc, logger }) {
     return { jsonrpc: '2.0', id, error: { code: -32601, message: `method not found: ${method}` } }
   }
 
+  const stateDir = () => cfg().mcpStateDir || join(homedir(), '.cache', 'dsh-jiuwen', 'mcp', cfg().mcpServerName)
+  const jiuwenState = () => cfg().jiuwenMcpStateFile || join(process.env.JIUWEN_HOME || join(homedir(), '.jiuwenswarm'), 'agent', 'workspace', 'mcp', 'state.json')
+  let epFile
+  const removeEp = () => { if (epFile) { try { unlinkSync(epFile) } catch { /* gone */ } epFile = undefined } }
+
+  /** Merge this process's schemas into the shared union; true when names were added. */
+  function publishSchemas() {
+    const f = join(stateDir(), 'schemas.json')
+    const prev = readJson(f, [])
+    const byName = new Map(prev.map(t => [t.name, t]))
+    let added = false
+    for (const sch of schemas.values()) {
+      if (!byName.has(sch.name)) added = true
+      byName.set(sch.name, { name: sch.name, description: String(sch.description || sch.name).slice(0, 4000), inputSchema: sch.parameters || sch.inputSchema || { type: 'object', properties: {} } })
+    }
+    writeAtomic(f, JSON.stringify([...byName.values()]), 0o644)
+    return added
+  }
+
+  async function ensureRegistered(added) {
+    const c = cfg()
+    const reg = proxyRegistration(c.mcpServerName, stateDir(), c.toolCallTimeoutMs)
+    const record = readJson(jiuwenState(), {})?.mcp?.[c.mcpServerName]
+    const timeoutMs = c.mcpRpcTimeoutMs ?? 30_000
+    if (isProxyConnected(record, reg)) {
+      // New tool names are only listed after a reconnect; safe because the proxy is alive.
+      if (added) { await rpc('mcp.disconnect', { name: reg.name }, { timeoutMs }); await rpc('mcp.connect', { name: reg.name }, { timeoutMs }) }
+      return { reused: !added, reconnected: added }
+    }
+    await rpc('mcp.register_custom', reg, { timeoutMs })
+    const r = await rpc('mcp.connect', { name: reg.name }, { timeoutMs })
+    return { registered: true, connect: r }
+  }
+
   function start() {
     if (ready) return ready
     token = randomBytes(24).toString('hex')
@@ -98,23 +157,26 @@ export function createMcpBridge({ config, services, rpc, logger }) {
         try { msg = JSON.parse(body) } catch { res.writeHead(400).end(); return }
         const out = Array.isArray(msg) ? (await Promise.all(msg.map(handle))).filter(Boolean) : await handle(msg)
         if (!out || (Array.isArray(out) && !out.length)) { res.writeHead(202).end(); return }
-        res.writeHead(200, { 'content-type': 'application/json', 'mcp-session-id': 'dsh' }).end(JSON.stringify(out))
+        res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(out))
       })
     })
-    // Never keep a short-lived host (dsh headless) alive: Jiuwen holds keep-alive connections.
+    // Never keep a short-lived host (dsh headless) alive.
     server.unref?.()
     server.keepAliveTimeout = 1000
     server.on('connection', (sock) => sock.unref?.())
-    ready = new Promise((resolve, reject) => {
-      server.once('error', reject)
+    ready = new Promise((resolve) => {
+      server.once('error', (error) => resolve({ error: String(error?.message || error) }))
       server.listen(0, '127.0.0.1', async () => {
         url = `http://127.0.0.1:${server.address().port}/mcp`
         const name = cfg().mcpServerName
         try {
-          await rpc('mcp.register_custom', { name, transport: 'streamable-http', url, headers: { Authorization: `Bearer ${token}` }, timeout_s: Math.ceil(cfg().toolCallTimeoutMs / 1000) })
-          const r = await rpc('mcp.connect', { name }, { timeoutMs: 60_000 })
-          logger?.info?.(`[dsh-jiuwen] dsh tools exposed to Jiuwen as MCP "${name}" (${schemas.size} schema(s))`)
-          resolve({ url, connect: r })
+          mkdirSync(stateDir(), { recursive: true, mode: 0o700 })
+          epFile = join(stateDir(), `ep-${process.pid}.json`)
+          writeAtomic(epFile, JSON.stringify({ pid: process.pid, url, token, ts: Date.now(), tools: [...schemas.keys()] }))
+          process.once('exit', removeEp)
+          const r = await ensureRegistered(publishSchemas())
+          logger?.info?.(`[dsh-jiuwen] dsh tools exposed to Jiuwen via MCP proxy "${name}" (${schemas.size} schema(s)${r.reused ? ', reused registration' : ''})`)
+          resolve({ url, ...r })
         } catch (error) {
           logger?.warn?.(`[dsh-jiuwen] MCP passthrough registration failed: ${error?.message || error}`)
           resolve({ url, error: String(error?.message || error) })
@@ -130,15 +192,32 @@ export function createMcpBridge({ config, services, rpc, logger }) {
       currentSessionId = sessionId
       for (const t of tools || []) if (t?.name && matchesAllowlist(t.name, cfg().toolAllowlist)) schemas.set(t.name, t)
       if (!schemas.size) return null
-      return start()
+      if (!ready) return start()
+      const r = await ready
+      // Later turns of a long-lived host may expose more tools: refresh our endpoint + the union.
+      const known = readJson(epFile || '', null)?.tools || []
+      if (epFile && [...schemas.keys()].some(n => !known.includes(n))) {
+        try {
+          writeAtomic(epFile, JSON.stringify({ pid: process.pid, url, token, ts: Date.now(), tools: [...schemas.keys()] }))
+          return { url, ...(await ensureRegistered(publishSchemas())) }
+        } catch (error) { return { url, error: String(error?.message || error) } }
+      }
+      return r
     },
     exposed: () => [...schemas.keys()],
+    /** Leave Jiuwen's registration in place (the proxy is owned by Jiuwen); drop only our endpoint. */
     async dispose() {
+      removeEp()
       if (!server) return
-      const name = cfg().mcpServerName
-      try { await rpc('mcp.disconnect', { name }, { timeoutMs: 5000 }) } catch { /* ignore */ }
-      try { await rpc('mcp.delete_custom', { name }, { timeoutMs: 5000 }) } catch { /* ignore */ }
       server.close(); server = undefined; ready = undefined
+    },
+    /** Explicit teardown (e.g. `/jiuwen mcp-reset`): disconnect while the proxy still answers, then delete. */
+    async unregister() {
+      const name = cfg().mcpServerName, timeoutMs = cfg().mcpRpcTimeoutMs ?? 30_000
+      const out = {}
+      try { out.disconnect = await rpc('mcp.disconnect', { name }, { timeoutMs }) } catch (e) { out.disconnect = String(e?.message || e) }
+      try { out.delete = await rpc('mcp.delete_custom', { name }, { timeoutMs }) } catch (e) { out.delete = String(e?.message || e) }
+      return out
     },
     _handle: handle,
   }

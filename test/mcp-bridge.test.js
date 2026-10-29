@@ -1,8 +1,15 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createMcpBridge, matchesAllowlist } from '../src/mcp-bridge.js'
+import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { spawn } from 'node:child_process'
+import { createMcpBridge, matchesAllowlist, proxyRegistration, isProxyConnected, PROXY_PATH } from '../src/mcp-bridge.js'
 
-const base = { toolAllowlist: ['read', 'web_*'], toolApproval: 'dsh', approvalTimeoutMs: 200, toolCallTimeoutMs: 1000, mcpServerName: 'dsh-tools' }
+const tmp = mkdtempSync(join(tmpdir(), 'jw-mcp-test-'))
+process.on('exit', () => rmSync(tmp, { recursive: true, force: true }))
+
+const base = { toolAllowlist: ['read', 'web_*'], toolApproval: 'dsh', approvalTimeoutMs: 200, toolCallTimeoutMs: 1000, mcpServerName: 'dsh-tools', mcpStateDir: join(tmp, 'state'), jiuwenMcpStateFile: join(tmp, 'jiuwen-state.json') }
 function bridge(services, cfg = {}) {
   const calls = []
   const b = createMcpBridge({ config: () => ({ ...base, ...cfg }), services: () => services, rpc: async (m, p) => { calls.push([m, p]); return {} } })
@@ -17,18 +24,58 @@ test('allowlist: exact, prefix*, *', () => {
   assert.ok(!matchesAllowlist('bash', []))
 })
 
-test('tools/list exposes only allowlisted dsh schemas; registers + connects once', async () => {
+test('registers the stable stdio proxy once; dispose never disconnects; connected proxy is reused', async () => {
+  rmSync(join(tmp, 'jiuwen-state.json'), { force: true })
   const { b, calls } = bridge({})
   await b.prepare(schemas, 's1')
   const r = await b._handle({ jsonrpc: '2.0', id: 1, method: 'tools/list' })
   assert.deepEqual(r.result.tools.map(t => t.name), ['read', 'web_fetch'])
   assert.deepEqual(calls.map(c => c[0]), ['mcp.register_custom', 'mcp.connect'])
-  assert.equal(calls[0][1].transport, 'streamable-http')
-  assert.match(calls[0][1].url, /^http:\/\/127\.0\.0\.1:\d+\/mcp$/)
+  assert.equal(calls[0][1].transport, 'stdio')
+  assert.deepEqual(calls[0][1].args, [PROXY_PATH, join(tmp, 'state')])
+  const ep = join(tmp, 'state', `ep-${process.pid}.json`)
+  assert.ok(existsSync(ep))
+  assert.deepEqual(JSON.parse(readFileSync(join(tmp, 'state', 'schemas.json'), 'utf8')).map(t => t.name), ['read', 'web_fetch'])
   await b.prepare(schemas, 's1')
   assert.equal(calls.length, 2)
   await b.dispose()
-  assert.deepEqual(calls.slice(2).map(c => c[0]), ['mcp.disconnect', 'mcp.delete_custom'])
+  assert.equal(calls.length, 2, 'no mcp.disconnect / delete_custom on dispose')
+  assert.ok(!existsSync(ep))
+  // Next process: Jiuwen already has our proxy connected → no RPC at all.
+  const reg = proxyRegistration('dsh-tools', join(tmp, 'state'), 1000)
+  writeFileSync(join(tmp, 'jiuwen-state.json'), JSON.stringify({ mcp: { 'dsh-tools': { ...reg, state: 'connected' } } }))
+  assert.ok(isProxyConnected({ ...reg, state: 'connected' }, reg))
+  assert.ok(!isProxyConnected({ ...reg, state: 'connected', transport: 'streamable-http' }, reg))
+  const next = bridge({})
+  const r2 = await next.b.prepare(schemas, 's2')
+  assert.equal(r2.reused, true)
+  assert.equal(next.calls.length, 0)
+  // A new tool name → reconnect (proxy alive) so Jiuwen re-lists.
+  const more = bridge({}, { toolAllowlist: ['*'] })
+  await more.b.prepare(schemas, 's3')
+  assert.deepEqual(more.calls.map(c => c[0]), ['mcp.disconnect', 'mcp.connect'])
+  await next.b.dispose(); await more.b.dispose()
+  const u = await more.b.unregister()
+  assert.ok(u.disconnect && u.delete)
+})
+
+test('proxy (stdio): lists the shared schemas, forwards tools/call to the live endpoint, errors when dsh is gone', async () => {
+  rmSync(join(tmp, 'jiuwen-state.json'), { force: true })
+  const tools = { get: (n) => ({ execute: async () => `ran ${n}` }) }
+  const { b } = bridge({ tools }, { toolApproval: 'none' })
+  await b.prepare(schemas, 's1')
+  const p = spawn(process.execPath, [PROXY_PATH, join(tmp, 'state')], { stdio: ['pipe', 'pipe', 'inherit'] })
+  const pending = new Map(); let buf = ''
+  p.stdout.on('data', (d) => { buf += d; let i; while ((i = buf.indexOf('\n')) >= 0) { const m = JSON.parse(buf.slice(0, i)); buf = buf.slice(i + 1); pending.get(m.id)?.(m) } })
+  const call = (id, method, params) => new Promise((res) => { pending.set(id, res); p.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n') })
+  assert.equal((await call(1, 'initialize', {})).result.serverInfo.name, 'dsh-jiuwen-proxy')
+  assert.ok((await call(2, 'tools/list', {})).result.tools.some(t => t.name === 'read'))
+  let r = await call(3, 'tools/call', { name: 'read', arguments: {} })
+  assert.equal(r.result.isError, false); assert.equal(r.result.content[0].text, 'ran read')
+  await b.dispose()
+  r = await call(4, 'tools/call', { name: 'read', arguments: {} })
+  assert.equal(r.result.isError, true); assert.match(r.result.content[0].text, /not running/)
+  p.stdin.end()
 })
 
 test('tools/call: approval allowed-once executes dsh tool; no approval UI → denied; non-allowlisted → error', async () => {
