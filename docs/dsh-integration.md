@@ -1,4 +1,4 @@
-# dsh integration / 与 dsh 扩展点的集成
+# dsh integration
 
 How the adapter cooperates with other dsh (Cordis) plugins while JiuwenSwarm stays the agent brain.
 Verified live on npm `@deepseek-ai/dsh@0.2.1-rc.2` + local JiuwenSwarm Gateway `ws://127.0.0.1:19000/ws` (2026-10-29).
@@ -11,7 +11,6 @@ Verified live on npm `@deepseek-ai/dsh@0.2.1-rc.2` + local JiuwenSwarm Gateway `
 - Fallback: no answerer (`NO_PROVIDER`, e.g. headless), error or `questionTimeoutMs` (default 600000) → Jiuwen is told `noUiAnswer` ("No interactive user is available…") so it never stays paused. With `supportsUserInteraction: false` the legacy behaviour remains (question printed as text, turn ends, `gateway.userAnswer()` available).
 - Duplicate cards for an already-answered `request_id` are ignored.
 
-中文：`supportsUserInteraction` 默认 `auto`——宿主有 `ctx.userQuestions` 且有客户端监听 `user-questions/request`（TUI/web）时才告诉 Jiuwen 可交互（headless 不开启，省掉 ask_user 工具约 920 输入 token/轮）；问题走 dsh 原生问答卡，答案在同一 WS 上回给 Jiuwen 并继续流式输出；无答题 UI/超时则回一个中性答复让 Jiuwen 自行继续。
 
 ## 2. Permission / plan approval → dsh user-approval (`ctx.approval`)
 
@@ -23,7 +22,6 @@ Verified live on npm `@deepseek-ai/dsh@0.2.1-rc.2` + local JiuwenSwarm Gateway `
 - **Safe default = deny**: no `ctx.approval`, no live agent, `rejected`/`cancelled`/`unavailable`, error, abort or `approvalTimeoutMs` (default 300000) → reject. Approvals never fail open. dsh approval policy `never` (auto-approve) is honoured because it is dsh's own decision.
 - Live (dsh 0.2.1-rc.2, `JIUWEN_CHAT_MODE=code.plan`): rejected → Jiuwen did not execute the plan (file not created); `allowed-once` → plan executed (`/tmp/jwplan.txt` = `hi`).
 
-中文：Jiuwen 的工具权限卡 / 计划审批统一交给 dsh `ctx.approval`；只有 `allowed-once` 才放行，其余（无 UI、超时、出错）一律拒绝。
 
 ## 3. dsh tools → Jiuwen (opt-in MCP passthrough) — **experimental**
 
@@ -55,7 +53,6 @@ Notes / risks:
 - **Recovery** if the Jiuwen worker sits at ~100 % CPU while idle / all turns get slower: `/jiuwen mcp-reset confirm` (disconnect + delete while the proxy answers; the next passthrough turn re-registers the identical proxy) and restart the JiuwenSwarm agentserver **and** gateway (killing the old worker process; it does not exit on SIGTERM when wedged). See known-issues.md.
 - Live (dsh 0.2.1-rc.2, first implementation): allowlist `working_directory` → Jiuwen called `mcp_dsh-tools_working_directory`, got the dsh cwd; with approval rejected Jiuwen received `dsh denied working_directory (rejected)`.
 
-中文（实验性）：默认仍剥离 dsh 工具；设 `toolPassthrough: mcp` + `toolAllowlist` 后，Jiuwen 只连接一个由它自己托管、常驻的 stdio MCP 代理（`bin/jiuwen-mcp-proxy.mjs`，每个 Jiuwen 后端注册一次），代理把调用转发给当前存活的 dsh 进程（`ep-<pid>.json`）；dsh 进程退出或被 kill -9 只会留下无效端点文件，不再逐进程 disconnect/delete，从而避开 Jiuwen 在关闭"服务端已消失"的 MCP 客户端时 worker 100% CPU 空转的 bug。每次调用仍需 dsh 审批（默认拒绝）。出现空转时：`/jiuwen mcp-reset confirm` 后重启 Jiuwen agentserver + gateway。
 
 ## 4. dsh auxiliary calls (titles, compaction) don't run Jiuwen turns
 
@@ -65,7 +62,6 @@ Verified first: dsh `dsh-compaction-basic` calls `ctx.llm.stream({ purpose: 'com
 - `local+jiuwen`: same, plus `command.compact {session_id}` on the mapped Jiuwen session (live: `{"result":"compressed",…}`, ~15 s, only when the session has turns).
 - `jiuwen`: legacy throwaway-session turn.
 
-中文：dsh 压缩默认本地生成摘要，不再为压缩起一个 Jiuwen 回合；`local+jiuwen` 额外让 Jiuwen 压缩自己的会话。
 
 ## 5. `/jiuwen` slash command (dsh command registry)
 
@@ -128,7 +124,6 @@ Per-session overrides (`modelName`, `chatMode`, `skills`, `agentTemplateName`) l
 
 Live (dsh 0.2.1-rc.2, via `ctx.commands.execute(agent, …)` inside headless): registry lists `compact, feedback, goal, jiuwen, permission, plan`; `/jiuwen status`, `models`, `model doubao-seed-2.0-mini`, `model nosuch` (rejected with the available list) and `skills` all returned from the live gateway. Newer session RPCs (`session.rename` / `pin` / `fork` / `delete`, `command.goal`, `skills.toggle`, `command.btw` / `command.recap`, `session.plan_status`, `team.*`, `skills.installed`) depend on the Gateway build — see [known-issues.md](./known-issues.md) live probe notes; probe with `ctx.jiuwenAdapter.gateway.rpc` if a live call fails.
 
-中文：在 dsh 命令注册表上注册 `/jiuwen <子命令>`，覆盖 status / models / model / model-info / mode / pause / resume / rename / pin / fork / switch / archive / unarchive / unmap / delete confirm / goal / workflows / history / btw / recap / skill-toggle / plan-status / supplement / teams / tools / hooks / permissions[set/unset] / plugins[enable/disable] / projects[info/sessions] / archived / assets / version / heartbeat[set/jobs] / path / locale / commands / templates / cron / compact / interrupt / sessions / skills[installed] / agents / mcp / mcp-reset confirm；本地标题会兼容同步 `session.rename`；会话级 mode/skills/agentTemplate 可覆盖默认配置。
 
 ### 5a. Extended subcommands (JiuwenSwarm 0.2.7 `/ws`)
 
@@ -183,4 +178,3 @@ With `typedEvents: true` the same activity is also emitted as `jiuwen/tool` (too
 
 All events carry `dshSessionId`, `sessionId` (Jiuwen) and `requestId`; `raw` is the untouched Jiuwen payload (owned by JiuwenSwarm, may change). Live check: a co-loaded plugin's `ctx.on('jiuwen/event')` received events with `dshSessionId` (used by the command test in §5).
 
-中文：`jiuwen/event` 现已在 index.d.ts 中声明（Cordis Events 扩展），字段如上表；其他插件可直接 `ctx.on('jiuwen/event')` 订阅。

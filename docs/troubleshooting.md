@@ -1,29 +1,32 @@
-# Troubleshooting & FAQ / 排障与常见问题
+# Troubleshooting & FAQ
 
-## 排障
+## Symptoms
 
-| 现象 | 原因 | 处理 |
+| Symptom | Cause | Fix |
 |---|---|---|
-| `permissionPresets.catalog is not a function`（Mac brew dsh `0.1.2-rc.1`） | 旧版 dsh 宿主 ABI 缺 `catalog()`，与本插件无关 | `brew upgrade` 到 dsh `>= 0.2`，或使用源码构建的 dsh |
-| `ECONNREFUSED 127.0.0.1:19000` / 一直无输出 | Gateway 未启动 | `jiuwenswarm-start app`；`ss -ltn \| grep 19000`（Mac: `lsof -iTCP:19000 -sTCP:LISTEN`）；或 `npm run mock:gateway` 先联调 |
-| 401 / 403 / WS 立刻关闭 | token / cookie 不对或过期 | 设置 `JIUWEN_ACCESS_TOKEN` 或 `JIUWEN_COOKIE='access_token=...'`；确认 `JIUWEN_USER_ID` 与 token 匹配；见 [configuration.md](./configuration.md) 鉴权顺序 |
-| 回复「还没有配置可用的模型…」 | Jiuwen 未配置模型 | 填写 `~/.jiuwenswarm/config/.env` 的 `API_BASE/API_KEY/MODEL_NAME/MODEL_PROVIDER` 后重启 gateway |
-| 日志 `dsh-llm not resolvable; using duck-typed base` | 宿主没有 `@deepseek-ai/dsh-llm` | 通常无害；需要时设置 `JIUWEN_LLM_ADAPTER_MODULE` |
-| provider `jiuwen` 不出现 | 插件未加载 / 缺 `llm` 服务 | 检查 `inject: ['llm']` 满足；`dsh plugin --profile web add <path>` |
-| 超时 | 长任务超过 `requestTimeoutMs` | 调大 `JIUWEN_TIMEOUT_MS` |
-| 宿主想自己执行工具 | gateway 模式下工具归 Jiuwen | 改 `mode: openai` + `allowDshAgentLoop: true`（仅诊断） |
-| 首轮很慢 / 侧栏标题怪 | 旧版把 dsh 的标题调用当完整 Jiuwen 轮次 | 升级本适配器（`titleMode: local`） |
-| Jiuwen 回答"已收到运行时上下文" | 宿主追加 runtime context 被转发 | 默认已过滤；自定义 `ignoreMessagePatterns` |
-| 回复里出现 `[jiuwen-chat.processing_status] {...}` | 旧版泄漏 | 默认过滤；`showProcessingStatus: true` 可显示 |
-| 想要旧的 `[jiuwen-tool:…]` 文本 | 新默认放在推理块 | `eventDisplay: markers` |
-| 图片发了但 Jiuwen 说看不到 / 重复输出错误 | Jiuwen 模型不支持视觉 | 在 Jiuwen 配置视觉模型（`.env` / `models.upsert`），或 `providerOptions.jiuwen.modelName` |
-| 排查发送内容 | — | `JIUWEN_TRACE_FILE=/tmp/jw.jsonl` |
+| `permissionPresets.catalog is not a function` (Mac brew dsh `0.1.2-rc.1`) | Old dsh host ABI lacks `catalog()` — not an adapter bug | `brew upgrade` to dsh `≥ 0.2`, or build dsh from source |
+| `ECONNREFUSED 127.0.0.1:19000` / no output | Gateway not running | `jiuwenswarm-start app`; check `ss -ltn \| grep 19000` (Mac: `lsof -iTCP:19000 -sTCP:LISTEN`); or `npm run mock:gateway` |
+| 401 / 403 / WS closes immediately | Bad or expired token/cookie | Set `JIUWEN_ACCESS_TOKEN` or `JIUWEN_COOKIE='access_token=…'`; match `JIUWEN_USER_ID`; see [configuration.md](./configuration.md) auth order |
+| Reply: “no usable model configured…” | Jiuwen has no model | Fill `~/.jiuwenswarm/config/.env` (`API_BASE` / `API_KEY` / `MODEL_NAME` / `MODEL_PROVIDER`) and restart the gateway |
+| Log: `dsh-llm not resolvable; using duck-typed base` | Host has no `@deepseek-ai/dsh-llm` | Usually harmless; set `JIUWEN_LLM_ADAPTER_MODULE` if needed |
+| Provider `jiuwen` missing | Plugin not loaded / no `llm` service | Ensure `inject: ['llm']`; `dsh plugin --profile web add <path>` |
+| Timeout | Long turn exceeds `requestTimeoutMs` | Raise `JIUWEN_TIMEOUT_MS` |
+| Host wants to run tools itself | Gateway mode keeps tools on Jiuwen | Use `mode: openai` + `allowDshAgentLoop: true` (diagnostics only) |
+| First turn very slow / odd sidebar title | Older builds treated dsh title calls as full Jiuwen turns | Upgrade this adapter (`titleMode: local`) |
+| Jiuwen answers “runtime context received” | Host appended runtime context was forwarded | Filtered by default; customise `ignoreMessagePatterns` |
+| Reply contains `[jiuwen-chat.processing_status] {…}` | Older leak | Filtered by default; `showProcessingStatus: true` to show |
+| Want legacy `[jiuwen-tool:…]` text | New default puts activity in the reasoning block | `eventDisplay: markers` |
+| Image sent but Jiuwen “cannot see” it | Model has no vision | Configure a vision model in Jiuwen, or `providerOptions.jiuwen.modelName` |
+| Slash errors look like `Jiuwen: "未找到 skill"` (extra quotes) | Fixed in Round 3 — upgrade | Errors are now `Jiuwen: 未找到 skill` without quotes |
+| Mid-turn `TRANSPORT: Gateway WebSocket closed` | Gateway restarted or socket dropped | In-flight answer is lost (upstream); send the next message — it reconnects. `/jiuwen continue-queued` only helps when Jiuwen actually queued something |
+| Inspect what was sent | — | `JIUWEN_TRACE_FILE=/tmp/jw.jsonl` |
 
 ## FAQ
 
-- **一定要 dsh 吗？** 不需要。任何提供 Cordis `llm` 服务（`registerAdapter`）的宿主都行，见 `test/generic-host.test.js`。
-- **工具调用谁执行？** 默认 Jiuwen 执行，宿主只看到文本 marker（`[jiuwen-tool:name]`），finish=`stop`，不会二次执行。
-- **会话如何保持？** 宿主 `sessionId` 映射到稳定的 Jiuwen `session_id`（`dsh-<hex>`），存于 `mappingPath`；历史/记忆在 Jiuwen 侧。
-- **支持图片/文件吗？** 支持 data URL / 可读路径的图片与文件，转为 `media_items`；仅设备端/离线附件只能发文本占位。
-- **如何列历史、模型、MCP？** `ctx.jiuwenAdapter.gateway.historyGet / modelsList / mcpList / memoryList / filesList / chatCancel / workflows`。
-- **会提交密钥吗？** 不会；`.gitignore` 排除 `.env*`、cookie/token 文件、session-map、examples 证据目录。
+- **Do I need dsh?** No. Any Cordis host that exposes `ctx.llm.registerAdapter` works — see `test/generic-host.test.js`.
+- **Who runs tools?** Jiuwen, by default. The host sees activity in the reasoning block (or markers); finish is `stop`, so the host agent-loop does not re-execute tools.
+- **How do sessions persist?** Host `sessionId` → stable Jiuwen `session_id` (`dsh-<hex>`), stored at `mappingPath`. History/memory live on Jiuwen.
+- **Images / files?** Data URLs or readable paths become `media_items`. Device-only / offline attachments degrade to a text placeholder.
+- **History / models / MCP?** `ctx.jiuwenAdapter.gateway.historyGet` / `historyMessages` / `modelsList` / `mcpList` / … — see [gateway.md](./gateway.md).
+- **Are secrets committed?** No. `.gitignore` excludes `.env*`, cookie/token files, session maps, and example evidence dirs. The adapter never passes `api_key` through slash commands.
+- **Deletes?** Destructive `/jiuwen` actions need a trailing `confirm` (`delete`, `mcp-reset`, `cron delete`, `heartbeat delete`, `permissions rule delete`, `media discard`). `unmap` is local-only and confirm-free.

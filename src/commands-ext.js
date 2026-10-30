@@ -55,6 +55,15 @@ const label = (d) => (d && typeof d === 'object' ? (d.zh || d.en || Object.value
 const onOff = (raw) => { const v = String(raw || '').toLowerCase(); return ['on', 'true', '1', 'enable', 'enabled'].includes(v) ? true : (['off', 'false', '0', 'disable', 'disabled'].includes(v) ? false : undefined) }
 const getPath = (obj, path) => String(path).split('.').filter(Boolean).reduce((o, k) => (o == null ? undefined : o[k]), obj)
 const jobLine = j2 => `- ${j2.id || j2.job_id}${j2.name ? `  ${short(j2.name, 40)}` : ''}${j2.enabled === false ? ' [disabled]' : (j2.enabled ? ' [enabled]' : '')}${j2.cron_expr ? `  "${j2.cron_expr}"` : ''}`
+
+/** Normalise a cron expr to 5 or 7 fields (Gateway rejects 6). 5-field → Quartz 7-field with second=0, year=*. */
+export function normalizeCronExpr(expr) {
+  const parts = String(expr || '').trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 5) return ['0', ...parts, '*'].join(' ')
+  if (parts.length === 6) return ['0', ...parts].join(' ') // minute…dow year → add seconds
+  return parts.join(' ')
+}
+
 const needConfirm = (tokens, what) => (tokens.some(t => t === 'confirm' || t === '--confirm') ? null : `Refusing to ${what} without confirmation: re-run with a trailing \`confirm\`.`)
 
 /** One readable line per team.history record (0.2.7 records carry empty `content` for tool/team events). */
@@ -327,7 +336,7 @@ export const EXT = {
     usage: 'cron create name=<n> expr="<m h dom mon dow>" [desc=..] [tz=..] [target=web] [mode=agent] [enabled=off]', group: 'Schedules', methods: ['cron.job.create'],
     async run({ g, tokens, sid }) {
       const p = kv(tokens.slice(1))
-      const expr = p.expr || p.cron_expr
+      const expr = normalizeCronExpr(p.expr || p.cron_expr)
       if (!p.name || !expr) return 'Usage: /jiuwen cron create name=<name> expr="*/30 * * * *" [desc=<text>] [tz=Asia/Shanghai] [target=web] [mode=agent] [enabled=off]'
       const enabled = onOff(p.enabled) ?? false // created disabled unless asked: nothing runs by surprise
       const params = {
@@ -338,6 +347,24 @@ export const EXT = {
       const r = await g.rpc('cron.job.create', params)
       const job = r?.job || r || {}
       return `Created Jiuwen cron job ${job.id || '?'} "${job.name || p.name}" (${job.cron_expr || expr}, ${job.timezone || params.timezone}) ${job.enabled ?? enabled ? 'enabled' : 'disabled'}. Remove with /jiuwen cron delete ${job.id || '<id>'} confirm`
+    },
+  },
+
+  'cron update': {
+    usage: 'cron update <id> key=value…', group: 'Schedules', methods: ['cron.job.update'],
+    async run({ g, rest, tokens }) {
+      const id = rest[1]
+      const patch = kv(tokens.slice(2))
+      if (!id || !Object.keys(patch).length) return 'Usage: /jiuwen cron update <id> name=<n> [expr="<cron>"] [desc=..] [tz=..] [target=web] [enabled=on|off]'
+      if (patch.expr && !patch.cron_expr) { patch.cron_expr = patch.expr; delete patch.expr }
+      if (patch.cron_expr) patch.cron_expr = normalizeCronExpr(patch.cron_expr)
+      if (patch.desc && !patch.description) { patch.description = patch.desc; delete patch.desc }
+      if (patch.tz && !patch.timezone) { patch.timezone = patch.tz; delete patch.tz }
+      if (patch.target && !patch.targets) { patch.targets = patch.target; delete patch.target }
+      const en = onOff(patch.enabled); if (en !== undefined) patch.enabled = en
+      const r = await g.rpc('cron.job.update', { id, patch })
+      const job = r?.job || r || {}
+      return `Updated Jiuwen cron job ${id}: ${job.name || patch.name || ''} ${job.cron_expr || patch.cron_expr || ''} ${job.enabled === false ? 'disabled' : (job.enabled ? 'enabled' : '')}`.replace(/\s+/g, ' ').trim()
     },
   },
   'cron toggle': {
@@ -365,6 +392,24 @@ export const EXT = {
       if (no) return no
       await g.rpc('cron.job.delete', { id: rest[1] })
       return `Deleted Jiuwen cron job ${rest[1]}.`
+    },
+  },
+
+  'heartbeat create': {
+    usage: 'heartbeat create name=<n> prompt="<text>" [every=<seconds>] [enabled=off]', group: 'Schedules', methods: ['heartbeat.job.create'],
+    async run({ g, tokens, sid }) {
+      const p = kv(tokens.slice(1))
+      if (!p.name || !p.prompt) return 'Usage: /jiuwen heartbeat create name=<name> prompt="<text>" [every=<seconds≥60>] [enabled=off]'
+      const every = Number(p.every || p.interval_seconds || 3600)
+      if (!Number.isFinite(every) || every < 60) return 'heartbeat create: every must be ≥ 60 seconds (Gateway min_interval_seconds)'
+      const enabled = onOff(p.enabled) ?? false
+      const params = {
+        session_id: sid, name: p.name, prompt: p.prompt, enabled,
+        schedule: { type: 'interval', interval_seconds: every },
+      }
+      const r = await g.rpc('heartbeat.job.create', params)
+      const job = r?.job || r || {}
+      return `Created Jiuwen heartbeat job ${job.id || '?'} "${job.name || p.name}" every ${every}s ${job.enabled ?? enabled ? 'enabled' : 'disabled'}. Remove with /jiuwen heartbeat delete ${job.id || '<id>'} confirm`
     },
   },
   'heartbeat toggle': {
@@ -432,8 +477,17 @@ export const EXT = {
   'continue-queued': {
     usage: 'continue-queued', group: 'Turn control', methods: ['session.message.continue_queued'],
     async run({ g, sid }) {
-      const r = await g.rpc('session.message.continue_queued', { session_id: sid })
-      return `Asked Jiuwen to continue queued messages for ${sid}: ${j(r, 200)}`
+      try {
+        const r = await g.rpc('session.message.continue_queued', { session_id: sid })
+        return `Asked Jiuwen to continue queued messages for ${sid}: ${j(r, 200)}`
+      } catch (e) {
+        const msg = String(e?.message || e)
+        // Session is created lazily on the first turn; a brand-new mapping has nothing queued.
+        if (/session (was )?not found/i.test(msg)) {
+          return `Jiuwen: no queued messages to continue for ${sid} (session has no turns yet, or was deleted). Send a normal message first; after a mid-turn drop, the next user message reconnects automatically.`
+        }
+        throw e
+      }
     },
   },
   'swarm-stop': {
@@ -441,8 +495,17 @@ export const EXT = {
     async run({ g, rest, sid, mapping }) {
       const runId = rest[0] || mapping?.swarmRunId
       if (!runId) return 'Usage: /jiuwen swarm-stop <run_id> (no SwarmFlow run seen for this session yet)'
-      const r = await g.rpc('swarmflow.stop', { session_id: sid, run_id: runId })
-      return `Sent swarmflow.stop for run ${runId}${r?.ok === false ? ` — ${short(r.reason || r.error, 120)}` : ''}.`
+      try {
+        const r = await g.rpc('swarmflow.stop', { session_id: sid, run_id: runId })
+        return `Sent swarmflow.stop for run ${runId}${r?.ok === false ? ` — ${short(r.reason || r.error, 120)}` : ''}.`
+      } catch (e) {
+        const msg = String(e?.message || e)
+        // Team idle / no active SwarmFlow: Gateway Chinese "工作流控制不可用…"
+        if (/工作流控制不可用|workflow (control )?unavailable|no (active )?swarm/i.test(msg)) {
+          return `Jiuwen: swarmflow.stop soft-failed — no active SwarmFlow run for ${sid} (team idle or already stopped). ${short(msg, 160)}`
+        }
+        throw e
+      }
     },
   },
   'doc': {

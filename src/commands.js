@@ -4,6 +4,7 @@
  */
 
 import { isUnknownMethod } from './features.js'
+import { formatGatewayError } from './gateway-transport.js'
 import { findExt, extHelp, tokenize } from './commands-ext.js'
 
 export const SUBCOMMANDS =
@@ -556,13 +557,17 @@ ${jobs.slice(0, 15).map(j => `- ${j.id || j.job_id || j.name || JSON.stringify(j
         try {
           return { kind: 'success', text: await run(invocation.agent?.id, invocation.rawInput) }
         } catch (error) {
-          const msg = String(error?.message || error)
-          if (error?.code === 'UNSUPPORTED' || isUnknownMethod(error)) {
+          const msg = formatGatewayError(error?.message || error)
+          if (error?.code === 'UNSUPPORTED' || isUnknownMethod(error) || isUnknownMethod(msg)) {
             // Soft-fail: a Gateway build without this method is not an error of the host.
             const m = error?.method || (msg.match(/unknown method:?\s*([\w.]+)/i) || [])[1] || 'this method'
             return { kind: 'success', text: `Jiuwen: not available on this Gateway — ${m} is not routed on /ws (feature-detected; hidden from help).` }
           }
-          const hint = /unknown method/i.test(msg) ? ' (this Gateway build does not route it on /ws)' : (/timed? ?out|ETIMEDOUT/i.test(msg) ? ' (Gateway did not answer in time)' : (/ECONNREFUSED|connect|WebSocket/i.test(msg) ? ` (is the Gateway running at ${deps.config()?.gatewayURL || 'the configured URL'}?)` : ''))
+          const hint = /unknown method/i.test(msg) ? ' (this Gateway build does not route it on /ws)'
+            : (/timed? ?out|ETIMEDOUT/i.test(msg) ? ' (Gateway did not answer in time)'
+            : (/WebSocket closed mid-turn|WebSocket error mid-turn/i.test(msg) ? ''  // already explains reconnect
+            : (/ECONNREFUSED|WebSocket failed|connect/i.test(msg) ? ` (is the Gateway running at ${deps.config()?.gatewayURL || 'the configured URL'}?)`
+            : (/Gateway WebSocket (closed|error)/i.test(msg) ? ' — in-flight answer lost; send your next message to reconnect' : ''))))
           return { kind: 'error', text: `Jiuwen: ${msg.slice(0, 500)}${hint}` }
         }
       },

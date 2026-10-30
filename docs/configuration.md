@@ -1,8 +1,8 @@
-# Configuration reference / 配置参考
+# Configuration reference
 
-Precedence: **environment variable > Cordis plugin config > default**（`provider`/`displayName`/`models`/`defaultModel` 仅来自插件配置）。
+Precedence: **environment variable > Cordis plugin config > default** (`provider` / `displayName` / `models` / `defaultModel` come from plugin config only).
 
-| Plugin key | Env | Default | Meaning / 含义 |
+| Plugin key | Env | Default | Meaning |
 |---|---|---|---|
 | `provider` | — | `jiuwen` | Provider id registered on `ctx.llm` |
 | `displayName` | — | `JiuwenSwarm` | `providerInfo().name` |

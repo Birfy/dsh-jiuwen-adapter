@@ -159,7 +159,11 @@ export class SessionStore {
         })
       }
     } catch (error) {
-      throw new Error(`session-store: failed to read ${this.path}: ${error.message}`)
+      // Corrupt / truncated / non-JSON store must not crash plugin load — start empty and
+      // overwrite on the next successful save. Callers can inspect `loadError`.
+      this.loadError = error
+      this.byDsh.clear()
+      this.byJiuwen.clear()
     }
   }
 

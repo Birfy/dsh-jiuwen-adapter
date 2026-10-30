@@ -10,11 +10,12 @@ const ext = async () => (await mock.rpc('debug.ext')).log
 test('P2: cron create (disabled by default) / toggle / run / delete needs confirm', async () => {
   const h = makeHost(mock)
   const c = await h.cmd('cron create name=nightly expr="0 3 * * *" desc="dsh test" tz=Asia/Shanghai')
-  assert.match(c.text, /Created Jiuwen cron job (cron-\d+) "nightly" \(0 3 \* \* \*, Asia\/Shanghai\) disabled/)
+  assert.match(c.text, /Created Jiuwen cron job (cron-\d+) "nightly" \(0 0 3 \* \* \* \*, Asia\/Shanghai\) disabled/)
   const id = c.text.match(/job (cron-\d+)/)[1]
   const created = (await ext()).find(x => x.method === 'cron.job.create')
   assert.equal(created.params.enabled, false)
   assert.equal(created.params.targets, 'web')
+  assert.equal(created.params.cron_expr, '0 0 3 * * * *')
   assert.ok(created.params.session_id)
   assert.match((await h.cmd(`cron toggle ${id} on`)).text, /enabled/)
   assert.match((await h.cmd(`cron run ${id}`)).text, /Triggered/)

@@ -192,3 +192,40 @@ Same real Cordis host (`Context` + `dsh-llm` + `dsh-commands`), JiuwenSwarm 0.2.
 - `media discard /etc/passwd confirm` → `path is outside session uploads` (Gateway guard).
 - Gateway restart mid-stream ends the turn with `TRANSPORT`; the in-flight answer is lost (Jiuwen does not resume a turn on a new socket); the next command/turn reconnects transparently.
 - `/jiuwen rename` accepts very long titles (5000 chars) — Jiuwen stores them as is.
+
+## 11. Round 3 live hunt + fixes (2026-10-30, UTC+8)
+
+Same Cordis host pattern (`Context` + `dsh-llm` + command handlers), JiuwenSwarm 0.2.7 on :19000, model doubao-seed-2.0-mini. Gateway state snapshotted before/after (20 sessions, 0 cron, 0 heartbeat jobs, 37 permission rules, 43 tool overrides, heartbeat conf unchanged). Throwaways cleaned; state restored identical.
+
+**Adapter bugs found and fixed**
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Slash errors looked like `Jiuwen: "未找到 skill"` / `Jiuwen: "Agent 不存在"` (extra quotes); objects risked `[object Object]` | `_unary` / stream paths used `JSON.stringify` on Gateway `frame.error` even when it was already a string | `formatGatewayError()` unwraps JSON-string layers and object `.message`/`.error`/`.detail`; used on all Gateway error paths + command handler |
+| Corrupt `mappingPath` JSON crashed plugin load | `SessionStore._load` threw on parse failure | Soft-fail: empty store + `loadError`; next save rewrites the file |
+| Mid-stream Gateway close message was opaque (`Gateway WebSocket closed`) | Bare TRANSPORT text | Message now says in-flight answer is lost and the next user message reconnects |
+| `/jiuwen continue-queued` on a never-used mapping → hard error `Session was not found` | Session is created lazily on first turn | Soft-fail success text explaining no queue / reconnect via next message |
+| `/jiuwen swarm-stop` when team idle → hard error with Chinese Gateway text | Expected upstream idle state | Soft-fail success text (`no active SwarmFlow`) keeping the Gateway message |
+| `cron create` with 5- or 6-field exprs failed (`must have 5 or 7 fields`) | Docs claimed normalisation but the adapter never padded | `normalizeCronExpr()` pads 5→7 (`0 … *`) and 6→7 (prepend `0`); applied on create + update |
+
+**Also mapped (safe reversible writes, Round 3 hunt list)**
+
+| Surface | RPC |
+|---|---|
+| `/jiuwen heartbeat create name=… prompt="…" [every=…] [enabled=off]` | `heartbeat.job.create` with `schedule: {type:'interval', interval_seconds}` (created disabled by default) |
+| `/jiuwen cron update <id> key=value…` | `cron.job.update` `{id, patch}` |
+
+**Still Gateway / environment limits (unchanged)**
+
+- Mid-stream Gateway restart loses the in-flight answer (TRANSPORT); next turn reconnects cleanly (verified).
+- Nonexistent id lookups return Jiuwen’s own message (often Chinese); now consistently prefixed `Jiuwen: …` without quotes.
+- Tool permissions (ask/deny) not enforced on the web-channel agent here.
+- `swarmflow.stop` has no `run_id` when the team is idle (adapter soft-fails clearly).
+- Unknown on /ws: `memory.*`, `schedule.*`, `command.recap/context/status`, `session.preview/get`, `diagnosis.list`, `session.assets.list`, `team.list`, `history.list_turns`, `models.get`, `files.list`.
+- Git disabled on the default project; `models.validate` needs `api_key` (adapter never passes).
+- MCP: tools discovered only at AgentServer prewarm; new names invisible until AS restart.
+- `mode=openai` has no live HTTP target on :18092.
+- `permissions.rules.restore` / `permissions.snapshot.restore` are unknown on /ws — not exposed.
+- `heartbeat.job.update` is routed but not mapped (create/toggle/run/cancel/delete cover the lifecycle).
+
+**Tests:** 102 → 112, all green. Secret grep on live outputs/logs: no raw `api_key` / `sk-…` leaks.

@@ -1,19 +1,19 @@
 # Coverage: dsh-jiuwen-adapter vs JiuwenSwarm 0.2.7 Gateway
 
-Audit date: 2026-10-30 (UTC+8). Adapter base: `c76bd61`; recounted after the P0–P3 mapping work (commits `7f40a26`…`f1c0d95`). Source of truth: `jiuwenswarm/gateway/channel_manager/web/app_web_handlers.py` (`_FORWARD_REQ_METHODS`, `_FORWARD_NO_LOCAL_HANDLER_METHODS`, every `register_method` / `_register_*` / tuple table) + `web/lifecycle_handlers.py`, in `/workspace/jiuwen-0.2.7/.venv`. TUI-only = strings in `channel_manager/tui/` not routed by the web channel.
+Audit date: 2026-10-30 (UTC+8). Recounted after Round 3 (`heartbeat.job.create`, `cron.job.update`). Prior base: P0–P3 mapping work. Source of truth: `jiuwenswarm/gateway/channel_manager/web/app_web_handlers.py` (`_FORWARD_REQ_METHODS`, `_FORWARD_NO_LOCAL_HANDLER_METHODS`, every `register_method` / `_register_*` / tuple table) + `web/lifecycle_handlers.py`, in `/workspace/jiuwen-0.2.7/.venv`. TUI-only = strings in `channel_manager/tui/` not routed by the web channel.
 
 ## Summary
 
 | Bucket | Count |
 |---|---|
 | Web `/ws` methods (total) | 334 |
-| Covered by adapter | 104 |
+| Covered by adapter | 106 |
 | Intentionally excluded (irreversible / credentials / host side effects) | 99 |
-| Uncovered | 131 |
+| Uncovered | 129 |
 | TUI-only (not reachable on /ws) | 35 |
 
-- Raw coverage: 104/334 = **31.1%** (was 63/334 = 18.9%)
-- Coverage of the safe surface (total minus excluded): 104/235 = **44.3%** (was 63/232 = 27.2%)
+- Raw coverage: 106/334 = **31.7%** (was 104/334 = 31.1%; earlier 63/334 = 18.9%)
+- Coverage of the safe surface (total minus excluded): 106/235 = **45.1%** (was 104/235 = 44.3%)
 - Deletes moved from excluded to covered behind an explicit `confirm` argument: `cron.job.delete`, `heartbeat.job.delete`, `permissions.rules.delete`.
 - `schedule.*` (7) are wired but stay uncovered: live 0.2.7 `/ws` answers `unknown method`; the feature-detect cache hides them.
 
@@ -32,9 +32,9 @@ Earlier live probe (ws://127.0.0.1:19000/ws, empty params, read-only): routed ok
 | project | 10: `project.create`, `project.get_cron_sessions`, `project.git.probe`, `project.git.turn_diff`, `project.git.turn_diff_list`, `project.pin`, `project.pinned_sessions`, `project.rename`, `project.restore`, `project.sessions.archive` | project CRUD-lite, pinning, git status/diff (read parts useful: git.status, git.diff_status, turn_diff) |
 | channel | 10: `channel.dingtalk.get_conf`, `channel.discord.get_conf`, `channel.feishu.get_conf`, `channel.get`, `channel.slack.get_conf`, `channel.telegram.get_conf`, `channel.wechat.get_conf`, `channel.wecom.get_conf`, `channel.whatsapp.get_conf`, `channel.xiaoyi.get_conf` | IM channel conf reads (get_conf); low value inside DSH |
 | rsi | 10: `rsi.artifact.download`, `rsi.artifact.files.get`, `rsi.artifact.files.list`, `rsi.harness.rollback`, `rsi.harness.versions.list`, `rsi.report.get`, `rsi.task.get`, `rsi.task.list`, `rsi.tree.get`, `rsi.usage.get` | RSI dataset/task/report reads; research-only |
-| heartbeat | 2: `heartbeat.job.create`, `heartbeat.job.update` | heartbeat job get/meta/preview/toggle/run_now — moderately useful |
+| heartbeat | 1: `heartbeat.job.update` | create/toggle/run/cancel/delete covered in Round 3; update still open |
 | schedule | 8: `schedule.cancel`, `schedule.check_config`, `schedule.create`, `schedule.list`, `schedule.logs`, `schedule.run`, `schedule.status`, `schedule.update_config` | schedule list/status/logs — useful read-only |
-| cron | 1: `cron.job.update` | cron job get/meta/preview/toggle — get/preview useful |
+| cron | 0 | create/toggle/run/update/delete covered |
 | agent_groups | 3: `agent_groups.create`, `agent_groups.file.list`, `agent_groups.file.read` | agent group list/show/file reads |
 | agent_templates | 4: `agent_templates.create`, `agent_templates.file.list`, `agent_templates.file.read`, `agent_templates.update` | template show/file reads |
 | permissions | 1: `permissions.tools.set` | rules create/update, approval_overrides, owner_scopes.get — rule editing would complete /jiuwen permissions |

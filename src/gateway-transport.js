@@ -12,6 +12,48 @@ import {
   SKILLS, AGENTS, TEAM, COMMANDS, SYSTEM, EVENTS, normalizeEventName,
 } from './e2a-methods.js'
 
+
+/**
+ * Turn a Gateway `res.ok=false` error payload into a clean human message.
+ * Gateway often returns a JSON *string* (e.g. the frame.error value is the string
+ * `未找到 skill`, which `JSON.stringify` would wrap as `"\"未找到 skill\""`). Using that
+ * raw stringify made slash-command errors look like `Jiuwen: "未找到 skill"` with extra quotes.
+ * Objects become their `.message` / `.error` / `.detail` when present — never `[object Object]`.
+ */
+export function formatGatewayError(err, depth = 0) {
+  if (err == null) return 'Jiuwen Gateway error'
+  if (depth > 4) return String(err)
+  if (err instanceof Error) return formatGatewayError(err.message, depth + 1)
+  if (typeof err === 'string') {
+    let s = err.trim()
+    // Unwrap one or more layers of JSON-string encoding: `"foo"` → foo, `"\"foo\""` → foo.
+    for (let i = 0; i < 3; i++) {
+      if (!(s.startsWith('"') && s.endsWith('"') && s.length >= 2)) break
+      try {
+        const inner = JSON.parse(s)
+        if (typeof inner === 'string') { s = inner.trim(); continue }
+        return formatGatewayError(inner, depth + 1)
+      } catch { break }
+    }
+    if ((s.startsWith('{') && s.endsWith('}')) || (s.startsWith('[') && s.endsWith(']'))) {
+      try { return formatGatewayError(JSON.parse(s), depth + 1) } catch { /* keep */ }
+    }
+    return s || 'Jiuwen Gateway error'
+  }
+  if (typeof err === 'object') {
+    for (const k of ['message', 'error', 'detail', 'reason', 'msg']) {
+      const v = err[k]
+      if (typeof v === 'string' && v.trim()) return formatGatewayError(v, depth + 1)
+    }
+    try {
+      const j = JSON.stringify(err)
+      if (j && j !== '{}' && j !== 'null') return j.length > 500 ? `${j.slice(0, 500)}…` : j
+    } catch { /* ignore */ }
+  }
+  const s = String(err)
+  return s === '[object Object]' ? 'Jiuwen Gateway error' : s
+}
+
 /** Jiuwen interaction sources that must be answered by a resuming chat.send (see jiuwenswarm runtime/interaction.py). */
 export const INTERRUPT_RESUME_SOURCES = new Set(['confirm_interrupt', 'permission_interrupt', 'ask_user_interrupt', 'evolution_interrupt'])
 
@@ -221,7 +263,7 @@ export class GatewayTransport {
           let f
           try { f = JSON.parse(String(event.data)) } catch { return }
           if (f.type === 'res' && f.id === id) {
-            if (f.ok === false) { cleanup(); reject(Object.assign(new Error(JSON.stringify(f.error || f.payload || f)), { code: 'TRANSPORT' })) }
+            if (f.ok === false) { cleanup(); reject(Object.assign(new Error(formatGatewayError(f.error || f.payload || f)), { code: 'TRANSPORT' })) }
             return
           }
           if (f.type !== 'event') return
@@ -463,7 +505,7 @@ export class GatewayTransport {
         if (frame.type !== 'res' || frame.id !== id) return
         cleanup()
         if (frame.ok === false) {
-          reject(Object.assign(new Error(JSON.stringify(frame.error || frame.payload || frame)), { code: 'TRANSPORT' }))
+          reject(Object.assign(new Error(formatGatewayError(frame.error || frame.payload || frame)), { code: 'TRANSPORT' }))
           return
         }
         resolve(frame.payload ?? frame.result ?? frame)
@@ -507,8 +549,8 @@ export class GatewayTransport {
       try { push({ ok: true, frame: JSON.parse(String(event.data)) }) }
       catch (error) { push({ ok: false, error }) }
     }
-    const onClose = () => push({ ok: false, error: Object.assign(new Error('Gateway WebSocket closed'), { code: 'TRANSPORT' }) })
-    const onError = () => push({ ok: false, error: Object.assign(new Error('Gateway WebSocket error'), { code: 'TRANSPORT' }) })
+    const onClose = () => push({ ok: false, error: Object.assign(new Error('Gateway WebSocket closed mid-turn — in-flight answer lost; send your next message to reconnect'), { code: 'TRANSPORT' }) })
+    const onError = () => push({ ok: false, error: Object.assign(new Error('Gateway WebSocket error mid-turn — in-flight answer lost; send your next message to reconnect'), { code: 'TRANSPORT' }) })
     const onAbort = () => push({ ok: false, abort: true })
 
     ws.addEventListener('message', onMessage)
@@ -599,7 +641,7 @@ export class GatewayTransport {
 
         if (frame.type === 'res' && turnIds.has(frame.id) && frame.ok === false) {
           const err = frame.error || frame.payload || frame
-          throw Object.assign(new Error(typeof err === 'string' ? err : JSON.stringify(err)), { code: 'TRANSPORT' })
+          throw Object.assign(new Error(formatGatewayError(err)), { code: 'TRANSPORT' })
         }
         if (frame.type === 'res') continue
 
