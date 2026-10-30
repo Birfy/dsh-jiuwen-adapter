@@ -98,3 +98,28 @@ Re-scanned gateway handler tables (`gateway/channel_manager/web/app_web_handlers
 
 Deliberately not exposed (non-trivially reversible or side-effectful): `updater.download/upgrade`, `skills.install/uninstall`, `skills.marketplace.add/remove`, `agents.create/delete`, `team.delete`, `session.rewind*`, `assets.publish.*`.
 UX: `/jiuwen help` groups subcommands; errors are `Jiuwen: <msg>` plus a hint for unknown methods, timeouts and connection failures. Live probe cleaned up the leftover empty `probe-1793340702422` session.
+
+## 7. Re-probe after upgrading to JiuwenSwarm 0.2.7 (2026-10-30)
+
+Upgraded the box from the 0.2.5b1 source checkout to the official `workswarm-0.2.7` wheel (GitHub release asset; PyPI has no 0.2.7 and gitcode returns HTTP 418 from this box) in a separate uv venv. Same ports (Gateway :19000, AgentServer :18092), same `~/.jiuwenswarm` config, model `doubao-seed-2.0-mini`. `updater.get_status` → `current_version: 0.2.7`, `/jiuwen version` → `JiuwenSwarm 0.2.7 (pip, linux)`.
+
+| Method on `/ws` | 0.2.7 |
+|---|---|
+| `memory.list`, `memory.status` | still FAIL — unknown method |
+| `schedule.list`, `schedule.status` | still FAIL — unknown method |
+| `command.context`, `command.status`, `command.recap` | still FAIL — unknown method |
+| `session.preview`, `session.get`, `diagnosis.list` | still FAIL — unknown method |
+
+No previously unknown method started working.
+
+Regressions compared with 0.2.5b1 (Gateway-side; the adapter has not been changed):
+
+| Adapter surface | 0.2.7 behaviour |
+|---|---|
+| `/jiuwen assets` (`session.assets.list`) | FAIL — unknown method. The web handler table no longer lists it. |
+| `/jiuwen teams` (`team.list`) | Partial: templates still list, but teams show `unknown method: team.list` |
+| `/jiuwen model-info` | `models.list` no longer returns `model_id`, so the lookup reports "Unknown model". `models.get` still needs an id. |
+
+Everything else passed live: `npm test` 58/58, `smoke:live` 13/13, the other `/jiuwen` read subcommands, ask_user resume, MCP stdio-proxy passthrough, `jiuwen/event` streaming, per-turn model/chatMode/skills overrides, local title + `session.rename`, and `local+jiuwen` compaction (`command.compact`).
+
+Observation: MCP passthrough serves tools that Jiuwen discovered at prewarm (`working_directory`). A tool name added later was not visible to `tool_search` on the same turn.
