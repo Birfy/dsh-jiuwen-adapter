@@ -5,6 +5,7 @@
  */
 import { WebSocketServer } from './_ws-server.mjs'
 
+const SHAPE = { v: process.env.JIUWEN_GATEWAY_MOCK_SHAPE || '0.2.5' }
 const PORT = Number(process.env.JIUWEN_GATEWAY_MOCK_PORT || 19000)
 const wss = await WebSocketServer({ port: PORT, host: '127.0.0.1' })
 console.log(`[mock-gateway] listening on ws://127.0.0.1:${PORT}/ws`)
@@ -157,6 +158,19 @@ wss.on('connection', (ws, req) => {
     if (method === 'session.list') return ok({ sessions: [...HISTORY.keys()].map(id => ({ session_id: id, message_count: HISTORY.get(id).length })) })
     if (method === 'session.create') return ok({ session_id: `web_mock_${Date.now()}` })
     if (method === 'commands.list') return ok({ commands: [{ name: 'compact' }, { name: 'fork' }, { name: 'goal' }] })
+    if (method === 'debug.set_shape') { SHAPE.v = String(params.shape || '0.2.5'); return ok({ shape: SHAPE.v }) }
+    // JiuwenSwarm 0.2.7 web handler table: no session.assets.list / team.list / models.get;
+    // models.list entries carry model_name/alias/origin_index/is_default but no model_id.
+    if (SHAPE.v === '0.2.7' && ['session.assets.list', 'team.list', 'models.get'].includes(method)) return err(`unknown method: ${method}`)
+    if (method === 'models.list' && SHAPE.v === '0.2.7') {
+      return ok({
+        models: [
+          { model_name: 'jiuwen-default', api_base: 'https://example.test/v1', api_key: 'sk-secret-mock', model_provider: 'OpenAI', is_default: true, alias: 'primary', origin_index: 0, endpoint_profile: 'openai', context_window_tokens: 128000 },
+          { model_name: 'jiuwen-swarm', api_base: 'https://example.test/v1', api_key: '', model_provider: 'OpenAI', is_default: false, alias: '', origin_index: 1, endpoint_profile: '' },
+        ],
+        active_model: 'jiuwen-default',
+      })
+    }
     if (method === 'models.list') {
       return ok({
         models: [

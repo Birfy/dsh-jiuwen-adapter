@@ -112,14 +112,16 @@ Upgraded the box from the 0.2.5b1 source checkout to the official `workswarm-0.2
 
 No previously unknown method started working.
 
-Regressions compared with 0.2.5b1 (Gateway-side; the adapter has not been changed):
+Regressions compared with 0.2.5b1 (Gateway-side). Status after the adapter fix below:
 
 | Adapter surface | 0.2.7 behaviour |
 |---|---|
-| `/jiuwen assets` (`session.assets.list`) | FAIL — unknown method. The web handler table no longer lists it. |
-| `/jiuwen teams` (`team.list`) | Partial: templates still list, but teams show `unknown method: team.list` |
-| `/jiuwen model-info` | `models.list` no longer returns `model_id`, so the lookup reports "Unknown model". `models.get` still needs an id. |
+| `/jiuwen assets` (`session.assets.list`) | Unknown method. Neither the web handler table (`app_web_handlers.py`) nor the `/ws` routes have a replacement (`files.list` is sandbox-only and also unknown on /ws). **Fixed:** degrades to a clear "not available on this Gateway" message (still uses `session.assets.list` on 0.2.5b1). |
+| `/jiuwen teams` (`team.list`) | `team.list` is unknown. **Fixed:** falls back to `team.bindings.list` (`{teams:[{team_name}]}`) when `team.list` is unknown. Templates still come from `team.templates.list`. |
+| `/jiuwen model-info` | `models.list` entries are now `{model_name, alias, origin_index, is_default, model_provider, api_base, endpoint_profile, context_window_tokens, api_key}` with no `model_id`, and `models.get` is gone from the web table. **Fixed:** matches on model_id, model_name, id, name, alias, or `#<origin_index>` (exact match first, then case-insensitive). It calls `models.get` only when a `model_id` exists; otherwise it renders from the list entry. `api_key` is reduced to set/missing and never printed. |
 
 Everything else passed live: `npm test` 58/58, `smoke:live` 13/13, the other `/jiuwen` read subcommands, ask_user resume, MCP stdio-proxy passthrough, `jiuwen/event` streaming, per-turn model/chatMode/skills overrides, local title + `session.rename`, and `local+jiuwen` compaction (`command.compact`).
 
 Observation: MCP passthrough serves tools that Jiuwen discovered at prewarm (`working_directory`). A tool name added later was not visible to `tool_search` on the same turn.
+
+Live after the fix (:19000, 0.2.7): `assets` gives the degrade message; `teams` gives `templates: jiuwen_team`, `teams: none` (via `team.bindings.list`); `model-info doubao-seed-2.0-mini` gives provider/api_base/profile/context=262144/default/api_key=set. The mock gateway has a 0.2.7 shape (`JIUWEN_GATEWAY_MOCK_SHAPE=0.2.7` or `debug.set_shape`), and a test covers it.

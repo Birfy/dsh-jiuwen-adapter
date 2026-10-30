@@ -3,6 +3,8 @@
  * A single namespaced command avoids clashing with dsh built-ins (/compact, /goal, …).
  */
 
+const isUnknownMethod = e => /unknown method/i.test(String(e?.message || e))
+
 export const SUBCOMMANDS =
   'status | models | model <name|default> | model-info <id|name> | mode [name|default] | pause | resume | rename <title> | pin [on|off] | fork | switch | archive | unarchive | unmap | delete | goal [get|set <text>|pause|resume|clear] | workflows [list|get <id>] | history | btw <question> | recap | skill-toggle <name> <on|off> | plan-status | supplement <text> | teams | compact | interrupt | sessions | skills [installed] | agents | tools | hooks | permissions [set <tool> <allow|ask|deny>|unset <tool>] | plugins [enable|disable <name>] | projects [info|sessions [id]] | archived | assets | version | heartbeat [set <every> [target]|jobs] | path | locale | commands | templates | cron | updater [check|conf] | agent <name> | skill-info <name> | marketplaces | bindings | mcp | mcp-reset | help'
 
@@ -73,23 +75,34 @@ export function createJiuwenCommand(deps) {
         if (!arg) return 'Usage: /jiuwen model-info <id|name>'
         const listed = await g.modelsList()
         const models = listed?.models || []
-        const hit = models.find(x => [x.model_id, x.model_name, x.id, x.name].filter(Boolean).includes(arg))
-          || (arg === listed?.active_model ? models.find(x => (x.model_name || x.id || x.name) === arg) : undefined)
+        // 0.2.5b1 entries carry model_id/id/name; 0.2.7 only model_name/alias/origin_index.
+        const keys = x => [x.model_id, x.model_name, x.id, x.name, x.alias, x.origin_index != null ? `#${x.origin_index}` : undefined].filter(v => v != null && v !== '').map(String)
+        const hit = models.find(x => keys(x).includes(arg)) || models.find(x => keys(x).some(k => k.toLowerCase() === arg.toLowerCase()))
         const modelId = hit?.model_id || (arg.startsWith('mdl_') ? arg : undefined)
-        if (!modelId) {
-          const known = models.map(x => x.model_id || x.model_name || x.id).filter(Boolean)
-          return `Unknown model "${arg}". Try a model_id from /jiuwen models (e.g. ${known.slice(0, 5).join(', ') || 'none'}).`
+        if (!hit && !modelId) {
+          const known = models.map(x => x.model_id || x.model_name || x.alias || x.id).filter(Boolean)
+          return `Unknown model "${arg}". Try a name from /jiuwen models (e.g. ${known.slice(0, 5).join(', ') || 'none'}).`
         }
-        const r = await g.modelsGet(modelId)
-        const m = r?.model || r
+        let m = hit || {}
+        if (modelId) {
+          try { const r = await g.modelsGet(modelId); m = r?.model || r || m } catch (e) {
+            if (!hit || !isUnknownMethod(e)) throw e
+          }
+        }
         const cfg = m?.model_client_config || {}
         const name = cfg.model_name || m?.model_name || hit?.model_name || arg
-        const bits = [`model-info ${modelId}: ${name}`]
+        const label = modelId || name
+        const bits = [modelId ? `model-info ${modelId}: ${name}` : `model-info ${name}`]
+        const alias = m?.alias || hit?.alias
+        if (alias && alias !== label) bits.push(`alias=${alias}`)
         if (cfg.client_provider || m?.model_provider) bits.push(`provider=${cfg.client_provider || m.model_provider}`)
-        if (cfg.api_base) bits.push(`api_base=${cfg.api_base}`)
-        if (cfg.endpoint_profile) bits.push(`profile=${cfg.endpoint_profile}`)
-        if (m?.is_default || hit?.is_default) bits.push('default')
-        if (cfg.has_api_key !== undefined || m?.has_api_key !== undefined) bits.push(`api_key=${(cfg.has_api_key ?? m.has_api_key) ? 'set' : 'missing'}`)
+        if (cfg.api_base || m?.api_base) bits.push(`api_base=${cfg.api_base || m.api_base}`)
+        if (cfg.endpoint_profile || m?.endpoint_profile) bits.push(`profile=${cfg.endpoint_profile || m.endpoint_profile}`)
+        if (m?.context_window_tokens) bits.push(`context=${m.context_window_tokens}`)
+        if (m?.is_default || hit?.is_default || (!modelId && name === listed?.active_model)) bits.push('default')
+        // never print the key itself (0.2.7 models.list includes api_key in clear)
+        const hasKey = cfg.has_api_key ?? m?.has_api_key ?? (typeof m?.api_key === 'string' ? m.api_key.length > 0 : undefined)
+        if (hasKey !== undefined) bits.push(`api_key=${hasKey ? 'set' : 'missing'}`)
         return bits.join('; ')
       }
       case 'mode': {
@@ -256,12 +269,17 @@ export function createJiuwenCommand(deps) {
         return `Sent chat.interrupt (supplement) to Jiuwen session ${sid}.`
       }
       case 'teams': {
-        const [templates, teams] = await Promise.allSettled([g.teamTemplatesList(), g.teamList()])
+        // 0.2.5b1: team.list; 0.2.7 dropped it — fall back to team.bindings.list ({ teams: [...] }).
+        const teamsCall = g.teamList().catch(e => {
+          if (!isUnknownMethod(e) || !g.teamBindingsList) throw e
+          return g.teamBindingsList()
+        })
+        const [templates, teams] = await Promise.allSettled([g.teamTemplatesList(), teamsCall])
         const tNames = templates.status === 'fulfilled'
           ? names(templates.value?.templates || templates.value?.items, 'template_id')
           : []
         const teamNames = teams.status === 'fulfilled'
-          ? names(teams.value?.teams || teams.value?.items)
+          ? names(teams.value?.teams || teams.value?.items, 'team_name')
           : []
         const lines = []
         if (tNames.length) lines.push(`templates: ${tNames.join(', ')}`)
@@ -384,7 +402,11 @@ ${list.join('\n')}`
         return `Jiuwen archived sessions (${r?.total ?? list.length}): ${list.join(', ') || 'none'}`
       }
       case 'assets': {
-        const r = await g.sessionAssetsList(sid)
+        let r
+        try { r = await g.sessionAssetsList(sid) } catch (e) {
+          if (!isUnknownMethod(e)) throw e
+          return `Jiuwen session assets: not available — this Gateway (JiuwenSwarm ≥0.2.7) no longer routes session.assets.list on /ws and has no replacement. Use /jiuwen projects info or the Jiuwen web UI to browse session files.`
+        }
         const list = (r?.assets || []).map(x => x.name || x.path || x.asset_id || x.id).filter(Boolean)
         return `Jiuwen session assets (${sid}): ${list.join(', ') || 'none'}`
       }

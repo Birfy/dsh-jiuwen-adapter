@@ -599,3 +599,28 @@ test('connection refused yields a clear /jiuwen error hint', async () => {
   assert.equal(r.kind, 'error')
   assert.match(r.text, /^Jiuwen: /)
 })
+
+test('JiuwenSwarm 0.2.7 shape: assets degrade, teams via team.bindings.list, model-info without model_id', async () => {
+  const registered = []
+  const ctx = {
+    llm: { registerAdapter() { return () => {} } },
+    logger: { info() {}, warn() {}, error() {}, debug() {} }, provide(n, v) { this[n] = v }, on() {},
+    inject(deps, cb) { cb({ commands: { register(d) { registered.push(d); return () => {} } }, on() {} }) },
+  }
+  plugin.apply(ctx, { gatewayURL: URL_, mappingPath: join(dir, `cmds027-${Math.random()}.json`), finalGraceMs: 300 })
+  const def = registered.find(d => d.name === 'jiuwen')
+  const run = async (raw) => { const r = await def.handler({ agent: { id: 'n027' }, rawInput: raw }); assert.equal(r.kind, 'success', r.text); return r.text }
+  const shape = (v) => new GatewayTransport({ gatewayURL: URL_ }).rpc('debug.set_shape', { shape: v })
+  await shape('0.2.7')
+  try {
+    assert.match(await run('assets'), /not available.*session\.assets\.list/)
+    const teams = await run('teams')
+    assert.match(teams, /templates: jiuwen_team|templates: /); assert.match(teams, /teams: mock-team/)
+    const mi = await run('model-info jiuwen-default')
+    assert.match(mi, /model-info jiuwen-default; alias=primary; provider=OpenAI/); assert.match(mi, /default/); assert.match(mi, /api_key=set/)
+    assert.doesNotMatch(mi, /sk-secret-mock/)
+    assert.match(await run('model-info primary'), /jiuwen-default/)
+    assert.match(await run('model-info #1'), /jiuwen-swarm.*api_key=missing/)
+    assert.match(await run('model-info nope'), /Unknown model "nope".*jiuwen-default/)
+  } finally { await shape('0.2.5') }
+})

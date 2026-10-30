@@ -76,7 +76,7 @@ When the host provides `ctx.commands` (`@deepseek-ai/dsh-commands`; web UI, ACP 
 | `/jiuwen status` | `models.list` + `session.get_metadata`; mapping, turns, session overrides (mode/skills/agentTemplate), title |
 | `/jiuwen models` | `models.list` (★ = Jiuwen default) |
 | `/jiuwen model <name\|default>` | validated against `models.list`; per-session `modelName` for following `chat.send` |
-| `/jiuwen model-info <id\|name>` | resolve `model_id` via `models.list` then `models.get` (no api_key printed) |
+| `/jiuwen model-info <id\|name>` | match `models.list` by model_id/model_name/alias/#index; `models.get` when an id exists (0.2.5b1), else list entry (0.2.7); no api_key printed |
 | `/jiuwen mode [name\|default]` | show/set per-session `chatMode` (`default` clears); applied on following `chat.send` |
 | `/jiuwen pause` / `resume` | `chat.interrupt {intent:'pause'\|'resume'}` |
 | `/jiuwen rename <title>` | `session.rename` |
@@ -94,14 +94,14 @@ When the host provides `ctx.commands` (`@deepseek-ai/dsh-commands`; web UI, ACP 
 | `/jiuwen skill-toggle <name> <on\|off>` | `skills.toggle` (requires explicit on/off) |
 | `/jiuwen plan-status` | `session.plan_status` |
 | `/jiuwen supplement <text>` | `chat.interrupt {intent:'supplement', new_input}` (not `chat.send` `is_supplement`) |
-| `/jiuwen teams` | `team.templates.list` + `team.list` (names) |
+| `/jiuwen teams` | `team.templates.list` + `team.list` → fallback `team.bindings.list` (0.2.7) |
 | `/jiuwen tools` | `agents.tools_list` (Jiuwen-owned tool names + count) |
 | `/jiuwen hooks` | `hooks.list` (total hooks, non-empty events) |
 | `/jiuwen permissions` [`set <tool> <allow\|ask\|deny>`\|`unset <tool>`] | get: `permissions.tools.get` + `permissions.rules.get`; set/unset: `permissions.tools.update` / `delete` |
 | `/jiuwen plugins` [`enable\|disable <name>`] | list: `plugins.list`; enable/disable: `plugins.enable` / `plugins.disable` (`name`) |
 | `/jiuwen projects` [`info\|sessions [id]`] | list: `project.list`; info: `project.info`; sessions: `project.get_sessions` |
 | `/jiuwen archived` | `session.archived.list` |
-| `/jiuwen assets` | `session.assets.list` for the mapped session |
+| `/jiuwen assets` | `session.assets.list` for the mapped session (0.2.7: clear not-available message) |
 | `/jiuwen version` | `updater.get_status` (current / latest version, install mode) |
 | `/jiuwen heartbeat` [`set <every> [target]`\|`jobs`] | get: `heartbeat.get_conf`; set: `heartbeat.set_conf` (preserves active_hours); jobs: `heartbeat.job.list` |
 | `/jiuwen path` | `path.get` (chrome/headless/decision) |
