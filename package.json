@@ -1,18 +1,34 @@
 {
   "name": "@dsh-jiuwen/adapter",
-  "version": "0.1.0",
-  "description": "Generic Cordis llm provider `jiuwen`: ctx.llm stream → JiuwenSwarm Gateway / OpenAI-compatible AgentServer",
+  "version": "0.2.0",
+  "description": "JiuwenSwarm as a dsh (DeepSeek Harness) LLM provider: route any dsh agent to a Jiuwen agent/swarm over the Gateway, with /jiuwen commands. Zero dependencies, compatibility-first.",
   "keywords": [
     "dsh-plugin",
+    "dsh-bundle",
     "deepseek-harness",
     "dsh",
+    "cordis",
     "jiuwen",
     "jiuwenswarm",
-    "llm-adapter"
+    "llm-adapter",
+    "llm-provider",
+    "agent",
+    "multi-agent"
   ],
+  "author": "Birfy",
   "license": "Apache-2.0",
+  "homepage": "https://github.com/Birfy/dsh-jiuwen-adapter#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Birfy/dsh-jiuwen-adapter.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Birfy/dsh-jiuwen-adapter/issues"
+  },
+  "icon": "assets/icon.svg",
   "type": "module",
   "main": "index.js",
+  "types": "index.d.ts",
   "exports": {
     ".": {
       "types": "./index.d.ts",
@@ -25,12 +41,15 @@
     "index.d.ts",
     "src/",
     "bin/",
+    "assets/",
     "cordis.patch.yml",
     "README.md",
     "README.zh.md",
-    "VERIFICATION.md",
+    "CHANGELOG.md",
+    "LICENSE",
     "docs/",
-    "ARCHITECTURE.md"
+    "ARCHITECTURE.md",
+    "VERIFICATION.md"
   ],
   "scripts": {
     "test": "node --test test/*.test.js",
@@ -41,11 +60,14 @@
     "smoke:live": "node scripts/live-gateway-smoke.mjs",
     "bare-dsh": "bash scripts/bare-dsh.sh",
     "bench": "node scripts/bench.mjs",
-    "bench:hard": "node scripts/bench-hard.mjs"
+    "bench:hard": "node scripts/bench-hard.mjs",
+    "compat": "node scripts/compat-matrix.mjs --diff",
+    "compat:live": "node scripts/compat-matrix.mjs --live --diff",
+    "market:index": "node scripts/market-index.mjs"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "*",
-    "@deepseek-ai/dsh-llm": "*"
+    "@deepseek-ai/cordis": "^4.0.5",
+    "@deepseek-ai/dsh-llm": ">=0.2.1-rc.2 <0.3.0"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/cordis": {
@@ -55,13 +77,17 @@
       "optional": true
     }
   },
+  "engines": {
+    "node": ">=22",
+    "dsh": ">=0.2.1-rc.2 <0.3.0"
+  },
   "dsh": {
+    "manifestVersion": 1,
     "bundle": {
       "patch": "./cordis.patch.yml"
     }
   },
-  "engines": {
-    "node": ">=22"
-  },
-  "types": "index.d.ts"
+  "publishConfig": {
+    "access": "public"
+  }
 }

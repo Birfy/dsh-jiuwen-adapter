@@ -36,3 +36,9 @@ test('plugin apply warns through the host logger and never throws on a bad confi
   assert.doesNotThrow(() => plugin.apply(ctx, { gatwayURL: 'ws://127.0.0.1:1/ws', registerCommands: false, mappingPath: '/tmp/jw-cv-test.json' }))
   assert.ok(warns.some(w => /\[jiuwen\] unknown config key "gatwayURL" \(did you mean "gatewayURL"\?\)/.test(w)), JSON.stringify(warns))
 })
+
+test('index.d.ts JiuwenAdapterConfig declares every accepted raw key', () => {
+  const dts = readFileSync(new URL('../index.d.ts', import.meta.url), 'utf8')
+  const block = dts.slice(dts.indexOf('export interface JiuwenAdapterConfig'), dts.indexOf('export interface JiuwenAdapterService'))
+  assert.deepEqual(RAW_KEYS.filter(k => !new RegExp(`\\b${k}\\?:`).test(block)), [])
+})

@@ -45,6 +45,77 @@ export type JiuwenApprovalEvent = JiuwenEventBase & (
 export type JiuwenPlanEvent = JiuwenEventBase & { type: 'plan'; event: string; inPlan?: boolean; status?: string }
 export type JiuwenSwarmEvent = JiuwenEventBase & { type: 'swarm'; event: string; runId?: string; summary?: string }
 
+/** Plugin config. Unknown or misspelled keys are reported as warnings at load (never thrown). */
+export interface JiuwenAdapterConfig {
+  accessToken?: string
+  agentGroupName?: string
+  agentTemplateName?: string
+  allowDshAgentLoop?: boolean
+  /** @deprecated Put the key in an environment variable and set `apiKeyEnv`. */
+  apiKey?: string
+  apiKeyEnv?: string
+  approvalTimeoutMs?: number
+  authToken?: string
+  authorization?: string
+  baseURL?: string
+  chatMode?: string
+  commandName?: string
+  compactionMode?: string
+  cookie?: string
+  defaultModel?: string
+  discoveryNamespace?: string
+  discoveryPrefix?: string
+  displayName?: string
+  documentPersist?: boolean
+  emitUsage?: boolean
+  eventDisplay?: string
+  exposeJiuwenTools?: boolean
+  finalGraceMs?: number
+  forwardModelName?: boolean
+  forwardReasoning?: boolean
+  gatewayURL?: string
+  historyMode?: string
+  ignoreMessagePatterns?: Array<string | RegExp>
+  interruptOnAbort?: boolean
+  llmAdapterModule?: string
+  mappingPath?: string
+  mcpRpcTimeoutMs?: number
+  mcpServerName?: string
+  mcpStateDir?: string
+  mode?: 'gateway' | 'openai'
+  modelDiscovery?: boolean
+  models?: Array<{ id: string; name?: string; contextWindow?: number; maxTokens?: number; chatMode?: string }>
+  noUiAnswer?: boolean
+  planBridge?: boolean
+  postCancelSettleMs?: number
+  projectDir?: string
+  provider?: string
+  questionTimeoutMs?: number
+  recoverOnDrop?: boolean
+  recoverWindowMs?: number
+  registerCommands?: boolean
+  requestTimeoutMs?: number
+  serviceName?: string
+  sessionSync?: boolean
+  showProcessingStatus?: boolean
+  skills?: string[]
+  supportsUserInteraction?: boolean
+  surfaceGatewayToolEvents?: boolean
+  swarmflowReply?: string
+  swarmflowStopOnAbort?: boolean
+  terminalFinalGraceMs?: number
+  titleMode?: string
+  toolAllowlist?: string[]
+  toolApproval?: string
+  toolCallTimeoutMs?: number
+  toolPassthrough?: boolean
+  traceFile?: string
+  typedEvents?: boolean
+  userId?: string
+  workMode?: string
+  xToken?: string
+}
+
 export interface JiuwenAdapterService {
   readonly provider: string
   onEvent(listener: (event: JiuwenEvent) => void): () => void
@@ -76,5 +147,5 @@ declare module '@deepseek-ai/cordis' {
 
 export declare const name: string
 export declare const inject: string[]
-export declare function apply(ctx: any, config?: Record<string, unknown>): void
+export declare function apply(ctx: any, config?: JiuwenAdapterConfig): void
 export default apply

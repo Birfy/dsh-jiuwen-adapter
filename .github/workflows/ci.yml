@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: unit + mock gateway (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      # No dependencies to install: the adapter has none. Without the dsh packages the
+      # real-host / full-runtime suites skip themselves; the mock gateway tests always run.
+      - run: npm test
+        env:
+          DSH_NM: ${{ runner.temp }}/no-dsh
+      - name: npm pack --dry-run
+        run: npm pack --dry-run
+
+  compat:
+    name: compat matrix (dsh ${{ matrix.dsh }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dsh: ['0.2.1-rc.2', '0.2.1-rc.5']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dsh ${{ matrix.dsh }} from npm (outside the repo)
+        run: |
+          mkdir -p "$RUNNER_TEMP/dsh" && cd "$RUNNER_TEMP/dsh"
+          echo '{"private":true}' > package.json
+          npm i --ignore-scripts --no-audit --no-fund "@deepseek-ai/dsh@${{ matrix.dsh }}"
+      - name: Full test suite against the real dsh runtime
+        run: npm test
+        env:
+          DSH_NM: ${{ runner.temp }}/dsh/node_modules
+      - name: Full-runtime A/B compat matrix
+        run: node scripts/compat-matrix.mjs --diff
+        env:
+          DSH_NM: ${{ runner.temp }}/dsh/node_modules
