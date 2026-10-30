@@ -1,95 +1,85 @@
-# @dsh-jiuwen/adapter
+<p align="center"><img src="assets/icon.svg" width="88" alt=""></p>
 
-**Generic Cordis LLM provider: registers `jiuwen` on `ctx.llm` and routes it to JiuwenSwarm. The host (dsh or any Cordis app) is the plugin ABI/shell; JiuwenSwarm is the agent brain.**
+<h1 align="center">dsh-jiuwen-adapter</h1>
 
-Docs: [ARCHITECTURE.md](./ARCHITECTURE.md) · [docs/quickstart.md](./docs/quickstart.md) · [docs/configuration.md](./docs/configuration.md) · [docs/gateway.md](./docs/gateway.md) · [docs/dsh-integration.md](./docs/dsh-integration.md) · [docs/testing.md](./docs/testing.md) · [docs/troubleshooting.md](./docs/troubleshooting.md) · [docs/known-issues.md](./docs/known-issues.md) · [docs/coverage.md](./docs/coverage.md) · [VERIFICATION.md](./VERIFICATION.md)
+<p align="center"><b>Use JiuwenSwarm as the brain of dsh, with your other dsh plugins still working.</b></p>
 
-## Quickstart
+<p align="center">
+  <a href="https://github.com/Birfy/dsh-jiuwen-adapter/actions/workflows/ci.yml"><img src="https://github.com/Birfy/dsh-jiuwen-adapter/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
+  <img src="https://img.shields.io/github/package-json/v/Birfy/dsh-jiuwen-adapter?label=version" alt="version">
+  <img src="https://img.shields.io/badge/dsh-%3E%3D0.2.1--rc.2%20%3C0.3.0-6366f1" alt="dsh range">
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="license"></a>
+</p>
 
-Full, verified walkthrough (Mac + Linux, prerequisites, model config, stop/restart, errors): **[docs/quickstart.md](./docs/quickstart.md)**.
+<p align="center"><a href="./README.zh.md">中文</a> · <a href="./docs/quickstart.md">Quickstart</a> · <a href="./docs/configuration.md">Config</a> · <a href="./docs/dsh-integration.md">dsh integration</a> · <a href="./CHANGELOG.md">Changelog</a></p>
 
-```bash
-# 1. JiuwenSwarm (Python 3.11–3.14)
-uv venv ~/jiuwenswarm-venv --python 3.13 && source ~/jiuwenswarm-venv/bin/activate
-uv pip install workswarm && jiuwenswarm-init
-$EDITOR ~/.jiuwenswarm/config/.env        # API_BASE, API_KEY, MODEL_NAME, MODEL_PROVIDER=OpenAI, ENDPOINT_PROFILE
-jiuwenswarm-start app                      # gateway → ws://127.0.0.1:19000/ws  (check: ss -ltn | grep 19000)
+---
 
-# 2. dsh (Node ≥ 22, dsh ≥ 0.2) — new terminal
-npm install -g @deepseek-ai/dsh            # or: brew install dsh
-
-# 3. this adapter
-git clone https://github.com/Birfy/dsh-jiuwen-adapter.git && cd dsh-jiuwen-adapter
-dsh plugin --profile web add "$PWD" && dsh plugin --profile headless add "$PWD"
-for p in web headless; do printf -- '- id: agent-default-model\n  config:\n    provider: jiuwen\n    model: jiuwen-default\n' > ~/.dsh/profiles/$p/cordis.patch.yml; done
-
-# 4. chat
-dsh --profile headless "Say hello and end with QUICKSTART-OK"
-dsh --profile web --no-open --port 3291    # open the printed http://127.0.0.1:3291/?token=… URL
-```
-
-## Overview
-
-- The core depends only on the standard Cordis `llm` service (`ctx.llm.registerAdapter([id], adapter)`) and OpenAI-style messages/tools.
-- `mode=gateway` (default): one `stream()` = one Gateway `chat.send`; loop, tools, memory, sessions and models run in JiuwenSwarm; text streams back.
-- `mode=openai`: OpenAI-compatible diagnostics; with `allowDshAgentLoop` the host executes tools.
+A Cordis plugin that registers a `jiuwen` provider on `ctx.llm`. dsh still handles the UI, sessions, approvals and plugins. Each turn goes to the [JiuwenSwarm](https://pypi.org/project/workswarm/) Gateway, which runs its own agents, tools and memory.
 
 ```mermaid
 flowchart LR
-  P["Your plugin (inject: ['llm'])"] -->|ctx.llm.stream| L["Cordis llm service"]
-  L -->|provider=jiuwen| A["@dsh-jiuwen/adapter"]
-  A -->|"WS chat.send"| G["JiuwenSwarm Gateway :19000"]
-  A -.->|"mode=openai"| O["OpenAI-compatible :18080/v1"]
+  D["dsh + your plugins"] -->|ctx.llm · provider=jiuwen| A["jiuwen adapter"] -->|"WS chat.send"| G["JiuwenSwarm Gateway :19000"]
 ```
 
-## Install (details)
+## 30-second quickstart
 
 ```bash
-# macOS: brew install dsh   (needs >= 0.2; 0.1.2-rc.1 lacks permissionPresets.catalog())
-# Linux: Node >= 22, dsh via npm or source build
-git clone git@github.com:Birfy/dsh-jiuwen-adapter.git
-dsh plugin --profile web add $PWD/dsh-jiuwen-adapter
-# non-DSH host: npm install /path/to/dsh-jiuwen-adapter, then ctx.plugin(...)
+# 1. Brain: start JiuwenSwarm (put your model key in ~/.jiuwenswarm/config/.env)
+uv pip install workswarm && jiuwenswarm-init && jiuwenswarm-start app
+
+# 2. Plugin: install into a dsh profile (dsh >= 0.2.1-rc.2: npm i -g @deepseek-ai/dsh@next)
+dsh plugin --profile web add "git+https://github.com/Birfy/dsh-jiuwen-adapter.git"
+
+# 3. Make it the default model, then chat
+printf -- '- id: agent-default-model\n  config:\n    provider: jiuwen\n    model: jiuwen-default\n' >> ~/.dsh/profiles/web/cordis.patch.yml
+dsh --profile web
 ```
 
-Gateway: `jiuwenswarm-start app` (listens on `ws://127.0.0.1:19000/ws`). Models: `~/.jiuwenswarm/config/.env` (`API_BASE`, `API_KEY`, `MODEL_NAME`, `MODEL_PROVIDER`, `ENDPOINT_PROFILE`, …; never commit). See [docs/configuration.md](./docs/configuration.md) for every option and default.
+Step-by-step guide for Mac and Linux: **[docs/quickstart.md](./docs/quickstart.md)**. To try it without a Gateway, run `npm run mock:gateway`.
 
-## Usage with any Cordis plugin
+## Features
 
-```js
-import { Context } from '@deepseek-ai/cordis'
-import LlmRuntime from '@deepseek-ai/dsh-llm'   // or any llm service with registerAdapter()
-import * as jiuwen from '@dsh-jiuwen/adapter'
+| | What you get | Default |
+|---|---|---|
+| 🧠 **Jiuwen brain** | One dsh turn is one Gateway `chat.send`. Agents, team mode, skills and memory run in Jiuwen | on |
+| 💬 **Live activity** | Reasoning, 🔧 tool calls, subtasks and token usage stream into dsh | on |
+| ✅ **dsh approvals and questions** | Jiuwen permission prompts, plan approval and `ask_user` go through dsh's own dialogs, and deny when no answer comes | on |
+| 🔁 **Session continuity** | dsh sessions map to Jiuwen sessions. Only new text is sent after the first turn | on |
+| 🛟 **Drop recovery** | If the Gateway drops mid-answer, the reply is recovered from history and marked as recovered | on |
+| 🧾 **Local titles and compaction** | Titles and `/compact` are handled locally, so they never cost a Jiuwen turn | on |
+| ⌨️ **`/jiuwen` command** | Sessions, models, modes, skills, agents, cron, MCP and more ([list](./docs/dsh-integration.md#5-jiuwen-slash-command-dsh-command-registry)) | on |
+| 🖼️ **Multimodal** | Image and file parts are sent as Jiuwen media | on |
+| 🔌 **dsh tools → Jiuwen** | Allowlisted dsh tools exposed to Jiuwen over MCP, each call gated by an approval | opt-in |
+| 🧭 **Bridges** | Model discovery, session sync, plan bridge, typed events | opt-in |
+| 🩺 **Config validation** | Unknown keys get a "did you mean" hint and deprecated keys get a warning. Never throws | on |
 
-const ctx = new Context()
-await ctx.plugin(LlmRuntime)
-await ctx.plugin(jiuwen, { gatewayURL: 'ws://127.0.0.1:19000/ws' })
+## Compatibility
 
-for await (const c of ctx.llm.stream({
-  provider: 'jiuwen', model: 'jiuwen-default', sessionId: 'user-42',
-  messages: [{ role: 'user', content: 'hello' }],
-})) {
-  if (c.type === 'text-delta') process.stdout.write(c.text)
-  if (c.type === 'finish') console.log('\n', c.reason)
-}
-```
+Other dsh plugins must keep working. The adapter is tested against the **full dsh agent runtime** (`dsh-agent`, `dsh-agent-loop`, compaction, subagents, goals, plan mode, a bash sandbox, approvals and user-questions). The same scripted session runs once with jiuwen loaded and once without. Every row of the [compat matrix](./docs/known-issues.md#15-round-8-full-runtime-scenarios--version-matrix) must match, covering events, tool calls, plan exit, goal rounds, auto-compaction, subagents, bash, host event counts, globals and load failures.
 
-- **Tools**: gateway mode strips host `tools`; Jiuwen runs its own; activity appears in the reasoning block (`eventDisplay: markers` for legacy text markers), finish `stop`. `mode: 'openai', allowDshAgentLoop: true` forwards tools and returns `tool-call-delta` chunks, finish `tool-calls`.
-- **Multimodal**: image/file parts (data URL or readable path) → `media_items`.
-- **Sessions**: host `sessionId` → stable Jiuwen `session_id`, persisted at `mappingPath`.
-- **E2A helpers**: `ctx.jiuwenAdapter.gateway.{historyGet, modelsList, mcpList, memoryList, filesList, chatCancel, workflows, sessionRename, sessionPin, goal, btw, recap, planStatus, skillsToggle, skillsInstalled, teamList, …}`.
-- **Slash command**: `/jiuwen …` (session, turn control, models/mode, skills/agents, config/policy including cron/heartbeat create·update·delete confirm, mcp-reset confirm, help — see `/jiuwen help`) (when the host has `ctx.commands`).
+| Component | Supported | Tested in CI |
+|---|---|---|
+| dsh | `>=0.2.1-rc.2 <0.3.0` | 0.2.1-rc.2, 0.2.1-rc.5 |
+| Cordis | `^4.0.5` | 4.0.5 |
+| Node | `>=22` | 22, 24 |
+| JiuwenSwarm | 0.2.x Gateway | 0.2.7 (live) |
 
-## Gateway features (primary mode)
+The adapter also works in any Cordis app that has an `llm` service ([usage](./docs/usage.md)).
 
-Structured Jiuwen activity (reasoning, 🔧 tool calls, ✓ results, subtasks) streams as a standard `reasoning` block plus structured events (`ctx.jiuwenAdapter.onEvent`, `providerOptions.jiuwen.onEvent`, Cordis `jiuwen/event`); `usage` chunks; `processing_status` filtered; session continuity (only new user text after turn 1, host runtime-context stripped); abort → `chat.interrupt cancel`; agent/team/model/skills selection via config, catalog entries or `providerOptions.jiuwen`; images/files as `base64Data` (host `attachments` service supported); local session titles; extra RPCs (sessions, skills, agents, team templates, commands, interrupt, userAnswer, compact, generic `rpc`). Full list: [docs/gateway.md](./docs/gateway.md). Cooperation with other dsh plugins (user-questions, approval, SwarmFlow human turns, opt-in dsh-tool passthrough via MCP, local compaction, `/jiuwen` slash command with config/memory/cron/heartbeat/permission-rule/team/template/group/git subcommands, typed `jiuwen/event`): [docs/dsh-integration.md](./docs/dsh-integration.md). Opt-in bridges, all **off** by default: `modelDiscovery`, `sessionSync`, `planBridge`, `typedEvents`, `documentPersist` ([docs/configuration.md](./docs/configuration.md)). Gateway coverage: 172/334 `/ws` methods (73.2 % of the safe surface) — [docs/coverage.md](./docs/coverage.md). dsh field report: [docs/bare-dsh.md](./docs/bare-dsh.md) (`npm run bare-dsh`).
+## Docs
 
-## Testing
+- [Quickstart](./docs/quickstart.md), [Configuration](./docs/configuration.md), [Troubleshooting](./docs/troubleshooting.md)
+- [Using it from code and Gateway features](./docs/usage.md), [Gateway RPC coverage](./docs/coverage.md)
+- [dsh integration](./docs/dsh-integration.md), [Testing](./docs/testing.md), [Known issues and test logs](./docs/known-issues.md)
+- [Publishing to a dsh plugin market](./docs/marketplace.md), [Architecture](./ARCHITECTURE.md)
+
+## Development
 
 ```bash
-npm test && npm run smoke && npm run smoke:cordis && npm run smoke:live   # generic
+npm test                      # unit, mock-gateway and runtime suites
+npm run compat -- --diff      # with vs. without jiuwen compat matrix (needs DSH_NM=<dsh node_modules>)
+npm run market:index          # regenerate market/index.json
 ```
 
-## Troubleshooting
-
-dsh 0.1.2-rc.1 `catalog()` error → upgrade dsh; 401 → `JIUWEN_ACCESS_TOKEN`/`JIUWEN_COOKIE`; `ECONNREFUSED :19000` → start gateway or `npm run mock:gateway`. More + FAQ: [docs/troubleshooting.md](./docs/troubleshooting.md).
+Licensed under [Apache-2.0](./LICENSE).

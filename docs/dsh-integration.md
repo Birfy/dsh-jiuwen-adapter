@@ -178,3 +178,10 @@ With `typedEvents: true` the same activity is also emitted as `jiuwen/tool` (too
 
 All events carry `dshSessionId`, `sessionId` (Jiuwen) and `requestId`; `raw` is the untouched Jiuwen payload (owned by JiuwenSwarm, may change). Live check: a co-loaded plugin's `ctx.on('jiuwen/event')` received events with `dshSessionId` (used by the command test in §5).
 
+
+## 7. Compatibility guarantees
+
+- **Same behaviour with and without jiuwen.** `scripts/compat-runtime.mjs` runs the full dsh agent runtime through a scripted session twice, once with jiuwen loaded and once without. The session covers approvals, user-questions, tool calls, commands, `/plan` with `exit_plan_mode`, `/goal` rounds, automatic and manual compaction, an in-process subagent, and bash in a temp sandbox. `scripts/compat-matrix.mjs --diff` requires every row to match. CI runs it on dsh 0.2.1-rc.2 and 0.2.1-rc.5 ([log](./known-issues.md#15-round-8-full-runtime-scenarios--version-matrix)).
+- **Fail soft.** Missing host services such as `commands`, `approval`, `userQuestions` and `attachments` are detected, not required. A `/jiuwen` name clash only logs a warning. Bad config only warns ([validation](./configuration.md#validation)).
+- **No global side effects.** The matrix checks globals, env, prototypes, process listeners, unhandled rejections and the provider list after dispose.
+- **Supported range.** dsh `>=0.2.1-rc.2 <0.3.0` (`engines.dsh`), Cordis `^4.0.5`, Node `>=22`. dsh-llm is an optional peer.

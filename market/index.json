@@ -1,0 +1,73 @@
+{
+  "format": 1,
+  "title": {
+    "en": "JiuwenSwarm for dsh",
+    "zh": "JiuwenSwarm dsh 插件"
+  },
+  "description": {
+    "en": "Index for the JiuwenSwarm LLM adapter bundle."
+  },
+  "metadata": {
+    "categories": {
+      "agents": {
+        "title": {
+          "en": "Agents",
+          "zh": "智能体"
+        }
+      }
+    },
+    "labels": {
+      "compat-tested": {
+        "title": {
+          "en": "Compatibility-tested",
+          "zh": "兼容性已测"
+        }
+      }
+    }
+  },
+  "plugins": [
+    {
+      "name": "@dsh-jiuwen/adapter",
+      "title": {
+        "en": "JiuwenSwarm Adapter",
+        "zh": "JiuwenSwarm 适配器"
+      },
+      "description": {
+        "en": "JiuwenSwarm as a dsh (DeepSeek Harness) LLM provider: route any dsh agent to a Jiuwen agent/swarm over the Gateway, with /jiuwen commands. Zero dependencies, compatibility-first."
+      },
+      "icon": "icon.svg",
+      "author": "Birfy",
+      "homepage": "https://github.com/Birfy/dsh-jiuwen-adapter#readme",
+      "repository": {
+        "url": "https://github.com/Birfy/dsh-jiuwen-adapter"
+      },
+      "metadata": {
+        "category": "agents",
+        "keywords": [
+          "jiuwen",
+          "jiuwenswarm",
+          "llm-provider",
+          "multi-agent",
+          "gateway"
+        ],
+        "labels": [
+          "compat-tested"
+        ]
+      },
+      "versions": [
+        {
+          "version": "0.2.0",
+          "publishTimestamp": 1793367030,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/Birfy/dsh-jiuwen-adapter",
+            "commit": "1fe6a0e7bff9a6bb965271e95c707c49c279eff5"
+          },
+          "engines": {
+            "dsh": ">=0.2.1-rc.2 <0.3.0"
+          }
+        }
+      ]
+    }
+  ]
+}

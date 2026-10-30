@@ -340,3 +340,18 @@ A real dsh agent runtime (dsh-agent + dsh-agent-loop and 25 more real plugins) r
 - Goal rounds that actually run: `/goal` is paused or cleared before any round starts, to keep the run deterministic.
 - Automatic token-pressure compaction: only `/compact` is exercised.
 
+
+## 15. Round 8: full-runtime scenarios + version matrix (2026-10-30, UTC+8)
+
+This round extended `scripts/compat-runtime.mjs` beyond the round-7 runtime with real scenarios:
+- **Plan mode**: `/plan`, then `exit_plan_mode`, approved through the user-questions plan review.
+- **Goal**: `/goal …` runs a real goal round, and the scripted model calls `get_goal` then `update_goal complete`.
+- **Automatic compaction**: a small context window (1500) with realistic token usage triggers compaction-basic 8 times. There is also one manual `/compact`.
+- **Subagent**: in-process spawn plus `wait`.
+- **bash**: runs in a temp `danger-full-access` sandbox root.
+
+Every row of `compat-matrix --diff` is identical with and without jiuwen (330 events, 28 types). This holds on both **dsh 0.2.1-rc.2 (cordis 4.0.5)** and **dsh 0.2.1-rc.5**, in the variants before, after, two adapters, mixed, and Gateway down. CI repeats the diff on both versions for every push.
+
+Gateway drop: a TCP proxy cut the live 0.2.7 Gateway 2.5 s into a turn and again at 4 s. Both runs recovered the full answer from `history.get`, marked as recovered. The 4 s run was a continuation of the partial text. When history does not have the reply, the original error is surfaced (mock `drop-lost`).
+
+dsh 0.2.2-alpha.* is outside the declared range: SemVer prereleases of 0.2.2 do not match `<0.3.0` with a `0.2.1-rc` floor unless they are included explicitly. It is untested because the box's disk ran out of inodes during installation.

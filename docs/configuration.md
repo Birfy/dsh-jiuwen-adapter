@@ -61,6 +61,8 @@ Precedence: **environment variable > Cordis plugin config > default** (`provider
 | `documentPersist` | `JIUWEN_DOCUMENT_PERSIST=1` | `false` | Opt-in: `document.persist` document attachments on the turn socket before `chat.send` (fail soft: originals are sent if it fails) |
 | `modelDiscovery` | `JIUWEN_MODEL_DISCOVERY=1` | `false` | **Opt-in.** Append Jiuwen `models.list` to this provider's catalog as unique ids `<discoveryPrefix><model_name>` (routed as `model_name`), and offer `llm.registerModelDiscovery(discoveryNamespace)` when the host has it. Never sets a default model |
 | `discoveryNamespace` | — | `jiuwen` | Settings namespace for `registerModelDiscovery`; requests for other providers get `[]` |
+| `recoverOnDrop` | `JIUWEN_RECOVER_ON_DROP=0` disables | `true` | If the Gateway socket drops mid-turn, poll `history.get` and return the reply, with the visible mark `[Recovered from Jiuwen history after the Gateway connection dropped]`. If nothing is recovered, the original error is kept |
+| `recoverWindowMs` | `JIUWEN_RECOVER_WINDOW_MS` | `15000` | How long to poll history for the dropped reply |
 | `discoveryPrefix` | — | `jiuwen-model:` | Id prefix for discovered models (keeps them distinct from `jiuwen-default` / other providers) |
 | `sessionSync` | `JIUWEN_SESSION_SYNC=1` | `false` | **Opt-in.** `session/created` → ensure the local Jiuwen mapping; `session/disposed` → clear pending question / SwarmFlow run (mapping kept). Jiuwen sessions only (header provider or existing mapping); no Gateway create/delete |
 | `planBridge` | `JIUWEN_PLAN_BRIDGE=1` | `false` | **Opt-in.** After a Jiuwen turn completes or a plan event arrives, read `session.plan_status` and mirror `in_plan` onto `ctx.planMode.set(agent, …)`. Jiuwen sessions with a live agent only |
@@ -126,3 +128,14 @@ Precedence: request > catalog model entry > plugin config.
 ## Compatibility guarantees
 
 All flags off (the default) behave exactly like the pre-P3 adapter: no global listeners besides the plugin's own dispose, no host service is written except `ctx.provide(serviceName)`, no default model / permission preset / built-in command / tool is touched, and only namespaced names are used (`/jiuwen`, `jiuwen/*` events, `jiuwen_*` tools, `jiuwenAdapter`). Gateway methods are feature-detected (an `unknown method` answer is cached per Gateway URL; the subcommand soft-fails and disappears from `/jiuwen help`). Covered by `test/compat.test.js`.
+
+
+## Validation
+
+On load the adapter checks its config and logs `[jiuwen] …` warnings. It never throws and never prints values:
+
+- **Unknown key**: `unknown config key "gatewayUrl" (did you mean "gatewayURL"?)`
+- **Deprecated**: `apiKey`, because inline secrets end up in profile files. Put the key in an env var and name it with `apiKeyEnv`. Also `compactionMode: "jiuwen"`, because it runs a full Jiuwen turn; use the default `local`
+- **Wrong type**: a value of the wrong kind, such as an object where a string is expected
+
+`index.d.ts` exports `JiuwenAdapterConfig` for typed configs.

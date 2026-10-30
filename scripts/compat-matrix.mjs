@@ -56,7 +56,10 @@ for (const [feat, f] of Object.entries(FEATURES)) {
   rows.push([feat, ...cells.map(c => (c ? 'identical' : 'DIFF'))])
 }
 for (const [name, r] of results) extra[name] = { jwOut: r.jwOut, nonNamespaced: r.nonNamespacedFromJiuwen, serviceAfterDispose: r.afterDispose.service }
-const out = { baseline: { events: base.eventCount, types: base.types.length, deepseek: base.deepseek }, header: ['feature', ...VARIANTS.map(v => v[0])], rows, extra, ok }
+const countDiff = (a = {}, b = {}) => Object.fromEntries([...new Set([...Object.keys(a), ...Object.keys(b)])].filter(k => a[k] !== b[k]).map(k => [k, [a[k] ?? 0, b[k] ?? 0]]))
+const diffs = {}
+for (const [name, r] of results) for (const [feat, f] of Object.entries(FEATURES)) if (JSON.stringify(f(r)) !== JSON.stringify(f(base))) (diffs[name] ??= {})[feat] = feat === 'host event counts' ? countDiff(base.hostEventCountsRaw, r.hostEventCountsRaw) : { base: JSON.stringify(f(base)).slice(0, 400), this: JSON.stringify(f(r)).slice(0, 400) }
+const out = { diffs, baseline: { events: base.eventCount, types: base.types.length, deepseek: base.deepseek }, header: ['feature', ...VARIANTS.map(v => v[0])], rows, extra, ok }
 console.log(JSON.stringify(out, null, 1))
 if (process.argv.includes('--diff') && !ok) for (const [name, r] of results) for (const [feat, f] of Object.entries(FEATURES)) if (JSON.stringify(f(r)) !== JSON.stringify(f(base))) console.error(`[${name}] ${feat}\n  base: ${JSON.stringify(f(base)).slice(0, 600)}\n  this: ${JSON.stringify(f(r)).slice(0, 600)}`)
 process.exit(ok ? 0 : 1)

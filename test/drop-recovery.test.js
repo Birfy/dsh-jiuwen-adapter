@@ -24,7 +24,7 @@ test('mid-stream drop with nothing in history keeps the clear error', async () =
   const h = makeHost(mock, { recoverWindowMs: 600 })
   const cs = await h.run({ sessionId: 'drop-2', messages: [{ role: 'user', content: 'drop-lost please' }] })
   assert.equal(fin(cs).kind, 'error')
-  assert.match(JSON.stringify(fin(cs)), /closed mid-turn/)
+  assert.match(JSON.stringify(fin(cs)), /(closed|error) mid-turn/, 'drop surfaces the original transport error (close or error fires first depending on Node)')
 })
 
 test('recoverOnDrop:false keeps the old behaviour (error, no history lookups)', async () => {

@@ -42,7 +42,7 @@ describe('full agent runtime A/B matrix', { skip: !hasRuntime && 'dsh agent runt
     try { out = execFileSync(process.execPath, [`${ROOT}scripts/compat-matrix.mjs`, ...(process.env.JIUWEN_LIVE ? ['--live'] : [])], { encoding: 'utf8', timeout: 700_000, stdio: ['ignore', 'pipe', 'pipe'] }) } catch (e) { out = e.stdout }
     const m = JSON.parse(out)
     const bad = m.rows.filter(r => r.slice(1).some(c => c !== 'identical'))
-    assert.deepEqual(bad, [], JSON.stringify(m.header))
+    assert.deepEqual(bad, [], JSON.stringify({ header: m.header, diffs: m.diffs }))
     assert.ok(m.baseline.events > 100, 'scenario exercised the runtime')
     assert.equal(m.baseline.deepseek, 'loaded', 'dsh-llm-deepseek-api-key coexists')
     for (const [name, x] of Object.entries(m.extra)) {
