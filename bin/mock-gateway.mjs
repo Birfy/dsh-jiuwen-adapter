@@ -26,7 +26,8 @@ const INTERRUPTS = []
 const ANSWERS = []
 const RENAMES = []
 const EXTLOG = []
-const SWARM_WAIT = new Map() // P1/P2 extended-method calls
+const SWARM_WAIT = new Map()
+const PLAN_ON = new Set() // P1/P2 extended-method calls
 const CRON = new Map()
 const HB = new Map([['hb-job-1', { id: 'hb-job-1', name: 'mock-hb', enabled: true }]])
 const RULES = [{ id: 'shell_allow_ls', tools: ['bash'], pattern: 'ls', action: 'allow' }]
@@ -61,6 +62,7 @@ wss.on('connection', (ws, req) => {
       const rid = frame.id
       const ev = (event, payload) => ws.send(JSON.stringify({ type: 'event', event, payload: { session_id: sessionId, request_id: rid, ...payload } }))
       LAST_PARAMS.set(sessionId, params)
+      if (/plan-on/.test(query)) PLAN_ON.add(sessionId)
       const turns = HISTORY.get(sessionId) || []
       const prior = turns.filter(t => t.role === 'user').length
       const answered = Array.isArray(params.answers) && params.request_id
@@ -339,7 +341,7 @@ wss.on('connection', (ws, req) => {
       return ok({ teams: [{ name: 'mock-team', id: 'team-1' }] })
     }
     if (method === 'session.plan_status') {
-      return ok({ session_id: params.session_id, in_plan: false })
+      return ok({ session_id: params.session_id, in_plan: PLAN_ON.has(String(params.session_id)) })
     }
     if (method === 'command.btw') {
       const q = String(params.question || '').trim()

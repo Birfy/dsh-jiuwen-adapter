@@ -17,9 +17,9 @@ import { createFeatureCache } from './features.js'
 export { Config }
 export const name = 'llm-jiuwen'
 /** Cordis event carrying structured Jiuwen activity (see index.d.ts / docs/dsh-integration.md). */
-export const JIUWEN_EVENT = 'jiuwen/event'
-/** Typed, namespaced events (opt-in: config.typedEvents). */
-export const JIUWEN_TYPED_EVENTS = Object.freeze({ tool: 'jiuwen/tool', plan: 'jiuwen/plan', approval: 'jiuwen/approval', swarm: 'jiuwen/swarm' })
+import { JIUWEN_EVENT, JIUWEN_TYPED_EVENTS } from './typed-events.js'
+import { typedEventFor, installSessionSync, createPlanBridge, createModelDiscovery } from './bridges.js'
+export { JIUWEN_EVENT, JIUWEN_TYPED_EVENTS }
 export const inject = ['llm']
 
 export { createJiuwenAdapter as JiuwenLlmAdapter }
@@ -50,9 +50,15 @@ export function apply(ctx, config = {}) {
   const LlmAdapter = loadLlmAdapter(logger, resolved)
 
   const listeners = new Set()
+  let planBridge = null
   const onEvent = (e) => {
     for (const fn of listeners) { try { fn(e) } catch { /* ignore */ } }
     try { ctx.emit?.(JIUWEN_EVENT, e) } catch { /* host may not declare the event */ }
+    const c = resolved
+    if (c.typedEvents) {
+      try { const t = typedEventFor(e); if (t) ctx.emit?.(t[0], t[1]) } catch { /* ignore */ }
+    }
+    if (c.planBridge && planBridge) { try { planBridge(e) } catch { /* ignore */ } }
   }
   const service = (name) => { try { return (typeof ctx.get === 'function' ? ctx.get(name) : undefined) ?? ctx[name] } catch { return undefined } }
   const interact = createInteractor({
@@ -77,11 +83,14 @@ export function apply(ctx, config = {}) {
     sessions,
     logger,
     onEvent,
+    // modelDiscovery (opt-in): Jiuwen models as unique `<discoveryPrefix><model_name>` catalog ids.
+    discoverModels: () => (readConfig().modelDiscovery ? modelDiscovery.list() : Promise.resolve([])),
     // Optional host attachment store (generic Cordis service name `attachments`).
     attachments: () => {
       try { return (typeof ctx.get === 'function' ? ctx.get('attachments') : undefined) ?? ctx.attachments } catch { return undefined }
     },
   })
+  const modelDiscovery = createModelDiscovery({ gateway: () => gatewayFor(), config: readConfig })
   const adapter = new AdapterClass()
   const cfg = readConfig()
   const registration = ctx.llm.registerAdapter([cfg.provider], adapter)
@@ -213,15 +222,38 @@ export function apply(ctx, config = {}) {
     }
   }
 
+  // ── P3 opt-in bridges (all default OFF) ──
+  const disposers = []
+  try {
+    if (cfg.planBridge) {
+      planBridge = createPlanBridge({
+        services: () => ({ planMode: service('planMode'), agents: service('agents') }),
+        gateway: () => gatewayFor(), sessions, logger,
+      })
+    }
+    if (cfg.sessionSync) disposers.push(installSessionSync({ ctx, config: readConfig, sessions, logger }))
+    if (cfg.modelDiscovery && typeof ctx.llm?.registerModelDiscovery === 'function') {
+      const off = ctx.llm.registerModelDiscovery(cfg.discoveryNamespace, async (request) => {
+        if (request?.provider && request.provider !== readConfig().provider) return []
+        return (await modelDiscovery.list()).map(m => ({ id: m.id, name: m.name, ...(m.contextWindow ? { contextWindow: m.contextWindow } : {}) }))
+      })
+      if (typeof off === 'function') disposers.push(off)
+    }
+  } catch (error) {
+    logger.warn?.(`[dsh-jiuwen] optional bridge setup failed (continuing without it): ${error?.message || error}`)
+  }
+
   if (typeof ctx.effect === 'function') {
     ctx.effect(function* () {
       yield () => {
+        for (const d of disposers) { try { d() } catch { /* ignore */ } }
         try { registration() } catch { /* already disposed */ }
         mcpBridge.dispose().catch(() => {})
       }
     }, 'llm-jiuwen')
   } else {
     ctx.on?.('dispose', () => {
+      for (const d of disposers) { try { d() } catch { /* ignore */ } }
       try { registration() } catch { /* ignore */ }
     })
   }

@@ -158,6 +158,17 @@ export function resolveConfig(raw = {}, opts = {}) {
     mcpRpcTimeoutMs: Number(raw.mcpRpcTimeoutMs ?? env.JIUWEN_MCP_RPC_TIMEOUT_MS ?? 30_000),
     /** Register the `/jiuwen` slash command on ctx.commands when available. */
     registerCommands: raw.registerCommands !== false && env.JIUWEN_REGISTER_COMMANDS !== '0',
+    // ── P3 opt-in bridges (default OFF = previous behaviour) ──
+    /** Advertise Jiuwen models.list in this provider's catalog as `<discoveryPrefix><model_name>` (+ llm.registerModelDiscovery). */
+    modelDiscovery: raw.modelDiscovery === true || env.JIUWEN_MODEL_DISCOVERY === '1',
+    discoveryNamespace: String(raw.discoveryNamespace || 'jiuwen'),
+    discoveryPrefix: String(raw.discoveryPrefix || 'jiuwen-model:'),
+    /** DSH session/created|disposed → local Jiuwen mapping upkeep (jiuwen sessions only). */
+    sessionSync: raw.sessionSync === true || env.JIUWEN_SESSION_SYNC === '1',
+    /** Jiuwen session.plan_status → ctx.planMode (jiuwen sessions only). */
+    planBridge: raw.planBridge === true || env.JIUWEN_PLAN_BRIDGE === '1',
+    /** Also emit typed jiuwen/tool | jiuwen/plan | jiuwen/approval | jiuwen/swarm events. */
+    typedEvents: raw.typedEvents === true || env.JIUWEN_TYPED_EVENTS === '1',
     /** Slash command name (default 'jiuwen'); change it if another plugin already owns /jiuwen. */
     commandName: String(raw.commandName || env.JIUWEN_COMMAND_NAME || 'jiuwen').replace(/^\//, ''),
     /** Reply sent to Jiuwen when it asked but no dsh answerer exists. */

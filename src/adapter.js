@@ -108,12 +108,17 @@ export function createJiuwenAdapter(LlmAdapterBase, deps) {
 
     async listModels(provider) {
       const cfg = this._cfg()
-      return cfg.models.map(m => ({
+      const own = cfg.models.map(m => ({
         provider,
         id: m.id,
         name: m.name,
         inputModalities: ['text', 'image'],
       }))
+      if (!cfg.modelDiscovery || typeof deps.discoverModels !== 'function') return own
+      let found = []
+      try { found = await deps.discoverModels() } catch { found = [] }
+      const ids = new Set(own.map(m => m.id))
+      return [...own, ...found.filter(m => !ids.has(m.id)).map(m => ({ provider, id: m.id, name: m.name, inputModalities: ['text', 'image'] }))]
     }
 
     resolveModel(provider, model) {
@@ -263,6 +268,10 @@ export function turnOverrides(cfg, options) {
   const model = cfg.models.find(m => m.id === options?.model)
   let modelName = req.modelName ?? model?.modelName
   if (modelName === undefined && cfg.forwardModelName && options?.model && !model) modelName = options.model
+  // modelDiscovery ids: `<discoveryPrefix><model_name>` → model_name
+  if (req.modelName === undefined && !model && cfg.discoveryPrefix && String(options?.model || '').startsWith(cfg.discoveryPrefix)) {
+    modelName = String(options.model).slice(cfg.discoveryPrefix.length) || undefined
+  }
   const pick = (k) => req[k] ?? model?.[k] ?? cfg[k]
   return {
     chatMode: pick('chatMode'),
