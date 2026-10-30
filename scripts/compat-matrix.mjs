@@ -40,6 +40,7 @@ const FEATURES = {
   'token meter': r => r.tokens,
   'host event names': r => r.hostEvents,
   'host event counts': r => r.hostEventCounts,
+  'session/flush checkpoints fire': r => r.flushCheckpoints,
   'providers after dispose': r => r.afterDispose.providers,
   'globals/env/proto/process': r => r.globals,
   'unhandled rejections': r => r.unhandled,

@@ -269,6 +269,9 @@ const small = await runScenario('nonjw-small', SMALL, 'fake-small')
 rep.events = [...rep.events, ...small.events]; rep.types = [...rep.types, ...small.types]; rep.results = [...rep.results, ...small.results.map(r => `small:${r}`)]
 const jwOut = await jwSide
 const scenarioEvents = emitted.slice(base)
+// Durability checkpoints: dsh-session also flushes on goal-round-driver idle timers, so their
+// count depends on scheduling, not on the plugins loaded. Presence is still compared.
+const TIMING_EVENTS = new Set(['session/flush'])
 const norm = normalizer()
 const ev = norm(rep.events)
 for (const f of jw) { try { f.dispose?.() } catch (e) { failed.push(`dispose ${e.message}`) } }
@@ -290,8 +293,9 @@ const out = {
   results: rep.results, tools: rep.tools, cmds: rep.cmds, title: rep.title, tokens: norm(rep.tokens),
   approvals, questions,
   hostEvents: [...new Set(scenarioEvents.filter(n => !n.startsWith('jiuwen/')))].sort(),
-  hostEventCountsRaw: scenarioEvents.filter(n => !n.startsWith('jiuwen/') && !/^internal\//.test(n)).reduce((o, n) => (o[n] = (o[n] || 0) + 1, o), {}),
-  hostEventCounts: createHash('sha1').update(JSON.stringify(scenarioEvents.filter(n => !n.startsWith('jiuwen/') && !/^internal\//.test(n)).reduce((o, n) => (o[n] = (o[n] || 0) + 1, o), {}))).digest('hex').slice(0, 12),
+  hostEventCountsRaw: scenarioEvents.filter(n => !n.startsWith('jiuwen/') && !/^internal\//.test(n) && !TIMING_EVENTS.has(n)).reduce((o, n) => (o[n] = (o[n] || 0) + 1, o), {}),
+  hostEventCounts: createHash('sha1').update(JSON.stringify(scenarioEvents.filter(n => !n.startsWith('jiuwen/') && !/^internal\//.test(n) && !TIMING_EVENTS.has(n)).reduce((o, n) => (o[n] = (o[n] || 0) + 1, o), {}))).digest('hex').slice(0, 12),
+  flushCheckpoints: scenarioEvents.filter(n => n === 'session/flush').length > 0,
   nonNamespacedFromJiuwen: [...new Set(scenarioEvents.filter(n => /jiuwen/i.test(n) && !n.startsWith('jiuwen/')))],
   jwOut,
   afterDispose: { providers: ctx.llm.listProviders().map(p => p.id).sort(), service: ctx.get('jiuwenAdapter') === undefined ? 'gone' : 'present' },

@@ -355,3 +355,5 @@ Every row of `compat-matrix --diff` is identical with and without jiuwen (330 ev
 Gateway drop: a TCP proxy cut the live 0.2.7 Gateway 2.5 s into a turn and again at 4 s. Both runs recovered the full answer from `history.get`, marked as recovered. The 4 s run was a continuation of the partial text. When history does not have the reply, the original error is surfaced (mock `drop-lost`).
 
 dsh 0.2.2-alpha.* is outside the declared range: SemVer prereleases of 0.2.2 do not match `<0.3.0` with a `0.2.1-rc` floor unless they are included explicitly. It is untested because the box's disk ran out of inodes during installation.
+
+CI note: GitHub runners showed a `session/flush` count difference of ±1, in a different variant on each run (`down/two` once, `down/before` once), and never locally across 16 parallel runs. dsh-session also fires this durability checkpoint on goal-round-driver idle timers, so the count depends on scheduling, not on which plugins are loaded. The strict host-event-count row now leaves it out, and a separate row checks that flush checkpoints still fire.
