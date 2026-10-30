@@ -85,6 +85,7 @@ export class GatewayTransport {
     this.surfaceToolEvents = opts.surfaceToolEvents !== false
     this.chatMode = opts.chatMode
     this.eventDisplay = opts.eventDisplay || (this.surfaceToolEvents ? 'reasoning' : 'none')
+    this.trajectoryDetail = opts.trajectoryDetail === 'full' ? 'full' : 'summary'
     this.forwardReasoning = opts.forwardReasoning !== false
     this.showProcessingStatus = opts.showProcessingStatus === true
     this.emitUsage = opts.emitUsage !== false
@@ -585,6 +586,9 @@ export class GatewayTransport {
     const turnIds = new Set([requestId])
     /** True between answering an interaction and the first resumed output (ignore stale completion frames). */
     let resumePending = false
+    /** After a resume: start of the resumed segment in text.body, and a guard against Jiuwen re-streaming already-shown text. */
+    let segStart = 0
+    let replay = null
     const answeredIds = new Set()
     const queue = []
     let wake
@@ -624,6 +628,16 @@ export class GatewayTransport {
       if (self.eventDisplay === 'markers') { yield *textDelta(`${line}\n`); return }
       yield *reasoningDelta(`${reasoning.body && !reasoning.body.endsWith('\n') ? '\n' : ''}${line}\n`)
     }
+    /** trajectoryDetail=full: structured Markdown step in the reasoning block (falls back to the summary line). */
+    let stepNo = 0
+    const detailed = function *(self, summaryLine, build) {
+      if (self.trajectoryDetail !== 'full' || self.eventDisplay !== 'reasoning') { yield *activity(self, summaryLine); return }
+      let md
+      try { md = build() } catch { md = '' }
+      if (!md) { yield *activity(self, summaryLine); return }
+      yield *reasoningDelta(`${reasoning.body ? (reasoning.body.endsWith('\n\n') ? '' : reasoning.body.endsWith('\n') ? '\n' : '\n\n') : ''}${md}\n\n`)
+    }
+    const stepHeader = (label) => `#### Step ${++stepNo} · ${label}`
     const self = this
     const marked = new Set()
     const mark1 = (n) => { if (!marked.has(n)) { marked.add(n); ctx.mark?.(n) } }
@@ -728,7 +742,11 @@ export class GatewayTransport {
 
         switch (eventType) {
           case EVENTS.DELTA:
-            if (typeof content === 'string') yield *textDelta(content)
+            if (typeof content === 'string') {
+              if (replay && content && replay.base.startsWith(content, replay.pos)) { replay.pos += content.length; continue }
+              replay = null
+              yield *textDelta(content)
+            }
             continue
           case EVENTS.REASONING:
             emitEvent({ type: 'reasoning', text: content })
@@ -742,9 +760,10 @@ export class GatewayTransport {
             const name = tc.name || tc.tool_name || payload.tool_name || payload.name || 'tool'
             const args = typeof tc.arguments === 'string' ? tc.arguments : JSON.stringify(tc.arguments ?? {})
             emitEvent({ type: 'tool_call', name, id: tc.tool_call_id || tc.id, arguments: args, raw: payload })
-            yield *activity(this, this.eventDisplay === 'markers'
+            yield *detailed(this, this.eventDisplay === 'markers'
               ? `[jiuwen-tool:${name}]`
-              : `🔧 ${name} ${truncate(args, 300)}`)
+              : `🔧 ${name} ${truncate(args, 300)}`,
+            () => `${stepHeader(`🔧 Tool call: \`${mdInline(name)}\``)}\n\n**Arguments**\n\n${fenced(prettyJson(args), 'json')}`)
             continue
           }
           case EVENTS.TOOL_UPDATE:
@@ -755,9 +774,10 @@ export class GatewayTransport {
             const result = payload.rendered_result ?? payload.result ?? content ?? ''
             const resultText = typeof result === 'string' ? result : JSON.stringify(result)
             emitEvent({ type: 'tool_result', name, id: payload.tool_call_id, success: payload.success, result: resultText, raw: payload })
-            yield *activity(this, this.eventDisplay === 'markers'
+            yield *detailed(this, this.eventDisplay === 'markers'
               ? `[jiuwen-tool-result:${name}] ${truncate(resultText, 200)}`.trim()
-              : `${payload.success === false ? '✗' : '✓'} ${name}: ${truncate(resultText, 400)}`)
+              : `${payload.success === false ? '✗' : '✓'} ${name}: ${truncate(resultText, 400)}`,
+            () => `**Result** ${payload.success === false ? '✗ failed' : '✓'} \`${mdInline(name)}\`\n\n${fenced(prettyJson(resultText))}`)
             continue
           }
           case EVENTS.SUBTASK_UPDATE:
@@ -768,9 +788,10 @@ export class GatewayTransport {
           case EVENTS.TEAM_MESSAGE: {
             const summary = typeof content === 'string' && content ? content : summarize(payload)
             emitEvent({ type: eventType.replace(/^chat\./, ''), summary, raw: payload })
-            yield *activity(this, this.eventDisplay === 'markers'
+            yield *detailed(this, this.eventDisplay === 'markers'
               ? `[jiuwen-${eventType}] ${truncate(summary, 120)}`
-              : `• ${eventType.replace(/^chat\./, '')}: ${truncate(summary, 200)}`)
+              : `• ${eventType.replace(/^chat\./, '')}: ${truncate(summary, 200)}`,
+            () => `${stepHeader(stepLabel(eventType))}\n\n${typeof content === 'string' && content ? fenced(content) : fenced(detailJson(payload), 'json')}`)
             continue
           }
           case EVENTS.PROCESSING:
@@ -836,6 +857,7 @@ export class GatewayTransport {
                   } }))
                 }
                 finalSeen = false; terminalFinal = false; resumePending = true
+                segStart = text.body.length; replay = text.body ? { base: text.body, pos: 0 } : null
                 deadline = Date.now() + this.requestTimeoutMs
                 if (reply.note) yield *activity(this, reply.note)
                 continue
@@ -867,8 +889,11 @@ export class GatewayTransport {
           case 'content': {
             // Segment finals may repeat streamed text; only append an unseen tail.
             if (typeof content === 'string' && content) {
+              const seg = text.body.slice(segStart)
               if (!text.body) yield *textDelta(content)
               else if (content.startsWith(text.body) && content.length > text.body.length) yield *textDelta(content.slice(text.body.length))
+              else if (segStart > 0 && seg && content.startsWith(seg) && content.length > seg.length) yield *textDelta(content.slice(seg.length))
+              else if (segStart > 0 && !seg.trim() && !text.body.includes(content.trim())) yield *textDelta(`\n\n${content}`)
             }
             // JiuwenSwarm closes a turn with an empty, request-scoped chat.final (no final_mode) ~0.7 s
             // before processing_status{is_complete}; end on it after a short idle grace.
@@ -883,6 +908,10 @@ export class GatewayTransport {
             continue
           default:
             emitEvent({ type: 'raw', event: eventType, raw: payload })
+            // trace.updated / chat.tracer_agent: plan/agent steps, shown only with trajectoryDetail=full.
+            if (this.trajectoryDetail === 'full' && this.eventDisplay === 'reasoning' && /trace|tracer/i.test(eventType)) {
+              yield *detailed(this, '', () => `${stepHeader(stepLabel(eventType))}\n\n${fenced(detailJson(payload), 'json')}`)
+            }
             continue
         }
       }
@@ -898,6 +927,34 @@ export class GatewayTransport {
 function truncate(s, n) {
   const v = String(s ?? '')
   return v.length > n ? `${v.slice(0, n)}…` : v
+}
+
+const ITEM_MAX = 4096
+function capItem(s) {
+  const v = String(s ?? '')
+  return v.length > ITEM_MAX ? `${v.slice(0, ITEM_MAX)}\n…[truncated ${v.length - ITEM_MAX} chars]` : v
+}
+function prettyJson(s) {
+  const v = String(s ?? '')
+  try { const o = JSON.parse(v); if (o && typeof o === 'object') return JSON.stringify(o, null, 2) } catch { /* not JSON */ }
+  return v
+}
+function detailJson(payload) {
+  const { runtime_event, output_order, ...rest } = payload || {}
+  return JSON.stringify(rest, null, 2)
+}
+/** Fenced block whose fence is longer than any backtick run inside (no Markdown breakout). */
+function fenced(s, lang = '') {
+  const body = capItem(s)
+  const run = Math.max(2, ...[...body.matchAll(/`+/g)].map(m => m[0].length))
+  const fence = '`'.repeat(run + 1)
+  return `${fence}${lang}\n${body}\n${fence}`
+}
+function mdInline(s) { return String(s ?? '').replace(/[`\n]/g, ' ').slice(0, 120) }
+function stepLabel(eventType) {
+  const t = String(eventType || '').replace(/^chat\./, '')
+  const icon = /todo|plan/i.test(t) ? '📋' : /subtask|subagent|team/i.test(t) ? '🧩' : /trace/i.test(t) ? '🧭' : '•'
+  return `${icon} ${t}`
 }
 
 function summarize(payload) {

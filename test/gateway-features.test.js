@@ -268,6 +268,13 @@ test('ask_user → dsh userQuestions.ask → resume chat.send with mapped answer
   assert.equal(cs.at(-1).reason.kind, 'stop')
 })
 
+test('ask_user resume: pre-question text re-streamed by Jiuwen is not doubled', async () => {
+  const run = hostWith({ userQuestions: { async ask(r) { return { answers: [{ id: r.questions[0].id, selected: ['Blue'] }] } } } })
+  const t = txt(await run({ sessionId: 'uq-replay', messages: user('preface then ask me something') }))
+  assert.equal(t.split('Let me ask first.').length - 1, 1, t)
+  assert.match(t, /answered ask_user_interrupt: blue/)
+})
+
 test('ask_user with userQuestions but no answerer → neutral reply, turn continues', async () => {
   const run = hostWith({ userQuestions: { async ask() { throw Object.assign(new Error('none'), { code: 'NO_PROVIDER' }) } } })
   const cs = await run({ sessionId: 'uq2', messages: user('please ask me something') })

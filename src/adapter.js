@@ -14,6 +14,7 @@ import { createToolBridge } from './tool-bridge.js'
 import { prepareBrainRequest, callKind } from './agent-brain.js'
 import { appendFileSync } from 'node:fs'
 import { failureFromError, emitTextReply } from './stream-emit.js'
+import { applySystemInjection } from './system-inject.js'
 import { toGatewayQuery, contentToText, withInferredRoles } from './messages.js'
 import { fileBlocksFromHandles } from './multimodal.js'
 
@@ -85,6 +86,7 @@ export function createJiuwenAdapter(LlmAdapterBase, deps) {
           surfaceToolEvents: cfg.surfaceGatewayToolEvents,
           chatMode: cfg.chatMode,
           eventDisplay: cfg.eventDisplay,
+          trajectoryDetail: cfg.trajectoryDetail,
           forwardReasoning: cfg.forwardReasoning,
           showProcessingStatus: cfg.showProcessingStatus,
           emitUsage: cfg.emitUsage,
@@ -211,7 +213,13 @@ export function createJiuwenAdapter(LlmAdapterBase, deps) {
           const aux = Boolean(options.purpose)
           const turnMapping = aux ? { ...mapping, jiuwenSessionId: `${mapping.jiuwenSessionId}-aux-${Date.now().toString(36)}`, turns: 0 } : mapping
           if (aux) overrides.historyMode = 'transcript'
-          const query = buildQuery(options, turnMapping, cfg, overrides)
+          let query = buildQuery(options, turnMapping, cfg, overrides)
+          // injectSystem (jiuwen sessions only; fail soft). Skipped for aux calls and ask_user answers.
+          let systemHash
+          if (!aux && cfg.injectSystem !== 'off' && !turnMapping.pendingQuestion) {
+            const inj = applySystemInjection(query, options, turnMapping, cfg.injectSystem)
+            query = inj.query; systemHash = inj.hash
+          }
           const trace = makeTrace(cfg.traceFile)
           if (!aux && cfg.toolPassthrough === 'mcp' && deps.mcpBridge && options.tools?.length) {
             const r = await deps.mcpBridge.prepare(options.tools, dshSessionId)
@@ -238,7 +246,7 @@ export function createJiuwenAdapter(LlmAdapterBase, deps) {
               trace({ at: 'turn-end', reason: info.reason, chars: info.text?.length })
               recorded = true
               if (!aux && (info.reason?.kind === 'stop' || info.reason?.kind === 'aborted')) {
-                deps.sessions.recordTurn?.(dshSessionId, { requestId: info.requestId, pendingQuestion: info.pendingQuestion })
+                deps.sessions.recordTurn?.(dshSessionId, { requestId: info.requestId, pendingQuestion: info.pendingQuestion, ...(systemHash ? { systemHash } : {}) })
               }
               // Turns usually end on the terminal chat.final grace, before Gateway's processing_status
               // {is_complete} arrives, so bridges (planBridge) key off this explicit turn_end event.

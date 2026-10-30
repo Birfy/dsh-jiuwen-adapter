@@ -108,6 +108,7 @@ export class SessionStore {
     if (!mapping) return undefined
     mapping.turns = (mapping.turns || 0) + 1
     if (extra.requestId) mapping.lastRequestId = extra.requestId
+    if (extra.systemHash) mapping.systemHash = String(extra.systemHash)
     if (extra.pendingQuestion !== undefined) {
       if (extra.pendingQuestion) mapping.pendingQuestion = extra.pendingQuestion
       else delete mapping.pendingQuestion
@@ -154,6 +155,7 @@ export class SessionStore {
           ...(Array.isArray(entry.skills) ? { skills: entry.skills.map(String) } : {}),
           ...(entry.agentTemplateName ? { agentTemplateName: String(entry.agentTemplateName) } : {}),
           ...(entry.title ? { title: String(entry.title) } : {}),
+          ...(entry.systemHash ? { systemHash: String(entry.systemHash) } : {}),
           ...(entry.swarmRunId ? { swarmRunId: String(entry.swarmRunId) } : {}),
           updatedAt: String(entry.updatedAt || new Date().toISOString()),
         })

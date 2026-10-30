@@ -75,6 +75,10 @@ export interface JiuwenAdapterConfig {
   forwardReasoning?: boolean
   gatewayURL?: string
   historyMode?: string
+  /** Forward host system prompt once per Jiuwen session: off (default) | persona | full. */
+  injectSystem?: 'off' | 'persona' | 'full'
+  /** Jiuwen steps in reasoning: summary (default) | full (structured Markdown). */
+  trajectoryDetail?: 'summary' | 'full'
   ignoreMessagePatterns?: Array<string | RegExp>
   interruptOnAbort?: boolean
   llmAdapterModule?: string

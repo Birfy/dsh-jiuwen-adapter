@@ -31,6 +31,8 @@ Precedence: **environment variable > Cordis plugin config > default** (`provider
 | `showProcessingStatus` | `JIUWEN_SHOW_PROCESSING_STATUS=1` | `false` | Show `chat.processing_status` (filtered by default) |
 | `emitUsage` | — | `true` | Emit `usage` chunk from `chat.usage_summary` |
 | `historyMode` | `JIUWEN_HISTORY_MODE` | `gateway` | `gateway`: after turn 1 send only new user text; `transcript`: always recent transcript |
+| `injectSystem` | `JIUWEN_INJECT_SYSTEM` | `off` | Forward the host system prompt to Jiuwen (its `chat.send` has no system field): `persona` = FlyBot identity/instructions/group/language sections only (no markers → nothing sent); `full` = whole text. Sent once per Jiuwen session as a `[System instructions from host]…[/System]` prefix, resent only when its hash changes; capped at 8 KB; latest in-history system message wins; any error → plain query |
+| `trajectoryDetail` | `JIUWEN_TRAJECTORY_DETAIL` | `summary` | `full`: Jiuwen tool calls/results, subtasks, todos and `trace.*` steps as Markdown steps (header, args, result; 4 KB per item) in the reasoning block (dsh Trajectory tab). Never emits tool-call blocks. Needs `eventDisplay: reasoning` |
 | `ignoreMessagePatterns` | — | `['^Current runtime context\\.']` | Regexes; matching user blocks (from match onward) are not forwarded |
 | `chatMode` | `JIUWEN_CHAT_MODE` | = `workMode` | chat.send `mode` (`agent`, `agent.plan`, `agent.fast`, `agent.work.normal`, `agent.code.normal`, `team`, `team.work.normal`, …). Per-session override via `/jiuwen mode` (stored in the session map) |
 | `agentTemplateName` | `JIUWEN_AGENT_TEMPLATE` | — | Jiuwen expert (`agent_template_name`); may also be stored per-session in the map |

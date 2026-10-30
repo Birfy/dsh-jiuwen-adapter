@@ -3,6 +3,15 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- `injectSystem` (`off` default | `persona` | `full`): forward the host system prompt to Jiuwen once per mapped session as a `[System instructions from host]` prefix, hash-gated (stored in the session mapping), 8 KB cap, fail-soft.
+- `trajectoryDetail` (`summary` default | `full`): structured Markdown steps (tool, args, result, subtasks, todos, `trace.*`) in the reasoning block, 4 KB per item.
+
+### Fixed
+- Card answer text no longer doubles when Jiuwen re-streams the pre-question text after an `ask_user` resume; a resumed final with no deltas is no longer dropped.
+
 ## [0.2.0] - 2026-10-30
 
 ### Added

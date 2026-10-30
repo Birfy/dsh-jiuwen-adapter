@@ -5,6 +5,7 @@
  */
 import { WebSocketServer } from './_ws-server.mjs'
 
+const REPLAY_ASK = new Set()
 const SHAPE = { v: process.env.JIUWEN_GATEWAY_MOCK_SHAPE || '0.2.5' }
 const PORT = Number(process.env.JIUWEN_GATEWAY_MOCK_PORT || 19000)
 const wss = await WebSocketServer({ port: PORT, host: '127.0.0.1' })
@@ -96,6 +97,8 @@ wss.on('connection', (ws, req) => {
         // never finishes on its own → host abort path
         return
       }
+      if (!answered && /ask me/i.test(query) && /preface/.test(query)) { REPLAY_ASK.add(sessionId); ev('chat.delta', { content: 'Let me ask first. ' }) }
+      if (answered && REPLAY_ASK.delete(sessionId)) ev('chat.delta', { content: 'Let me ask first. ' }) // Jiuwen re-streams the pre-question text on resume
       if (!answered && /ask me/i.test(query) && params.supports_user_interaction) {
         ev('chat.ask_user_question', { event_type: 'chat.ask_user_question', request_id: 'q-1', source: 'ask_user_interrupt', questions: [{ question: 'Which color?', options: [{ label: 'Red', value: 'red' }, { label: 'Blue', value: 'blue' }] }] })
         return

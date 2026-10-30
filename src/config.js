@@ -199,6 +199,10 @@ export function resolveConfig(raw = {}, opts = {}) {
     /** User-message blocks matching these regexes are not forwarded (default: DSH runtime-context snapshot; Jiuwen has its own runtime). */
     ignoreMessagePatterns: (Array.isArray(raw.ignoreMessagePatterns) ? raw.ignoreMessagePatterns : ['^Current runtime context\\.'])
       .map(p => { try { return new RegExp(String(p), 'm') } catch { return null } }).filter(Boolean),
+    /** Forward the host system prompt to Jiuwen once per session (hash-gated): off (default) | persona | full. */
+    injectSystem: pickEnum(env.JIUWEN_INJECT_SYSTEM || raw.injectSystem, ['off', 'persona', 'full'], 'off'),
+    /** Jiuwen steps in the reasoning block: summary (one line each, default) | full (structured Markdown). */
+    trajectoryDetail: pickEnum(env.JIUWEN_TRAJECTORY_DETAIL || raw.trajectoryDetail, ['summary', 'full'], 'summary'),
     /** Append JSONL trace of turns/events here (debugging). */
     traceFile: firstNonEmpty(env.JIUWEN_TRACE_FILE, typeof raw.traceFile === 'string' ? raw.traceFile : undefined),
     llmAdapterModule: firstNonEmpty(env.JIUWEN_LLM_ADAPTER_MODULE, typeof raw.llmAdapterModule === 'string' ? raw.llmAdapterModule : undefined),
