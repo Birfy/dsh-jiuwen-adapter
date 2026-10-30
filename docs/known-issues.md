@@ -308,3 +308,35 @@ Full regression through the Cordis host: every `/jiuwen` subcommand (148 checks 
 
 **Harness notes:** only `/compact` is active among the host commands without a full agent runtime. `commands.execute` needs a real agent, so the probe compares the registry instead.
 
+## 14. Round 7: full agent runtime A/B (2026-10-30, UTC+8)
+
+A real dsh agent runtime (dsh-agent + dsh-agent-loop and 25 more real plugins) runs a scripted non-jiuwen agent through approval, tools, ask-user, MCP, retry, `/goal`, `/plan`, `/compact`, title and token meter, with and without the adapter. See dsh-integration.md §7a.
+
+| Feature | mock/mixed | down/after | down/before | down/two | down/mixed | live/after | live/mixed | live/two+before+mixed |
+|---|---|---|---|---|---|---|---|---|
+| Session events (normalized hash) | = | = | = | = | = | = | = | = |
+| Approval approve + deny | = | = | = | = | = | = | = | = |
+| Tool calls (todo, guarded, ask-user, MCP echo) | = | = | = | = | = | = | = | = |
+| Ask-user answers | = | = | = | = | = | = | = | = |
+| `commands.execute` (/goal, /plan, /compact, unknown) | = | = | = | = | = | = | = | = |
+| Agent tool list / command list (minus `jiuwen`) | = | = | = | = | = | = | = | = |
+| Session title, token meter | = | = | = | = | = | = | = | = |
+| Host event names and counts (non-jiuwen) | = | = | = | = | = | = | = | = |
+| Providers after dispose | = | = | = | = | = | = | = | = |
+| Globals, env, prototypes, process listeners | = | = | = | = | = | = | = | = |
+| Unhandled rejections, load failures | none | none | none | none | none | none | none | none |
+
+`=` means byte-identical to the run without the adapter. In the mixed runs, the concurrent jiuwen agent (driven by dsh-agent-loop) answered `mixed-ok` live, and with the Gateway down it retried and closed its turn. The Gateway state was byte-identical afterwards.
+
+**Fixed:** in the real agent loop, user messages carry no `role` (only `source.kind: 'user'`). Every role check in the adapter missed them, so a jiuwen agent's query fell back to the dsh system prompt (live, the model replied about the `create_goal` rules). `stream()` now infers roles with `withInferredRoles`. Tests: unit tests, plus `mock/mixed` in the matrix, which fails without the fix.
+
+**dsh-llm-deepseek:** this package is a library (it exports `DeepSeekAdapter` and `registerDeepSeekProvider`; it has no `apply` and no default export), so it cannot be loaded as a Cordis plugin. The plugin is `dsh-llm-deepseek-api-key`. It loads in the runtime with an unset `apiKeyEnv` (no key is ever passed) and registers `deepseek-official` next to `jiuwen`.
+
+**Still not covered, and why:**
+- Real DeepSeek model calls: they need an API key, which we never pass.
+- Bash, fs and sandbox tools, subagents, workflows, jobs and schedule: these execute host side effects and are outside the sdk-minimal kernel.
+- The Web/SDK/ACP front ends: these are transports over the same runtime.
+- `/plan` approval through `exit_plan_mode`: plan mode is toggled by commands only.
+- Goal rounds that actually run: `/goal` is paused or cleared before any round starts, to keep the run deterministic.
+- Automatic token-pressure compaction: only `/compact` is exercised.
+

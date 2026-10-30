@@ -99,3 +99,26 @@ export function contentToText(content) {
   }
   return parts.join('\n')
 }
+
+/**
+ * Infer the role of host messages that omit it. dsh-agent-loop hands adapters user messages built
+ * from `followup()`/`steer()` input as `{ content, source: { kind: 'user' } }` without `role`; every
+ * role check in this adapter would otherwise miss them and the Jiuwen query would fall back to the
+ * system prompt. Returns the input array unchanged when every message already has a role, and never
+ * mutates host messages (they are frozen); a role-less message is copied with the inferred role.
+ * @param {any[]|undefined} messages
+ * @returns {any[]|undefined}
+ */
+export function withInferredRoles(messages) {
+  if (!Array.isArray(messages) || messages.every(m => !m || typeof m.role === 'string')) return messages
+  return messages.map(m => {
+    if (!m || typeof m.role === 'string') return m
+    const kind = m.source?.kind
+    const role = m.toolCallId !== undefined || kind === 'tool' ? 'tool'
+      : kind === 'system-prompt' ? 'system'
+        : kind === 'model' ? 'assistant'
+          : kind === 'developer' ? 'developer'
+            : 'user'
+    return { ...m, role }
+  })
+}

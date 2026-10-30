@@ -14,7 +14,7 @@ import { createToolBridge } from './tool-bridge.js'
 import { prepareBrainRequest, callKind } from './agent-brain.js'
 import { appendFileSync } from 'node:fs'
 import { failureFromError, emitTextReply } from './stream-emit.js'
-import { toGatewayQuery, contentToText } from './messages.js'
+import { toGatewayQuery, contentToText, withInferredRoles } from './messages.js'
 import { fileBlocksFromHandles } from './multimodal.js'
 
 /**
@@ -146,6 +146,9 @@ export function createJiuwenAdapter(LlmAdapterBase, deps) {
     }
 
     async *stream(options) {
+      // Real dsh agent loops send role-less user messages; infer roles once, without mutating host data.
+      const inferred = withInferredRoles(options?.messages)
+      if (inferred !== options?.messages) options = { ...options, messages: inferred }
       const cfg = this._cfg()
       const dshSessionId = String(options.sessionId || 'anonymous')
       const reqSession = options?.providerOptions?.jiuwen?.sessionId || options?.metadata?.jiuwen?.sessionId || options?.jiuwen?.sessionId
