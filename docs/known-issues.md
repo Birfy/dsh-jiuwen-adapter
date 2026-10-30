@@ -283,3 +283,28 @@ Full regression through the Cordis host: every `/jiuwen` subcommand (148 checks 
 
 **Coverage / tests:** covered 138→172 / 334 (safe 58.7%→73.2%). Unit tests 118→124.
 
+## 13. Round 6: plugin compatibility first (2026-10-30, UTC+8)
+
+**Priority:** compatibility with other dsh plugins. See dsh-integration.md §7 for the guarantees and how they are checked.
+
+**Compat matrix** (real Cordis host with 21 real dsh plugins, A/B against no adapter):
+
+| Run | Non-jiuwen identical | Services | Events | Globals/proto/env/process | Dispose leaks | Gateway down |
+|---|---|---|---|---|---|---|
+| adapter after others (live) | yes | unchanged | none extra | clean | none | n/a |
+| adapter before others (live) | yes | unchanged | none extra | clean | none | n/a |
+| two instances (live) | yes | unchanged | none extra | clean | none | n/a |
+| down, after / before / two / two+before | yes | unchanged | none extra | clean | none | soft (`finish: error`, `/jiuwen` text) |
+
+**Fixed:** the opt-in MCP bridge added a `process.once('exit')` listener and never removed it, so each prepare/dispose cycle leaked one global listener. `dispose()` now detaches it. A regression test plus a static scan of `src/` for env, global, prototype and process-listener writes guard against this.
+
+**Stress:** see dsh-integration.md §7, mock and live. Gateway state was byte-identical afterwards.
+
+**Create mappings skipped (not reversible byte-identically, so they risk other plugins' or users' state):**
+- `project.create`: `project.remove` only hides the project, so a permanent record remains.
+- `agents.create`: defaults to an LLM `generate` step and edits `config.yaml`.
+- `agent_templates` / `agent_groups` / `plugin_packages` create: these write package directories, and their rollbacks (delete/uninstall) are excluded.
+- `team.binding` create/generate: needs `team.delete` as its rollback, which is out of scope.
+
+**Harness notes:** only `/compact` is active among the host commands without a full agent runtime. `commands.execute` needs a real agent, so the probe compares the registry instead.
+

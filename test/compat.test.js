@@ -3,7 +3,7 @@
  * (compact / plan / schedule) and a non-jiuwen session. No duplicate errors, non-jiuwen behaviour is
  * unchanged, all flags off == previous behaviour, a duplicate /jiuwen command name does not crash.
  */
-import { test, before, after } from 'node:test'
+import { test, before, after, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { join } from 'node:path'
 import * as plugin from '../index.js'
@@ -86,4 +86,62 @@ test('compat: duplicate /jiuwen command and duplicate service do not crash; comm
   assert.doesNotThrow(() => plugin.apply(h.ctx, { gatewayURL: mock.url, mappingPath: join(mock.dir, 'compat4.json'), provider: 'jiuwen2', commandName: 'jiuwen2', serviceName: 'jiuwenAdapter2' }))
   assert.ok(h.commands.has('jiuwen2'))
   assert.ok(h.services.has('jiuwenAdapter2'))
+})
+
+// ---- Real-host A/B compatibility (real dsh plugins in a real Cordis Context) -------------
+import { execFileSync } from 'node:child_process'
+import { existsSync as _exists, readFileSync as _read, readdirSync as _readdir } from 'node:fs'
+const _ROOT = new URL('..', import.meta.url).pathname
+const _NM = process.env.DSH_NM || '/workspace/fb-busyack3/core/dev/harness/node_modules'
+const _hasHost = _exists(`${_NM}/@deepseek-ai/cordis/lib/index.js`) && _exists(`${_NM}/@deepseek-ai/dsh-llm/lib/index.js`)
+const _probe = (...a) => JSON.parse(execFileSync(process.execPath, [`${_ROOT}scripts/compat-host.mjs`, ...a], { encoding: 'utf8', timeout: 120_000, stdio: ['ignore', 'pipe', 'ignore'] }))
+
+describe('real-host A/B compatibility', { skip: !_hasHost && 'dsh host packages not found (set DSH_NM)' }, () => {
+  let base
+  let base0; before(() => { base = base0 ??= _probe() })
+  for (const variant of [['--jiuwen', '--down'], ['--jiuwen', '--down', '--order=before'], ['--jiuwen', '--down', '--two'], ['--jiuwen', '--down', '--two', '--order=before']]) {
+    it(`non-jiuwen behavior identical: ${variant.join(' ')}`, () => {
+      const r = _probe(...variant)
+      assert.deepEqual(r.failed, [])
+      assert.equal(r.loaded, base.loaded)
+      assert.equal(r.servicesUnchanged, true, 'no foreign service replaced')
+      for (const k of ['nonJiuwen', 'nonJiuwenAfterJwTurn', 'nonJiuwenAfterDispose']) assert.equal(r[k], base.nonJiuwen, k)
+      assert.deepEqual(r.nonJwEvents, base.nonJwEvents, 'no extra events during a non-jiuwen turn')
+      assert.deepEqual(r.foreignEventsFromJiuwen, [])
+      assert.ok(r.jwEvents.every(e => e.startsWith('jiuwen/')))
+      assert.deepEqual(r.globalsAdded, base.globalsAdded)
+      assert.deepEqual(r.protosChanged, [])
+      assert.equal(r.envChanged, false)
+      assert.deepEqual(r.procListenersDelta, {})
+      assert.deepEqual(r.providersAfterDispose, base.providersAfterDispose)
+      assert.deepEqual(r.cmdsAfterDispose, [])
+      assert.ok(!r.jwCmd?.startsWith('THROW') && !r.jwTurn?.startsWith('THROW'), 'gateway down fails soft')
+      assert.deepEqual(r.unhandled, [])
+      const n = o => Object.values(o).reduce((a, b) => a + b, 0)
+      assert.ok(n(r.resourcesAfterDispose) <= n(base.resourcesAfterDispose), `no leaked handles: ${JSON.stringify(r.resourcesAfterDispose)}`)
+    })
+  }
+  it('stress on mock gateway: concurrency, rapid commands, reconnect storm, leaks', () => {
+    const r = JSON.parse(execFileSync(process.execPath, [`${_ROOT}scripts/stress.mjs`], { encoding: 'utf8', timeout: 120_000, stdio: ['ignore', 'pipe', 'ignore'] }))
+    assert.equal(r.concurrent.ok, 30); assert.equal(r.concurrent.distinctJiuwenSessions, 10); assert.equal(r.concurrent.crossTalk, false)
+    assert.equal(r.rapidCommands.fulfilled, 50); assert.equal(r.rapidCommands.errText, 0)
+    for (const s of r.reconnectStorm) { assert.match(s.down, /finish:error/); assert.match(s.up, /up\d/) }
+    assert.equal(r.leak.procListenersSame, true); assert.equal(r.leak.serviceGone, true); assert.deepEqual(r.leak.providersAfter, [])
+    assert.ok(r.leak.after.every(x => x === 'PipeWrap'), JSON.stringify(r.leak.after))
+    assert.deepEqual(r.unhandled, [])
+  })
+})
+
+describe('static: no global mutation in src/', () => {
+  it('mcp bridge detaches its process exit listener on stop', () => {
+    const src = _read(`${_ROOT}src/mcp-bridge.js`, 'utf8')
+    assert.ok((src.match(/process\.off\('exit', removeEp\)/g) || []).length >= 2)
+  })
+  it('no env writes, globalThis writes, prototype patches or process listeners', () => {
+    const bad = /process\.env(\.\w+|\[[^\]]+\])\s*=(?!=)|globalThis\.\w+\s*=(?!=)|\.prototype\.\w+\s*=(?!=)|process\.(on|once|addListener|prependListener)\(|Object\.defineProperty\((globalThis|Object|Array|Function|String|Promise)\b/
+    for (const f of _readdir(`${_ROOT}src`).filter(f => f.endsWith('.js'))) {
+      const hit = _read(`${_ROOT}src/${f}`, 'utf8').split('\n').find(l => bad.test(l) && !l.includes('compat-allow:'))
+      assert.equal(hit, undefined, `${f}: ${hit}`)
+    }
+  })
 })

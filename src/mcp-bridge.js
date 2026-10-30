@@ -192,7 +192,8 @@ export function createMcpBridge({ config, services, rpc, logger }) {
           mkdirSync(stateDir(), { recursive: true, mode: 0o700 })
           epFile = join(stateDir(), `ep-${process.pid}.json`)
           writeAtomic(epFile, JSON.stringify({ pid: process.pid, url, token, ts: Date.now(), tools: [...schemas.keys()] }))
-          process.once('exit', removeEp)
+          // Crash-safety only; detached again in stop() so dispose leaves no process listener.
+          process.off('exit', removeEp); process.once('exit', removeEp) // compat-allow: paired with off() in stop()
           const r = await ensureRegistered(publishSchemas())
           logger?.info?.(`[dsh-jiuwen] dsh tools exposed to Jiuwen via MCP proxy "${name}" (${schemas.size} schema(s)${r.reused ? ', reused registration' : ''})`)
           resolve({ url, ...r })
@@ -237,6 +238,7 @@ export function createMcpBridge({ config, services, rpc, logger }) {
     /** Leave Jiuwen's registration in place (the proxy is owned by Jiuwen); drop only our endpoint. */
     async dispose() {
       removeEp()
+      process.off('exit', removeEp)
       if (!server) return
       server.close(); server = undefined; ready = undefined
     },

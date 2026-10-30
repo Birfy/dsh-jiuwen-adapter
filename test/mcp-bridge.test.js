@@ -139,3 +139,14 @@ test('/jiuwen mcp-reset requires a trailing confirm', async () => {
   assert.match(await cmd.run('s', 'mcp-reset confirm'), /Removed Jiuwen MCP registration/)
   assert.equal(n, 1)
 })
+
+test('compat: prepare/dispose cycles leave no process exit listener behind', async () => {
+  const n0 = process.listenerCount('exit')
+  for (let i = 0; i < 3; i++) {
+    const { b } = bridge({})
+    await b.prepare(schemas, `leak-${i}`)
+    assert.ok(process.listenerCount('exit') <= n0 + 1)
+    await b.dispose()
+  }
+  assert.equal(process.listenerCount('exit'), n0)
+})
