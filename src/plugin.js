@@ -68,6 +68,8 @@ export function apply(ctx, config = {}) {
     config: readConfig,
     logger,
     services: () => ({ userQuestions: service('userQuestions'), approval: service('approval'), agents: service('agents') }),
+    // Subscribed lazily on the first jiuwen question card, so hosts that never see one get no listener.
+    onUserMessage: (fn) => ctx.on?.('agent/inbox/inserted', fn, { global: true }),
   })
   const mcpBridge = createMcpBridge({
     config: readConfig,

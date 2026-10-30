@@ -16,7 +16,30 @@ const REJECT_RE = /^(reject|deny|denied|no|cancel|skip)$/i
 
 /** @param {{ services: () => { userQuestions?: any, approval?: any, agents?: any }, config: () => any, logger?: any }} deps */
 export function createInteractor(deps) {
-  return async function interact({ eventType, payload, signal, told }, dshSessionId) {
+  // dshSessionId -> { agent, ac } for host question cards currently awaiting the user.
+  const pendingAsks = new Map()
+  /** A normal chat message reached `agent`'s inbox: close its pending Jiuwen question so the turn ends. */
+  const noteUserMessage = (agent, message) => {
+    try {
+      if (message?.source?.kind === 'user-question-reply') return false
+      let hit = false
+      for (const [sid, p] of pendingAsks) {
+        if (p.agent && p.agent === agent) { hit = true; pendingAsks.delete(sid); p.ac.abort() }
+      }
+      return hit
+    } catch { return false }
+  }
+  let subscribed = false
+  const subscribe = () => {
+    if (subscribed) return
+    subscribed = true
+    try {
+      deps.onUserMessage?.(({ agent, message } = {}) => {
+        if (noteUserMessage(agent, message)) deps.logger?.info?.('[dsh-jiuwen] user message superseded a pending question card')
+      })
+    } catch { /* host without inbox events: legacy behaviour */ }
+  }
+  const interact = async function interact({ eventType, payload, signal, told }, dshSessionId) {
     const cfg = deps.config()
     const { userQuestions, approval, agents } = deps.services() || {}
     const questions = Array.isArray(payload?.questions) ? payload.questions.filter(q => q && typeof q === 'object') : []
@@ -73,13 +96,29 @@ export function createInteractor(deps) {
       ...((q.multi_select ?? q.multiSelect) ? { multiSelect: true } : {}),
     }))
     if (userQuestions?.ask) {
+      // A pending question must not block chat: a typed message supersedes the card (see noteUserMessage);
+      // the turn then ends and that message is delivered to Jiuwen as the answer on the next turn.
+      const ac = new AbortController()
+      const onParent = () => ac.abort()
+      signal?.addEventListener?.('abort', onParent, { once: true })
+      if (agent) subscribe()
+      if (agent) pendingAsks.set(String(dshSessionId), { agent, ac })
       try {
-        const res = await withTimeout(userQuestions.ask({ questions: items, ...(agent ? { agent } : {}), signal }), cfg.questionTimeoutMs, null, signal)
+        const ask = Promise.resolve(userQuestions.ask({ questions: items, ...(agent ? { agent } : {}), signal: ac.signal }))
+        ask.catch(() => {})
+        const res = await withTimeout(ask, cfg.questionTimeoutMs, null, ac.signal)
+        if (ac.signal.aborted && !signal?.aborted) {
+          return { kind: 'question', outcome: 'superseded', defer: true, note: '• question left open; your next message answers it' }
+        }
         if (res && Array.isArray(res.answers)) {
           return { kind: 'question', outcome: 'answered', answers: questionAnswers(questions, items, res.answers), note: '• answered via dsh user-questions' }
         }
       } catch (error) {
+        if (ac.signal.aborted && !signal?.aborted) return { kind: 'question', outcome: 'superseded', defer: true, note: '• question left open; your next message answers it' }
         deps.logger?.debug?.(`[dsh-jiuwen] user-questions unavailable: ${error?.code || error?.message}`)
+      } finally {
+        signal?.removeEventListener?.('abort', onParent)
+        if (pendingAsks.get(String(dshSessionId))?.ac === ac) pendingAsks.delete(String(dshSessionId))
       }
     }
     {
@@ -92,6 +131,9 @@ export function createInteractor(deps) {
     }
     return null
   }
+  interact.noteUserMessage = noteUserMessage
+  interact.pendingCount = () => pendingAsks.size
+  return interact
 }
 
 export function approvalAnswers(questions, allow, planActions) {

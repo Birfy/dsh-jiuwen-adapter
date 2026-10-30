@@ -172,6 +172,16 @@ export class GatewayTransport {
           trusted_dirs: [projectDir],
         } : {}),
       }
+      // A Jiuwen ask_user left open (the user typed instead of using the card): this message is its answer.
+      const pq = mapping.pendingQuestion
+      if (pq?.payload?.source === 'ask_user_interrupt' && pq.payload.request_id && query) {
+        const qs = Array.isArray(pq.payload.questions) && pq.payload.questions.length ? pq.payload.questions : [{}]
+        params.request_id = pq.payload.request_id
+        params.source = 'ask_user_interrupt'
+        params.answers = qs.map(q => ({ selected_options: [], custom_input: query, ...(q.card_id ? { card_id: q.card_id } : {}) }))
+        params.supports_user_interaction = true
+        turn.onEvent?.({ type: 'interaction_answered', eventType: 'chat.ask_user_question', source: 'ask_user_interrupt', kind: 'question', outcome: 'typed', requestIdOfQuestion: pq.payload.request_id, answers: params.answers, raw: pq.payload })
+      }
       params = attachMediaToChatParams(params, media)
       if (media.textExtras.length && !media.mediaItems.length) {
         params.query = `${params.query}\n${media.textExtras.join('\n')}`
@@ -800,6 +810,7 @@ export class GatewayTransport {
             if (typeof ctx.interact === 'function') {
               let reply = null
               try { reply = await ctx.interact({ eventType, payload, signal }) } catch { reply = null }
+              if (reply?.defer) { if (reply.note) yield *activity(this, reply.note); reply = null }
               if (reply && Array.isArray(reply.answers) && !signal?.aborted) {
                 const rid = payload.request_id
                 const source = payload.source

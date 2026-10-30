@@ -627,3 +627,40 @@ test('JiuwenSwarm 0.2.7 shape: assets degrade, teams via team.bindings.list, mod
     assert.match(await run('model-info nope'), /Unknown model "nope".*jiuwen-default/)
   } finally { await shape('0.2.5') }
 })
+
+test('pending ask_user never blocks chat: a typed message closes the card, ends the turn, and is sent as the answer', async () => {
+  const adapters = new Map()
+  const handlers = {}
+  const agent = { id: 'ta' }
+  let cardSignal
+  const services = {
+    agents: { get: (id) => (id === 'typed' ? agent : undefined) },
+    userQuestions: { ask: (r) => new Promise((resolve, reject) => { cardSignal = r.signal; r.signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { code: 'ASK_ABORTED' }))) }) },
+  }
+  const ctx = {
+    llm: { registerAdapter(ids, a) { ids.forEach(i => adapters.set(i, a)); return () => {} } },
+    logger: { info() {}, warn() {}, error() {} }, provide(n, v) { this[n] = v },
+    on(name, fn) { handlers[name] = fn }, get: (n) => services[n],
+  }
+  plugin.apply(ctx, { gatewayURL: URL_, mappingPath: join(dir, `t-${Math.random()}.json`), finalGraceMs: 300, supportsUserInteraction: true })
+  const a = adapters.get('jiuwen')
+  const run = async (o) => { const cs = []; for await (const c of a.stream({ provider: 'jiuwen', model: 'jiuwen-default', ...o })) cs.push(c); return cs }
+  assert.equal(handlers['agent/inbox/inserted'], undefined, 'no listener before a card')
+  const first = run({ sessionId: 'typed', messages: user('please ask me something') })
+  for (let i = 0; i < 100 && !cardSignal; i++) await new Promise(r => setTimeout(r, 20))
+  assert.ok(cardSignal, 'card shown')
+  assert.equal(typeof handlers['agent/inbox/inserted'], 'function')
+  // card replies do not supersede; other agents' messages do not either
+  handlers['agent/inbox/inserted']({ agent, message: { source: { kind: 'user-question-reply' } } })
+  handlers['agent/inbox/inserted']({ agent: { id: 'other' }, message: { source: { kind: 'user' } } })
+  assert.equal(cardSignal.aborted, false)
+  handlers['agent/inbox/inserted']({ agent, message: { source: { kind: 'user' } } })
+  const cs = await first
+  assert.equal(cardSignal.aborted, true)
+  assert.equal(cs.at(-1).reason.kind, 'stop')
+  assert.match(txt(cs), /Which color\?/)
+  const cs2 = await run({ sessionId: 'typed', messages: [...user('please ask me something'), { role: 'assistant', content: 'q' }, { role: 'user', content: 'green' }] })
+  assert.match(txt(cs2), /answered ask_user_interrupt: .*green/)
+  const cs3 = await run({ sessionId: 'typed', messages: [...user('x'), { role: 'user', content: 'ping after' }] })
+  assert.doesNotMatch(txt(cs3), /answered ask_user_interrupt/)
+})
