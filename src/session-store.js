@@ -16,6 +16,7 @@ import { randomUUID } from 'node:crypto'
  *   chatMode?: string,
  *   skills?: string[],
  *   agentTemplateName?: string,
+ *   title?: string,
  *   updatedAt: string,
  * }} SessionMapping
  */
@@ -152,6 +153,7 @@ export class SessionStore {
           ...(entry.chatMode ? { chatMode: String(entry.chatMode) } : {}),
           ...(Array.isArray(entry.skills) ? { skills: entry.skills.map(String) } : {}),
           ...(entry.agentTemplateName ? { agentTemplateName: String(entry.agentTemplateName) } : {}),
+          ...(entry.title ? { title: String(entry.title) } : {}),
           updatedAt: String(entry.updatedAt || new Date().toISOString()),
         })
       }

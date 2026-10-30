@@ -150,8 +150,20 @@ test('extra E2A RPCs: sessions/skills/agents/team templates/commands', async () 
 test('session-title calls are answered locally (no Jiuwen turn), unwrapping JSON title prompts', async () => {
   const { localTitle } = await import('../src/adapter.js')
   assert.equal(localTitle({ messages: [{ role: 'user', content: 'Generate the session title from this JSON array of human messages:\n[{"seq":8,"text":"Fix the login bug please"}]' }] }), 'Fix the login bug please')
-  const cs = await host().run({ purpose: 'session-title', messages: user('Plan my trip to Kyoto') })
+  const h = host()
+  const cs = await h.run({ sessionId: 'title-sync', purpose: 'session-title', messages: user('Plan my trip to Kyoto') })
   assert.equal(txt(cs), 'Plan my trip to Kyoto')
+  // Fire-and-forget session.rename for local titleMode compatibility
+  await new Promise(r => setTimeout(r, 200))
+  const st = await debug()
+  const jw = h.api.jiuwenSessionId('title-sync')
+  assert.ok(st.renames.some(r => r.session_id === jw && r.title === 'Plan my trip to Kyoto'), JSON.stringify(st.renames))
+  assert.equal(h.api.sessions.get('title-sync')?.title, 'Plan my trip to Kyoto')
+  // Skip rename spam when title unchanged
+  await h.run({ sessionId: 'title-sync', purpose: 'session-title', messages: user('Plan my trip to Kyoto') })
+  await new Promise(r => setTimeout(r, 200))
+  const st2 = await debug()
+  assert.equal(st2.renames.filter(r => r.session_id === jw && r.title === 'Plan my trip to Kyoto').length, 1)
 })
 
 test('host runtime-context block is not forwarded to Jiuwen', async () => {
@@ -391,4 +403,58 @@ test('/jiuwen pause resume rename pin goal workflows history unmap delete', asyn
   const toggled = await api.gateway.skillsToggle('mock-skill', true)
   assert.equal(toggled.name, 'mock-skill')
   assert.equal(toggled.enabled, true)
+})
+
+
+test('/jiuwen btw recap skill-toggle plan-status supplement teams skills installed', async () => {
+  const registered = []
+  const adapters = new Map()
+  const ctx = {
+    llm: { registerAdapter(ids, a) { ids.forEach(i => adapters.set(i, a)); return () => {} } },
+    logger: { info() {}, warn() {}, error() {}, debug() {} }, provide(n, v) { this[n] = v }, on() {},
+    inject(deps, cb) { cb({ commands: { register(d) { registered.push(d); return () => {} } }, on() {} }) },
+  }
+  const mappingPath = join(dir, `cmds2-${Math.random()}.json`)
+  plugin.apply(ctx, { gatewayURL: URL_, mappingPath, finalGraceMs: 300 })
+  const def = registered.find(d => d.name === 'jiuwen')
+  const api = ctx.jiuwenAdapter
+  const run = (id, raw) => def.handler({ agent: { id }, rawInput: raw })
+
+  const btw = await run('n1', 'btw what is this about?')
+  assert.equal(btw.kind, 'success')
+  assert.match(btw.text, /btw-mock: what is this about/)
+  assert.match((await run('n1', 'btw')).text, /Usage: \/jiuwen btw/)
+
+  const recap = await run('n1', 'recap')
+  assert.equal(recap.kind, 'success')
+  assert.match(recap.text, /mock recap/)
+
+  assert.match((await run('n1', 'skill-toggle')).text, /Usage: \/jiuwen skill-toggle/)
+  assert.match((await run('n1', 'skill-toggle mock-skill on')).text, /enabled/)
+  assert.match((await run('n1', 'skill-toggle mock-skill off')).text, /disabled/)
+
+  const ps = await run('n1', 'plan-status')
+  assert.equal(ps.kind, 'success')
+  assert.match(ps.text, /in_plan=false/)
+
+  assert.match((await run('n1', 'supplement')).text, /Usage: \/jiuwen supplement/)
+  assert.match((await run('n1', 'supplement more context please')).text, /supplement/)
+  const st = await debug()
+  assert.ok(st.interrupts.some(p => p.intent === 'supplement' && p.new_input === 'more context please'))
+
+  const teams = await run('n1', 'teams')
+  assert.equal(teams.kind, 'success')
+  assert.match(teams.text, /jiuwen_team|mock-team/)
+
+  assert.match((await run('n1', 'skills')).text, /mock-skill/)
+  assert.match((await run('n1', 'skills installed')).text, /installed-skill/)
+
+  assert.equal(typeof api.gateway.btw, 'function')
+  assert.equal(typeof api.gateway.recap, 'function')
+  assert.equal(typeof api.gateway.planStatus, 'function')
+  assert.equal(typeof api.gateway.teamList, 'function')
+  assert.equal(typeof api.gateway.skillsInstalled, 'function')
+  assert.equal((await api.gateway.planStatus('n1')).in_plan, false)
+  assert.ok((await api.gateway.skillsInstalled()).skills.length)
+  assert.ok((await api.gateway.teamList()).teams.length)
 })

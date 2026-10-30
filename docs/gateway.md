@@ -60,7 +60,7 @@
 - **文件/媒体**：`file.upload_chunk`、`media.persist/discard`、`document.persist/formats`
 - **项目/Git、cron、heartbeat、channel.*、permissions、memory.compute、hooks.list、updater.*、path.*** 等
 
-适配器 `ctx.jiuwenAdapter.gateway` 封装：`sessionList/sessionCreate/sessionDelete/sessionFork/sessionRename/sessionPin/sessionMetadata`、`historyGet/historyListTurns`、`skillsList/skillsToggle/agentsList/teamTemplatesList/commandsList/modelsList/mcpList`、`memoryList/memoryStatus/filesList`、`interrupt(sid, intent)/chatCancel/chatResume/userAnswer`、`compact`、`goal`、`workflows`，以及通用 `rpc(method, params)`。会话参数可传宿主 sessionId（自动映射）或 Jiuwen session_id。会话级 `chatMode` / `skills` / `agentTemplateName` 覆盖见 [dsh-integration.md](./dsh-integration.md#5-jiuwen-slash-command-dsh-command-registry)。
+适配器 `ctx.jiuwenAdapter.gateway` 封装：`sessionList/sessionCreate/sessionDelete/sessionFork/sessionRename/sessionPin/sessionMetadata/planStatus`、`historyGet/historyListTurns`、`skillsList/skillsInstalled/skillsToggle/agentsList/teamTemplatesList/teamList/commandsList/modelsList/mcpList`、`memoryList/memoryStatus/filesList`、`interrupt(sid, intent)/chatCancel/chatResume/userAnswer`、`compact`、`goal`、`btw`、`recap`、`workflows`，以及通用 `rpc(method, params)`。会话参数可传宿主 sessionId（自动映射）或 Jiuwen session_id。会话级 `chatMode` / `skills` / `agentTemplateName` 覆盖见 [dsh-integration.md](./dsh-integration.md#5-jiuwen-slash-command-dsh-command-registry)。
 
 实测（live :19000）：`session.list`、`skills.list`、`team.templates.list`、`models.list`、`commands.list`、`agents.list`、`session.create`、`chat.interrupt` 均 ok；`memory.list` 返回 ok=false（该版本未开放）。
 
@@ -75,4 +75,4 @@
 - `historyMode: gateway`（默认）：首轮发最新用户消息（宿主已有历史则发简短 transcript）；之后**只发最后一条 assistant 之后的用户消息**，Jiuwen 自己保有历史与记忆。`transcript` 则每轮发近 8 条。
 - `ignoreMessagePatterns`（默认 `^Current runtime context\.`）：宿主注入的运行时上下文块（DSH 的文件/审批策略，对 Jiuwen 无意义）不转发。
 - 取消：宿主 `AbortSignal` → 同一 WS 上发 `chat.interrupt {intent:'cancel'}` → `finish: aborted`（`interruptOnAbort`）。被取消的一轮仍计入会话轮次。
-- `purpose: session-title` → 默认本地即时生成标题（`titleMode: local`；可从 JSON 包装的标题 prompt 中取出原文），不占用 Jiuwen 一轮、不污染会话；`compaction` 等辅助调用走一次性 Jiuwen 会话。
+- `purpose: session-title` → 默认本地即时生成标题（`titleMode: local`；可从 JSON 包装的标题 prompt 中取出原文），不占用 Jiuwen 一轮、不污染会话；同时 fire-and-forget `session.rename` 同步到已映射的 Jiuwen 会话（失败仅 debug）；`compaction` 等辅助调用走一次性 Jiuwen 会话。

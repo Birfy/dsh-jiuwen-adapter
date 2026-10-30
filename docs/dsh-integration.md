@@ -86,18 +86,26 @@ When the host provides `ctx.commands` (`@deepseek-ai/dsh-commands`; web UI, ACP 
 | `/jiuwen goal [get\|set <text>\|pause\|resume\|clear]` | `command.goal` (default get) |
 | `/jiuwen workflows [list\|get <id>]` | `command.workflows` (default list) |
 | `/jiuwen history` | `history.list_turns` / `history.get` (capped ~15 turns) |
+| `/jiuwen btw <question>` | `command.btw` `{session_id, question}` (unary side-question; short summary) |
+| `/jiuwen recap` | `command.recap` `{session_id}` |
+| `/jiuwen skill-toggle <name> <on\|off>` | `skills.toggle` (requires explicit on/off) |
+| `/jiuwen plan-status` | `session.plan_status` |
+| `/jiuwen supplement <text>` | `chat.interrupt {intent:'supplement', new_input}` (not `chat.send` `is_supplement`) |
+| `/jiuwen teams` | `team.templates.list` + `team.list` (names) |
 | `/jiuwen compact` | `command.compact` on the mapped Jiuwen session |
 | `/jiuwen interrupt` | `chat.interrupt {intent:'cancel'}` |
-| `/jiuwen sessions` / `skills` / `agents` / `mcp` | `session.list` / `skills.list` / `agents.list` / `mcp.list` |
+| `/jiuwen sessions` / `skills` [`installed`] / `agents` / `mcp` | `session.list` / `skills.list` (or `skills.installed`) / `agents.list` / `mcp.list` |
 | `/jiuwen mcp-reset` | disconnect + delete the dsh MCP registration (passthrough recovery) |
 
 Per-session overrides (`modelName`, `chatMode`, `skills`, `agentTemplateName`) live in the session map file; request `providerOptions.jiuwen` and catalog model fields still win over the mapping.
 
+**Title sync:** when `titleMode: local` answers `purpose: session-title`, the adapter also fire-and-forgets `session.rename` on the mapped Jiuwen session (skips empty / same-as-`mapping.title`; rename failures are logged at debug and do not fail the dsh title stream). Persists `title` on the mapping when rename succeeds.
+
 `registerCommands: false` (`JIUWEN_REGISTER_COMMANDS=0`) disables it; the same handler is available as `ctx.jiuwenAdapter.command(sessionId, 'models')`. dsh headless has no command parser (a `/…` task is sent as text), so use the web UI / ACP there.
 
-Live (dsh 0.2.1-rc.2, via `ctx.commands.execute(agent, …)` inside headless): registry lists `compact, feedback, goal, jiuwen, permission, plan`; `/jiuwen status`, `models`, `model doubao-seed-2.0-mini`, `model nosuch` (rejected with the available list) and `skills` all returned from the live gateway. Newer session RPCs (`session.rename` / `pin` / `fork` / `delete`, `command.goal`, `skills.toggle`) depend on the Gateway build — probe with `ctx.jiuwenAdapter.gateway.rpc` if a live call fails.
+Live (dsh 0.2.1-rc.2, via `ctx.commands.execute(agent, …)` inside headless): registry lists `compact, feedback, goal, jiuwen, permission, plan`; `/jiuwen status`, `models`, `model doubao-seed-2.0-mini`, `model nosuch` (rejected with the available list) and `skills` all returned from the live gateway. Newer session RPCs (`session.rename` / `pin` / `fork` / `delete`, `command.goal`, `skills.toggle`, `command.btw` / `command.recap`, `session.plan_status`, `team.*`, `skills.installed`) depend on the Gateway build — see [known-issues.md](./known-issues.md) live probe notes; probe with `ctx.jiuwenAdapter.gateway.rpc` if a live call fails.
 
-中文：在 dsh 命令注册表上注册 `/jiuwen <子命令>`，覆盖 status / models / model / mode / pause / resume / rename / pin / fork / unmap / delete / goal / workflows / history / compact / interrupt / sessions / skills / agents / mcp / mcp-reset；会话级 mode/skills/agentTemplate 可覆盖默认配置。
+中文：在 dsh 命令注册表上注册 `/jiuwen <子命令>`，覆盖 status / models / model / mode / pause / resume / rename / pin / fork / unmap / delete / goal / workflows / history / btw / recap / skill-toggle / plan-status / supplement / teams / compact / interrupt / sessions / skills[installed] / agents / mcp / mcp-reset；本地标题会兼容同步 `session.rename`；会话级 mode/skills/agentTemplate 可覆盖默认配置。
 
 ## 6. `jiuwen/event` (declared Cordis event)
 

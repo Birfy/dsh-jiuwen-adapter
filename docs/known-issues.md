@@ -27,3 +27,21 @@ Control: the same `mcp.disconnect` while the server is still alive returns in 8 
 ## 2. Latency outliers are upstream model time
 
 30 + 30 alternating pongs (2026-10-30 07:04–07:08 UTC+8): A median 4.21 s (max 5.23 s), C median 3.55 s (max 4.78 s); no outliers. The 9–18 s outliers of 2026-10-29 23:16–23:40 were all a **single** LLM call (no `llm_call_error`, no retry) taking 9.0–17.5 s; Jiuwen time from user message to `llm_call_start` was 0.25–0.56 s; output 24–64 tokens; both A and C (no dsh) were affected. Nothing adapter-side.
+
+## 3. Live Gateway RPC probe (ws://127.0.0.1:19000/ws, 2026-10-30)
+
+Non-destructive unary probe against the local Jiuwen Gateway (AgentServer :18092). Throwaway `session.create` only; no goals / no prod deletes.
+
+| Method | Result |
+|---|---|
+| `session.create` | ok |
+| `session.plan_status` | ok (`in_plan=false`) |
+| `command.btw` | ok (`status=ok`, returns `answer`) |
+| `command.recap` | **FAIL** — Gateway: `unknown method: command.recap` (AgentServer may implement it; this Gateway build does not route it) |
+| `team.templates.list` | ok |
+| `team.list` | ok |
+| `skills.installed` | ok (payload key `plugins`) |
+| `skills.list` | ok |
+
+Adapter still exposes `/jiuwen recap` → `command.recap`; expect an error text until the Gateway build registers the method.
+

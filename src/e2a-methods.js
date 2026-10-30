@@ -24,12 +24,13 @@ export const SESSION = Object.freeze({
   SWITCH: 'session.switch',
   RENAME: 'session.rename',
   PIN: 'session.pin',
+  PLAN_STATUS: 'session.plan_status',
 })
 
 export const SKILLS = Object.freeze({ LIST: 'skills.list', INSTALLED: 'skills.installed', GET: 'skills.get', TOGGLE: 'skills.toggle' })
 export const AGENTS = Object.freeze({ LIST: 'agents.list' })
 export const TEAM = Object.freeze({ TEMPLATES_LIST: 'team.templates.list', LIST: 'team.list', HISTORY_GET: 'team.history.get' })
-export const COMMANDS = Object.freeze({ LIST: 'commands.list', COMPACT: 'command.compact', GOAL: 'command.goal' })
+export const COMMANDS = Object.freeze({ LIST: 'commands.list', COMPACT: 'command.compact', GOAL: 'command.goal', BTW: 'command.btw', RECAP: 'command.recap' })
 
 export const HISTORY = Object.freeze({
   GET: 'history.get',

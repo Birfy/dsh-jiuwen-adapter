@@ -4,7 +4,7 @@
  */
 
 export const SUBCOMMANDS =
-  'status | models | model <name|default> | mode [name|default] | pause | resume | rename <title> | pin [on|off] | fork | unmap | delete | goal [get|set <text>|pause|resume|clear] | workflows [list|get <id>] | history | compact | interrupt | sessions | skills | agents | mcp | mcp-reset'
+  'status | models | model <name|default> | mode [name|default] | pause | resume | rename <title> | pin [on|off] | fork | unmap | delete | goal [get|set <text>|pause|resume|clear] | workflows [list|get <id>] | history | btw <question> | recap | skill-toggle <name> <on|off> | plan-status | supplement <text> | teams | compact | interrupt | sessions | skills [installed] | agents | mcp | mcp-reset'
 
 /**
  * @param {{ sessions: import('./session-store.js').SessionStore, gateway: () => import('./gateway-transport.js').GatewayTransport, config: () => any, mcpBridge?: any }} deps
@@ -165,7 +165,70 @@ export function createJiuwenCommand(deps) {
         const list = (r?.sessions || r?.items || []).slice(0, 15).map(s => `- ${s.session_id || s.id}${s.title ? `  ${s.title}` : ''}`)
         return list.length ? `Jiuwen sessions (first ${list.length}):\n${list.join('\n')}` : 'No Jiuwen sessions'
       }
-      case 'skills': { const r = await g.skillsList(); return `Jiuwen skills: ${names(r?.skills || r?.items).join(', ') || 'none'}` }
+      case 'btw': {
+        if (!arg) return 'Usage: /jiuwen btw <question>'
+        const r = await g.btw(sid, arg)
+        const text = r?.answer ?? r?.content ?? r?.text ?? r?.result ?? r?.recap
+          ?? (r?.status ? `status=${r.status}${r.error ? ` error=${r.error}` : ''}` : null)
+          ?? JSON.stringify(r).slice(0, 300)
+        return `btw: ${short(text, 400)}`
+      }
+      case 'recap': {
+        const r = await g.recap(sid)
+        const text = r?.recap ?? r?.summary ?? r?.answer ?? r?.content ?? r?.text ?? r?.result
+          ?? (r?.status ? `status=${r.status}${r.error ? ` error=${r.error}` : ''}` : null)
+          ?? JSON.stringify(r).slice(0, 400)
+        return `recap: ${short(text, 500)}`
+      }
+      case 'skill-toggle': {
+        const name = rest[0]
+        const flag = String(rest[1] || '').toLowerCase()
+        if (!name || !['on', 'off'].includes(flag)) return 'Usage: /jiuwen skill-toggle <name> <on|off>'
+        const enabled = flag === 'on'
+        const r = await g.skillsToggle(name, enabled)
+        return `Skill ${r?.name || name} ${r?.enabled ?? enabled ? 'enabled' : 'disabled'}.`
+      }
+      case 'plan-status': {
+        const r = await g.planStatus(sid)
+        const bits = [`plan-status for ${sid}`]
+        if (r?.in_plan !== undefined) bits.push(`in_plan=${r.in_plan}`)
+        if (r?.plan_mode !== undefined) bits.push(`plan_mode=${r.plan_mode}`)
+        if (r?.mode !== undefined) bits.push(`mode=${r.mode}`)
+        if (r?.status !== undefined) bits.push(`status=${r.status}`)
+        const known = r?.in_plan !== undefined || r?.plan_mode !== undefined || r?.mode !== undefined || r?.status !== undefined
+        return known ? bits.join('; ') : `plan-status for ${sid}: ${JSON.stringify(r).slice(0, 300)}`
+      }
+      case 'supplement': {
+        if (!arg) return 'Usage: /jiuwen supplement <text>'
+        // Wire: chat.interrupt {intent:'supplement', new_input} (Jiuwen Gateway → AgentServer); not chat.send is_supplement.
+        await g.chatInterrupt(sid, 'supplement', { new_input: arg })
+        return `Sent chat.interrupt (supplement) to Jiuwen session ${sid}.`
+      }
+      case 'teams': {
+        const [templates, teams] = await Promise.allSettled([g.teamTemplatesList(), g.teamList()])
+        const tNames = templates.status === 'fulfilled'
+          ? names(templates.value?.templates || templates.value?.items, 'template_id')
+          : []
+        const teamNames = teams.status === 'fulfilled'
+          ? names(teams.value?.teams || teams.value?.items)
+          : []
+        const lines = []
+        if (tNames.length) lines.push(`templates: ${tNames.join(', ')}`)
+        else if (templates.status === 'rejected') lines.push(`templates: unavailable (${String(templates.reason?.message || templates.reason).slice(0, 80)})`)
+        else lines.push('templates: none')
+        if (teamNames.length) lines.push(`teams: ${teamNames.join(', ')}`)
+        else if (teams.status === 'rejected') lines.push(`teams: unavailable (${String(teams.reason?.message || teams.reason).slice(0, 80)})`)
+        else lines.push('teams: none')
+        return `Jiuwen teams:\n${lines.join('\n')}`
+      }
+      case 'skills': {
+        if ((rest[0] || '').toLowerCase() === 'installed') {
+          const r = await g.skillsInstalled()
+          return `Jiuwen installed skills: ${names(r?.skills || r?.plugins || r?.items || r?.installed).join(', ') || 'none'}`
+        }
+        const r = await g.skillsList()
+        return `Jiuwen skills: ${names(r?.skills || r?.items).join(', ') || 'none'}`
+      }
       case 'agents': { const r = await g.agentsList(); return `Jiuwen agents: ${names(r?.agents || r?.items).join(', ') || 'none'}` }
       case 'mcp': { const r = await g.mcpList(); return `Jiuwen MCP servers: ${(r?.items || []).map(x => `${x.name}${x.connection_state ? ` (${x.connection_state})` : ''}`).join(', ') || 'none'}` }
       case 'mcp-reset': {
@@ -181,7 +244,7 @@ export function createJiuwenCommand(deps) {
     run,
     definition: {
       name: 'jiuwen',
-      description: 'JiuwenSwarm: status, models/model, mode, pause/resume, rename, pin, fork, unmap/delete, goal, workflows, history, compact, interrupt, sessions, skills, agents, mcp',
+      description: 'JiuwenSwarm: status, models/model, mode, pause/resume, rename, pin, fork, unmap/delete, goal, workflows, history, btw, recap, skill-toggle, plan-status, supplement, teams, compact, interrupt, sessions, skills, agents, mcp',
       input: { hint: SUBCOMMANDS },
       async handler(invocation) {
         try {

@@ -15,6 +15,7 @@ const CANCEL_AT = new Map()
 const CANCELLED = new Set()
 const INTERRUPTS = []
 const ANSWERS = []
+const RENAMES = []
 
 wss.on('connection', (ws, req) => {
   // Echo whether access_token / user_id arrived (query) for auth smoke
@@ -123,7 +124,7 @@ wss.on('connection', (ws, req) => {
     }
     if (method === 'debug.state') {
       return ws.send(JSON.stringify({ type: 'res', id: frame.id, ok: true, payload: {
-        interrupts: INTERRUPTS, answers: ANSWERS, last: Object.fromEntries(LAST_PARAMS), history: Object.fromEntries(HISTORY),
+        interrupts: INTERRUPTS, answers: ANSWERS, renames: RENAMES, last: Object.fromEntries(LAST_PARAMS), history: Object.fromEntries(HISTORY),
       } }))
     }
 
@@ -178,6 +179,7 @@ wss.on('connection', (ws, req) => {
       return ok({ ok: true, method })
     }
     if (method === 'session.rename') {
+      RENAMES.push({ session_id: params.session_id, title: params.title ?? '' })
       return ok({ session_id: params.session_id, title: params.title ?? '', previous_title: '' })
     }
     if (method === 'session.pin') {
@@ -199,6 +201,23 @@ wss.on('connection', (ws, req) => {
     }
     if (method === 'skills.toggle') {
       return ok({ name: params.name, enabled: Boolean(params.enabled) })
+    }
+    if (method === 'skills.installed') {
+      return ok({ skills: [{ name: 'installed-skill', description: 'mock installed' }] })
+    }
+    if (method === 'team.list') {
+      return ok({ teams: [{ name: 'mock-team', id: 'team-1' }] })
+    }
+    if (method === 'session.plan_status') {
+      return ok({ session_id: params.session_id, in_plan: false })
+    }
+    if (method === 'command.btw') {
+      const q = String(params.question || '').trim()
+      if (!q) return ok({ status: 'failed', error: 'Question is required' })
+      return ok({ status: 'ok', answer: `btw-mock: ${q.slice(0, 200)}` })
+    }
+    if (method === 'command.recap') {
+      return ok({ status: 'ok', recap: `mock recap for ${params.session_id || 'session'}` })
     }
 
     ws.send(JSON.stringify({

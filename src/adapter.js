@@ -150,6 +150,14 @@ export function createJiuwenAdapter(LlmAdapterBase, deps) {
           // Don't spend a full Jiuwen agent turn (and pollute its session) on a title.
           const title = localTitle(options, cfg.ignoreMessagePatterns)
           makeTrace(cfg.traceFile)({ at: 'local-title', title, system: String(options.system || '').slice(0, 300), messages: JSON.stringify(options.messages).slice(0, 1500) })
+          // Compatibility: also push the local title to Jiuwen via session.rename (fire-and-forget).
+          if (title && title !== mapping.title) {
+            const jwSid = mapping.jiuwenSessionId
+            Promise.resolve()
+              .then(() => this._gatewayTransport().sessionRename(jwSid, title))
+              .then(() => { try { deps.sessions.update?.(dshSessionId, { title }) } catch { /* ignore */ } })
+              .catch((error) => deps.logger?.debug?.(`[dsh-jiuwen] session.rename after local title failed: ${String(error?.message || error).slice(0, 200)}`))
+          }
           yield *emitTextReply(title)
           return
         }
