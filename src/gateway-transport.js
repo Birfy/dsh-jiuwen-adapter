@@ -232,6 +232,17 @@ export class GatewayTransport {
   sessionPin(sessionId, pinned, extra = {}) {
     return this.rpc(SESSION.PIN, { session_id: sessionId, pinned: Boolean(pinned), ...extra })
   }
+  sessionSwitch(sessionId, extra = {}) {
+    return this.rpc(SESSION.SWITCH, { session_id: sessionId, ...extra })
+  }
+  sessionArchive(sessionIds, extra = {}) {
+    const ids = Array.isArray(sessionIds) ? sessionIds : [sessionIds]
+    return this.rpc(SESSION.ARCHIVE, { session_ids: ids.filter(Boolean).map(String), ...extra })
+  }
+  sessionUnarchive(sessionIds, extra = {}) {
+    const ids = Array.isArray(sessionIds) ? sessionIds : [sessionIds]
+    return this.rpc(SESSION.UNARCHIVE, { session_ids: ids.filter(Boolean).map(String), ...extra })
+  }
   skillsList(extra = {}) { return this.rpc(SKILLS.LIST, { ...extra }) }
   skillsInstalled(extra = {}) { return this.rpc(SKILLS.INSTALLED, { ...extra }) }
   skillsToggle(name, enabled, extra = {}) {
@@ -262,17 +273,40 @@ export class GatewayTransport {
   workflows(sessionId, action = 'list', extra = {}) {
     return this.rpc(SWARM.WORKFLOWS, { session_id: sessionId, action, ...extra })
   }
+  modelsGet(modelId, extra = {}) {
+    return this.rpc(MODELS.GET, { model_id: modelId, ...extra })
+  }
 
   agentsToolsList(extra = {}) { return this.rpc(AGENTS.TOOLS_LIST, { ...extra }) }
   hooksList(extra = {}) { return this.rpc(SYSTEM.HOOKS_LIST, { ...extra }) }
   permissionsToolsGet(extra = {}) { return this.rpc(SYSTEM.PERMISSIONS_TOOLS_GET, { ...extra }) }
+  permissionsToolsUpdate(tool, level, extra = {}) {
+    return this.rpc(SYSTEM.PERMISSIONS_TOOLS_UPDATE, { tool, level, ...extra })
+  }
+  permissionsToolsDelete(tool, extra = {}) {
+    return this.rpc(SYSTEM.PERMISSIONS_TOOLS_DELETE, { tool, ...extra })
+  }
   permissionsRulesGet(extra = {}) { return this.rpc(SYSTEM.PERMISSIONS_RULES_GET, { ...extra }) }
   pluginsList(extra = {}) { return this.rpc(SYSTEM.PLUGINS_LIST, { ...extra }) }
+  pluginsEnable(name, extra = {}) { return this.rpc(SYSTEM.PLUGINS_ENABLE, { name, ...extra }) }
+  pluginsDisable(name, extra = {}) { return this.rpc(SYSTEM.PLUGINS_DISABLE, { name, ...extra }) }
   projectList(extra = {}) { return this.rpc(SYSTEM.PROJECT_LIST, { ...extra }) }
+  projectInfo(projectId, extra = {}) {
+    return this.rpc(SYSTEM.PROJECT_INFO, { ...(projectId ? { project_id: projectId } : {}), ...extra })
+  }
+  projectGetSessions(projectId, extra = {}) {
+    return this.rpc(SYSTEM.PROJECT_GET_SESSIONS, { ...(projectId ? { project_id: projectId } : {}), ...extra })
+  }
   sessionArchivedList(extra = {}) { return this.rpc(SYSTEM.SESSION_ARCHIVED_LIST, { ...extra }) }
   sessionAssetsList(sessionId, extra = {}) { return this.rpc(SYSTEM.SESSION_ASSETS_LIST, { session_id: sessionId, ...extra }) }
   updaterStatus(extra = {}) { return this.rpc(SYSTEM.UPDATER_STATUS, { ...extra }) }
   heartbeatConf(extra = {}) { return this.rpc(SYSTEM.HEARTBEAT_GET_CONF, { ...extra }) }
+  heartbeatSetConf(conf = {}, extra = {}) { return this.rpc(SYSTEM.HEARTBEAT_SET_CONF, { ...conf, ...extra }) }
+  heartbeatJobList(extra = {}) { return this.rpc(SYSTEM.HEARTBEAT_JOB_LIST, { ...extra }) }
+  pathGet(extra = {}) { return this.rpc(SYSTEM.PATH_GET, { ...extra }) }
+  localeGetConf(extra = {}) { return this.rpc(SYSTEM.LOCALE_GET_CONF, { ...extra }) }
+  cronJobList(extra = {}) { return this.rpc(SYSTEM.CRON_JOB_LIST, { ...extra }) }
+  agentTemplatesList(extra = {}) { return this.rpc(SYSTEM.AGENT_TEMPLATES_LIST, { ...extra }) }
 
   _connect(url, signal) {
     return new Promise((resolve, reject) => {

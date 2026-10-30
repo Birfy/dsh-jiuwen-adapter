@@ -25,6 +25,8 @@ export const SESSION = Object.freeze({
   RENAME: 'session.rename',
   PIN: 'session.pin',
   PLAN_STATUS: 'session.plan_status',
+  ARCHIVE: 'session.archive',
+  UNARCHIVE: 'session.unarchive',
 })
 
 export const SKILLS = Object.freeze({ LIST: 'skills.list', INSTALLED: 'skills.installed', GET: 'skills.get', TOGGLE: 'skills.toggle' })
@@ -33,13 +35,25 @@ export const AGENTS = Object.freeze({ LIST: 'agents.list', TOOLS_LIST: 'agents.t
 export const SYSTEM = Object.freeze({
   HOOKS_LIST: 'hooks.list',
   PERMISSIONS_TOOLS_GET: 'permissions.tools.get',
+  PERMISSIONS_TOOLS_UPDATE: 'permissions.tools.update',
+  PERMISSIONS_TOOLS_DELETE: 'permissions.tools.delete',
   PERMISSIONS_RULES_GET: 'permissions.rules.get',
   PLUGINS_LIST: 'plugins.list',
+  PLUGINS_ENABLE: 'plugins.enable',
+  PLUGINS_DISABLE: 'plugins.disable',
   PROJECT_LIST: 'project.list',
+  PROJECT_INFO: 'project.info',
+  PROJECT_GET_SESSIONS: 'project.get_sessions',
   SESSION_ARCHIVED_LIST: 'session.archived.list',
   SESSION_ASSETS_LIST: 'session.assets.list',
   UPDATER_STATUS: 'updater.get_status',
   HEARTBEAT_GET_CONF: 'heartbeat.get_conf',
+  HEARTBEAT_SET_CONF: 'heartbeat.set_conf',
+  HEARTBEAT_JOB_LIST: 'heartbeat.job.list',
+  PATH_GET: 'path.get',
+  LOCALE_GET_CONF: 'locale.get_conf',
+  CRON_JOB_LIST: 'cron.job.list',
+  AGENT_TEMPLATES_LIST: 'agent_templates.list',
 })
 export const TEAM = Object.freeze({ TEMPLATES_LIST: 'team.templates.list', LIST: 'team.list', HISTORY_GET: 'team.history.get' })
 export const COMMANDS = Object.freeze({ LIST: 'commands.list', COMPACT: 'command.compact', GOAL: 'command.goal', BTW: 'command.btw', RECAP: 'command.recap' })

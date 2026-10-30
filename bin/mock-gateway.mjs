@@ -10,6 +10,14 @@ const wss = await WebSocketServer({ port: PORT, host: '127.0.0.1' })
 console.log(`[mock-gateway] listening on ws://127.0.0.1:${PORT}/ws`)
 
 const HISTORY = new Map() // session_id -> turns[]
+const PERM_TOOLS = { bash: 'allow', acp_chat: 'ask', rm_rf: 'deny' }
+const PLUGINS = [
+  { plugin_name: 'skill-creator', enabled: true },
+  { plugin_name: 'old-plugin', enabled: false },
+]
+const ARCHIVED = [{ session_id: 's-old', title: 'Old chat' }]
+let HEARTBEAT = { every: 3600, target: 'web', active_hours: { start: '08:00', end: '22:00' } }
+
 const LAST_PARAMS = new Map()
 const CANCEL_AT = new Map()
 const CANCELLED = new Set()
@@ -147,15 +155,28 @@ wss.on('connection', (ws, req) => {
     if (method === 'team.templates.list') return ok({ templates: [{ template_id: 'jiuwen_team' }] })
     if (method === 'session.list') return ok({ sessions: [...HISTORY.keys()].map(id => ({ session_id: id, message_count: HISTORY.get(id).length })) })
     if (method === 'session.create') return ok({ session_id: `web_mock_${Date.now()}` })
-    if (method === 'commands.list') return ok({ commands: [{ name: 'compact' }] })
+    if (method === 'commands.list') return ok({ commands: [{ name: 'compact' }, { name: 'fork' }, { name: 'goal' }] })
     if (method === 'models.list') {
       return ok({
         models: [
-          { id: 'jiuwen-default', model_name: 'jiuwen-default', name: 'Jiuwen Default' },
-          { id: 'jiuwen-swarm', model_name: 'jiuwen-swarm', name: 'Jiuwen Swarm' },
+          { model_id: 'mdl_default_primary', id: 'jiuwen-default', model_name: 'jiuwen-default', name: 'Jiuwen Default', is_default: true },
+          { model_id: 'mdl_swarm', id: 'jiuwen-swarm', model_name: 'jiuwen-swarm', name: 'Jiuwen Swarm' },
         ],
         active_model: 'jiuwen-default',
       })
+    }
+    if (method === 'models.get') {
+      const id = String(params.model_id || '')
+      const catalog = {
+        mdl_default_primary: { model_id: 'mdl_default_primary', model_name: 'jiuwen-default', is_default: true, model_client_config: { model_name: 'jiuwen-default', client_provider: 'OpenAI', api_base: 'https://example.test/v1', endpoint_profile: 'openai', has_api_key: true } },
+        mdl_swarm: { model_id: 'mdl_swarm', model_name: 'jiuwen-swarm', model_client_config: { model_name: 'jiuwen-swarm', client_provider: 'OpenAI', api_base: 'https://example.test/v1', endpoint_profile: 'openai', has_api_key: false } },
+      }
+      const hit = catalog[id]
+      if (!hit) {
+        ws.send(JSON.stringify({ type: 'res', id: frame.id, ok: false, error: { message: `unknown model_id '${id}'` } }))
+        return
+      }
+      return ok({ model: hit })
     }
     if (method === 'mcp.list') {
       return ok({
@@ -207,14 +228,73 @@ wss.on('connection', (ws, req) => {
     }
     if (method === 'agents.tools_list') return ok({ tools: [{ name: 'Read', internal_name: 'read_file' }, { name: 'Bash', internal_name: 'bash' }] })
     if (method === 'hooks.list') return ok({ events: [{ name: 'PreToolUse', total_hooks: 2, matchers: [] }, { name: 'Stop', total_hooks: 0, matchers: [] }] })
-    if (method === 'permissions.tools.get') return ok({ tools: { bash: 'allow', acp_chat: 'ask', rm_rf: 'deny' } })
+    if (method === 'permissions.tools.get') return ok({ tools: { ...PERM_TOOLS } })
+    if (method === 'permissions.tools.update') {
+      if (!params.tool) { ws.send(JSON.stringify({ type: 'res', id: frame.id, ok: false, error: { message: 'tool is required' } })); return }
+      if (!params.level) { ws.send(JSON.stringify({ type: 'res', id: frame.id, ok: false, error: { message: 'level is required' } })); return }
+      PERM_TOOLS[String(params.tool)] = String(params.level)
+      return ok({ tools: { ...PERM_TOOLS } })
+    }
+    if (method === 'permissions.tools.delete') {
+      if (!params.tool) { ws.send(JSON.stringify({ type: 'res', id: frame.id, ok: false, error: { message: 'tool is required' } })); return }
+      delete PERM_TOOLS[String(params.tool)]
+      return ok({ tools: { ...PERM_TOOLS } })
+    }
     if (method === 'permissions.rules.get') return ok({ rules: [{ id: 'shell_allow_ls' }] })
-    if (method === 'plugins.list') return ok({ plugins: [{ plugin_name: 'skill-creator', enabled: true }, { plugin_name: 'old-plugin', enabled: false }] })
-    if (method === 'project.list') return ok({ projects: [{ project_id: 'default', name: 'Default', is_default: true, project_dir: '' }] })
-    if (method === 'session.archived.list') return ok({ sessions: [{ session_id: 's-old', title: 'Old chat' }], total: 1 })
+    if (method === 'plugins.list') return ok({ plugins: PLUGINS.map(p => ({ ...p })) })
+    if (method === 'plugins.enable' || method === 'plugins.disable') {
+      const name = params.name
+      if (!name) return ok({ success: false, detail: '缺少参数: name' })
+      const plug = PLUGINS.find(p => p.plugin_name === name)
+      if (!plug) return ok({ success: false, detail: `未找到插件: ${name}` })
+      plug.enabled = method === 'plugins.enable'
+      return ok({ success: true, plugin_name: name, enabled: plug.enabled })
+    }
+    if (method === 'project.list') return ok({ projects: [{ project_id: 'default', name: 'Default', is_default: true, project_dir: '', work_mode: 'work' }] })
+    if (method === 'project.info') {
+      return ok({ project: { project_id: params.project_id || 'default', name: 'Default', is_default: true, project_dir: '', work_mode: 'work', session_count: HISTORY.size, pinned: false } })
+    }
+    if (method === 'project.get_sessions') {
+      const sessions = [...HISTORY.keys()].map(id => ({ session_id: id, title: `mock-${id}` }))
+      return ok({ sessions, total: sessions.length })
+    }
+    if (method === 'session.archived.list') return ok({ sessions: ARCHIVED.map(s => ({ ...s })), total: ARCHIVED.length })
+    if (method === 'session.archive') {
+      const ids = Array.isArray(params.session_ids) ? params.session_ids : []
+      if (!ids.length) { ws.send(JSON.stringify({ type: 'res', id: frame.id, ok: false, error: { message: 'session_ids is required' } })); return }
+      const results = ids.map(session_id => {
+        ARCHIVED.push({ session_id, title: `archived-${session_id}` })
+        return { session_id, ok: true, archived: true }
+      })
+      return ok({ succeeded_count: results.length, failed_count: 0, results })
+    }
+    if (method === 'session.unarchive') {
+      const ids = Array.isArray(params.session_ids) ? params.session_ids : []
+      if (!ids.length) { ws.send(JSON.stringify({ type: 'res', id: frame.id, ok: false, error: { message: 'session_ids is required' } })); return }
+      const results = ids.map(session_id => {
+        const i = ARCHIVED.findIndex(s => s.session_id === session_id)
+        if (i >= 0) ARCHIVED.splice(i, 1)
+        return { session_id, ok: true, restored: true, project_id: 'default' }
+      })
+      return ok({ succeeded_count: results.length, failed_count: 0, results })
+    }
+    if (method === 'session.switch') {
+      return ok({ session_id: params.session_id, mode: 'agent.work.normal', switched: true, moa_enabled: false })
+    }
     if (method === 'session.assets.list') return ok({ assets: [{ name: `asset-${params.session_id}` }] })
     if (method === 'updater.get_status') return ok({ current_version: '9.9.9', install_mode: 'pip', platform: 'linux', latest_version: '10.0.0', has_update: true })
-    if (method === 'heartbeat.get_conf') return ok({ every: 3600, target: 'web', active_hours: { start: '08:00', end: '22:00' } })
+    if (method === 'heartbeat.get_conf') return ok({ ...HEARTBEAT, active_hours: { ...HEARTBEAT.active_hours } })
+    if (method === 'heartbeat.set_conf') {
+      if (params.every != null) HEARTBEAT.every = Number(params.every)
+      if (params.target) HEARTBEAT.target = String(params.target)
+      if (params.active_hours) HEARTBEAT.active_hours = { ...params.active_hours }
+      return ok({ ...HEARTBEAT, active_hours: { ...HEARTBEAT.active_hours } })
+    }
+    if (method === 'heartbeat.job.list') return ok({ jobs: [{ id: 'hb-job-1', name: 'mock-hb' }] })
+    if (method === 'path.get') return ok({ chrome_path: '', headless: true, decision_mode: 'llm', decision_provider: 'openrouter', decision_model: 'typesafe/jev-1.13' })
+    if (method === 'locale.get_conf') return ok({ preferred_language: 'zh' })
+    if (method === 'cron.job.list') return ok({ jobs: [{ id: 'cron-1', name: 'mock-cron' }] })
+    if (method === 'agent_templates.list') return ok({ templates: [{ id: 't1', packageName: 'engineering-quality-mentor', displayName: { zh: '工程质量顾问', en: 'EQM' } }] })
     if (method === 'team.list') {
       return ok({ teams: [{ name: 'mock-team', id: 'team-1' }] })
     }

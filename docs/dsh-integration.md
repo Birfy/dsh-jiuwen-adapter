@@ -76,11 +76,14 @@ When the host provides `ctx.commands` (`@deepseek-ai/dsh-commands`; web UI, ACP 
 | `/jiuwen status` | `models.list` + `session.get_metadata`; mapping, turns, session overrides (mode/skills/agentTemplate), title |
 | `/jiuwen models` | `models.list` (★ = Jiuwen default) |
 | `/jiuwen model <name\|default>` | validated against `models.list`; per-session `modelName` for following `chat.send` |
+| `/jiuwen model-info <id\|name>` | resolve `model_id` via `models.list` then `models.get` (no api_key printed) |
 | `/jiuwen mode [name\|default]` | show/set per-session `chatMode` (`default` clears); applied on following `chat.send` |
 | `/jiuwen pause` / `resume` | `chat.interrupt {intent:'pause'\|'resume'}` |
 | `/jiuwen rename <title>` | `session.rename` |
 | `/jiuwen pin [on\|off]` | `session.pin` (default on) |
 | `/jiuwen fork` | `session.fork`; reports new `session_id` (does not overwrite the current local mapping) |
+| `/jiuwen switch` | `session.switch` on the mapped session |
+| `/jiuwen archive` / `unarchive` | `session.archive` / `session.unarchive` (`session_ids: [sid]`) |
 | `/jiuwen unmap` | drop local dsh↔Jiuwen mapping only (no Gateway delete) |
 | `/jiuwen delete` | `session.delete` then clear local mapping |
 | `/jiuwen goal [get\|set <text>\|pause\|resume\|clear]` | `command.goal` (default get) |
@@ -94,13 +97,18 @@ When the host provides `ctx.commands` (`@deepseek-ai/dsh-commands`; web UI, ACP 
 | `/jiuwen teams` | `team.templates.list` + `team.list` (names) |
 | `/jiuwen tools` | `agents.tools_list` (Jiuwen-owned tool names + count) |
 | `/jiuwen hooks` | `hooks.list` (total hooks, non-empty events) |
-| `/jiuwen permissions` | `permissions.tools.get` (allow/ask/deny counts, ask/deny names) + `permissions.rules.get` (rule count) |
-| `/jiuwen plugins` | `plugins.list` (enabled / disabled) |
-| `/jiuwen projects` | `project.list` (name, `project_id`, work mode, default marker, dir) |
+| `/jiuwen permissions` [`set <tool> <allow\|ask\|deny>`\|`unset <tool>`] | get: `permissions.tools.get` + `permissions.rules.get`; set/unset: `permissions.tools.update` / `delete` |
+| `/jiuwen plugins` [`enable\|disable <name>`] | list: `plugins.list`; enable/disable: `plugins.enable` / `plugins.disable` (`name`) |
+| `/jiuwen projects` [`info\|sessions [id]`] | list: `project.list`; info: `project.info`; sessions: `project.get_sessions` |
 | `/jiuwen archived` | `session.archived.list` |
 | `/jiuwen assets` | `session.assets.list` for the mapped session |
 | `/jiuwen version` | `updater.get_status` (current / latest version, install mode) |
-| `/jiuwen heartbeat` | `heartbeat.get_conf` (interval, target, active hours) |
+| `/jiuwen heartbeat` [`set <every> [target]`\|`jobs`] | get: `heartbeat.get_conf`; set: `heartbeat.set_conf` (preserves active_hours); jobs: `heartbeat.job.list` |
+| `/jiuwen path` | `path.get` (chrome/headless/decision) |
+| `/jiuwen locale` | `locale.get_conf` |
+| `/jiuwen commands` | `commands.list` (Gateway slash command names) |
+| `/jiuwen templates` | `agent_templates.list` |
+| `/jiuwen cron` | `cron.job.list` |
 | `/jiuwen compact` | `command.compact` on the mapped Jiuwen session |
 | `/jiuwen interrupt` | `chat.interrupt {intent:'cancel'}` |
 | `/jiuwen sessions` / `skills` [`installed`] / `agents` / `mcp` | `session.list` / `skills.list` (or `skills.installed`) / `agents.list` / `mcp.list` |
@@ -114,7 +122,7 @@ Per-session overrides (`modelName`, `chatMode`, `skills`, `agentTemplateName`) l
 
 Live (dsh 0.2.1-rc.2, via `ctx.commands.execute(agent, …)` inside headless): registry lists `compact, feedback, goal, jiuwen, permission, plan`; `/jiuwen status`, `models`, `model doubao-seed-2.0-mini`, `model nosuch` (rejected with the available list) and `skills` all returned from the live gateway. Newer session RPCs (`session.rename` / `pin` / `fork` / `delete`, `command.goal`, `skills.toggle`, `command.btw` / `command.recap`, `session.plan_status`, `team.*`, `skills.installed`) depend on the Gateway build — see [known-issues.md](./known-issues.md) live probe notes; probe with `ctx.jiuwenAdapter.gateway.rpc` if a live call fails.
 
-中文：在 dsh 命令注册表上注册 `/jiuwen <子命令>`，覆盖 status / models / model / mode / pause / resume / rename / pin / fork / unmap / delete / goal / workflows / history / btw / recap / skill-toggle / plan-status / supplement / teams / tools / hooks / permissions / plugins / projects / archived / assets / version / heartbeat / compact / interrupt / sessions / skills[installed] / agents / mcp / mcp-reset；本地标题会兼容同步 `session.rename`；会话级 mode/skills/agentTemplate 可覆盖默认配置。
+中文：在 dsh 命令注册表上注册 `/jiuwen <子命令>`，覆盖 status / models / model / model-info / mode / pause / resume / rename / pin / fork / switch / archive / unarchive / unmap / delete / goal / workflows / history / btw / recap / skill-toggle / plan-status / supplement / teams / tools / hooks / permissions[set/unset] / plugins[enable/disable] / projects[info/sessions] / archived / assets / version / heartbeat[set/jobs] / path / locale / commands / templates / cron / compact / interrupt / sessions / skills[installed] / agents / mcp / mcp-reset；本地标题会兼容同步 `session.rename`；会话级 mode/skills/agentTemplate 可覆盖默认配置。
 
 ## 6. `jiuwen/event` (declared Cordis event)
 

@@ -61,3 +61,23 @@ These exist in `ReqMethod` and AgentServer but the Gateway **web** channel does 
 | `models.get` (no `model_id`) | FAIL — `unknown model_id ''` (needs an id; `/jiuwen models` already covers listing) |
 
 Note: `project.list` returns two projects both named 默认项目 (`default` work mode and `default_code` code mode); `/jiuwen projects` prints `project_id` and `work_mode` to disambiguate (and dedupes exact `project_id` repeats). The `memoryList/memoryStatus` gateway helpers remain for builds that route them.
+
+
+## 5. Third-batch probe: mutate + high-value reads (2026-10-30)
+
+Probed for archive/unarchive, plugins enable/disable, permissions tools update/delete, heartbeat set/jobs, project info/sessions, session.switch, models.get, path/locale/commands/templates/cron. All answered on `ws://127.0.0.1:19000/ws` (Gateway 0.2.5b1).
+
+| Method | Result on /ws |
+|---|---|
+| `session.archive` / `session.unarchive` | ok — params use **`session_ids`** (array), not `session_id` |
+| `session.switch` | ok |
+| `plugins.enable` / `plugins.disable` | ok — params use **`name`** |
+| `permissions.tools.update` | ok — `{tool, level}` (`allow`/`ask`/`deny`) |
+| `permissions.tools.delete` | ok — `{tool}` |
+| `heartbeat.set_conf` / `heartbeat.job.list` | ok |
+| `project.info` / `project.get_sessions` | ok |
+| `models.get` | ok when given `model_id` (e.g. `mdl_default_primary` from `models.list`); `model_name` alone fails |
+| `path.get` / `locale.get_conf` / `commands.list` / `agent_templates.list` / `cron.job.list` | ok |
+| `session.preview` / `diagnosis.list` / `command.recap` / `memory.list` | still FAIL — unknown method (unchanged from §3–4) |
+
+Adapter exposes `/jiuwen archive|unarchive|switch|model-info|path|locale|commands|templates|cron` plus expansions of `permissions` / `plugins` / `heartbeat` / `projects`. Live probes that mutate must reverse (unarchive/delete throwaway sessions; restore heartbeat; unset probe tools; re-enable plugins).

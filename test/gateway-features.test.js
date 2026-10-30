@@ -475,7 +475,7 @@ test('/jiuwen tools hooks permissions plugins projects archived assets version h
   const perms = await run('permissions')
   assert.match(perms, /allow=1/); assert.match(perms, /ask: acp_chat/); assert.match(perms, /deny: rm_rf/); assert.match(perms, /rules: 1/)
   assert.match(await run('plugins'), /skill-creator, old-plugin \(disabled\)/)
-  assert.match(await run('projects'), /Default \(default\) \[default\]/)
+  assert.match(await run('projects'), /Default \(default(?:, work)?\) \[default\]/)
   assert.match(await run('archived'), /\(1\): Old chat/)
   assert.match(await run('assets'), /asset-/)
   assert.match(await run('version'), /9\.9\.9 \(pip, linux\), latest 10\.0\.0 \(update available\)/)
@@ -483,4 +483,65 @@ test('/jiuwen tools hooks permissions plugins projects archived assets version h
   assert.match(def.input.hint, /heartbeat/)
   const g = ctx.jiuwenAdapter.gateway
   for (const fn of ['agentsToolsList', 'hooksList', 'permissionsToolsGet', 'permissionsRulesGet', 'pluginsList', 'projectList', 'sessionArchivedList', 'sessionAssetsList', 'updaterStatus', 'heartbeatConf']) assert.equal(typeof g[fn], 'function', fn)
+})
+
+test('/jiuwen archive switch permissions set/unset plugins enable/disable heartbeat set/jobs projects info/sessions model-info path locale commands templates cron', async () => {
+  const registered = []
+  const ctx = {
+    llm: { registerAdapter() { return () => {} } },
+    logger: { info() {}, warn() {}, error() {}, debug() {} }, provide(n, v) { this[n] = v }, on() {},
+    inject(deps, cb) { cb({ commands: { register(d) { registered.push(d); return () => {} } }, on() {} }) },
+  }
+  plugin.apply(ctx, { gatewayURL: URL_, mappingPath: join(dir, `cmds4-${Math.random()}.json`), finalGraceMs: 300 })
+  const def = registered.find(d => d.name === 'jiuwen')
+  const g = ctx.jiuwenAdapter.gateway
+  const run = async (raw, id = 'n4') => { const r = await def.handler({ agent: { id }, rawInput: raw }); assert.equal(r.kind, 'success', r.text); return r.text }
+
+  assert.match(await run('switch'), /Switched Jiuwen session/)
+  assert.match(await run('archive'), /Archived Jiuwen session/)
+  assert.match(await run('unarchive'), /Unarchived Jiuwen session/)
+
+  assert.match(await run('permissions set __probe__ ask'), /__probe__=ask/)
+  assert.match(await run('permissions'), /ask:.*__probe__/)
+  assert.match(await run('permissions unset __probe__'), /Removed permission/)
+  assert.doesNotMatch(await run('permissions'), /__probe__/)
+
+  assert.match(await run('plugins disable skill-creator'), /disabled/)
+  assert.match(await run('plugins'), /skill-creator \(disabled\)/)
+  assert.match(await run('plugins enable skill-creator'), /enabled/)
+  assert.match(await run('plugins'), /skill-creator,/)
+
+  assert.match(await run('heartbeat set 7200 web'), /every 7200s → web/)
+  assert.match(await run('heartbeat'), /every 7200s → web/)
+  assert.match(await run('heartbeat set 3600'), /every 3600s/)
+  assert.match(await run('heartbeat jobs'), /hb-job-1|mock-hb/)
+
+  assert.match(await run('projects info'), /project Default \(default\)/)
+  assert.match(await run('projects sessions'), /Project sessions|No sessions/)
+
+  assert.match(await run('model-info jiuwen-default'), /mdl_default_primary.*jiuwen-default/)
+  assert.match(await run('model-info mdl_swarm'), /mdl_swarm/)
+
+  assert.match(await run('path'), /headless=true/)
+  assert.match(await run('locale'), /zh/)
+  assert.match(await run('commands'), /compact.*fork|fork.*compact/)
+  assert.match(await run('templates'), /engineering-quality-mentor/)
+  assert.match(await run('cron'), /cron-1|mock-cron/)
+
+  assert.match(def.input.hint, /archive/)
+  assert.match(def.input.hint, /model-info/)
+  assert.match(def.input.hint, /templates/)
+
+  for (const fn of [
+    'sessionArchive', 'sessionUnarchive', 'sessionSwitch',
+    'permissionsToolsUpdate', 'permissionsToolsDelete',
+    'pluginsEnable', 'pluginsDisable',
+    'heartbeatSetConf', 'heartbeatJobList',
+    'projectInfo', 'projectGetSessions', 'modelsGet',
+    'pathGet', 'localeGetConf', 'cronJobList', 'agentTemplatesList',
+  ]) assert.equal(typeof g[fn], 'function', fn)
+
+  assert.equal((await g.sessionArchive('s-x')).succeeded_count, 1)
+  assert.equal((await g.pluginsDisable('old-plugin')).success, true)
+  assert.equal((await g.modelsGet('mdl_default_primary')).model.model_id, 'mdl_default_primary')
 })

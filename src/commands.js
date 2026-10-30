@@ -4,7 +4,7 @@
  */
 
 export const SUBCOMMANDS =
-  'status | models | model <name|default> | mode [name|default] | pause | resume | rename <title> | pin [on|off] | fork | unmap | delete | goal [get|set <text>|pause|resume|clear] | workflows [list|get <id>] | history | btw <question> | recap | skill-toggle <name> <on|off> | plan-status | supplement <text> | teams | compact | interrupt | sessions | skills [installed] | agents | tools | hooks | permissions | plugins | projects | archived | assets | version | heartbeat | mcp | mcp-reset'
+  'status | models | model <name|default> | model-info <id|name> | mode [name|default] | pause | resume | rename <title> | pin [on|off] | fork | switch | archive | unarchive | unmap | delete | goal [get|set <text>|pause|resume|clear] | workflows [list|get <id>] | history | btw <question> | recap | skill-toggle <name> <on|off> | plan-status | supplement <text> | teams | compact | interrupt | sessions | skills [installed] | agents | tools | hooks | permissions [set <tool> <allow|ask|deny>|unset <tool>] | plugins [enable|disable <name>] | projects [info|sessions [id]] | archived | assets | version | heartbeat [set <every> [target]|jobs] | path | locale | commands | templates | cron | mcp | mcp-reset'
 
 /**
  * @param {{ sessions: import('./session-store.js').SessionStore, gateway: () => import('./gateway-transport.js').GatewayTransport, config: () => any, mcpBridge?: any }} deps
@@ -59,6 +59,29 @@ export function createJiuwenCommand(deps) {
         deps.sessions.update?.(dshId, { modelName: arg })
         return `This session now sends model_name=${arg} to Jiuwen.`
       }
+      case 'model-info': {
+        if (!arg) return 'Usage: /jiuwen model-info <id|name>'
+        const listed = await g.modelsList()
+        const models = listed?.models || []
+        const hit = models.find(x => [x.model_id, x.model_name, x.id, x.name].filter(Boolean).includes(arg))
+          || (arg === listed?.active_model ? models.find(x => (x.model_name || x.id || x.name) === arg) : undefined)
+        const modelId = hit?.model_id || (arg.startsWith('mdl_') ? arg : undefined)
+        if (!modelId) {
+          const known = models.map(x => x.model_id || x.model_name || x.id).filter(Boolean)
+          return `Unknown model "${arg}". Try a model_id from /jiuwen models (e.g. ${known.slice(0, 5).join(', ') || 'none'}).`
+        }
+        const r = await g.modelsGet(modelId)
+        const m = r?.model || r
+        const cfg = m?.model_client_config || {}
+        const name = cfg.model_name || m?.model_name || hit?.model_name || arg
+        const bits = [`model-info ${modelId}: ${name}`]
+        if (cfg.client_provider || m?.model_provider) bits.push(`provider=${cfg.client_provider || m.model_provider}`)
+        if (cfg.api_base) bits.push(`api_base=${cfg.api_base}`)
+        if (cfg.endpoint_profile) bits.push(`profile=${cfg.endpoint_profile}`)
+        if (m?.is_default || hit?.is_default) bits.push('default')
+        if (cfg.has_api_key !== undefined || m?.has_api_key !== undefined) bits.push(`api_key=${(cfg.has_api_key ?? m.has_api_key) ? 'set' : 'missing'}`)
+        return bits.join('; ')
+      }
       case 'mode': {
         if (!arg) return `mode: ${mapping.chatMode || 'Jiuwen/config default'} — usage: /jiuwen mode <name|default>`
         if (arg === 'default') {
@@ -96,6 +119,24 @@ export function createJiuwenCommand(deps) {
           return `Forked Jiuwen session ${sid} → new session_id=${newId} (local mapping unchanged; use a new dsh session or sessions.ensure to map it).`
         }
         return `Forked Jiuwen session ${sid}: ${JSON.stringify(r).slice(0, 300)}`
+      }
+      case 'switch': {
+        const r = await g.sessionSwitch(sid)
+        return `Switched Jiuwen session context to ${r?.session_id || sid}${r?.mode ? ` (mode=${r.mode})` : ''}${r?.switched === false ? ' (already active)' : ''}.`
+      }
+      case 'archive': {
+        const r = await g.sessionArchive(sid)
+        const row = r?.results?.[0]
+        const ok = (r?.succeeded_count > 0) || row?.ok || row?.archived
+        if (!ok) return `Archive failed for ${sid}: ${row?.error || r?.error || `failed_count=${r?.failed_count ?? '?'}`}`
+        return `Archived Jiuwen session ${sid}.`
+      }
+      case 'unarchive': {
+        const r = await g.sessionUnarchive(sid)
+        const row = r?.results?.[0]
+        const ok = (r?.succeeded_count > 0) || row?.ok || row?.restored
+        if (!ok) return `Unarchive failed for ${sid}: ${row?.error || r?.error || `failed_count=${r?.failed_count ?? '?'}`}`
+        return `Unarchived Jiuwen session ${sid}.`
       }
       case 'unmap': {
         deps.sessions.remove?.(dshId)
@@ -243,6 +284,22 @@ export function createJiuwenCommand(deps) {
         return `Jiuwen hooks: ${total} across ${ev.length} events${active.length ? ` (${active.join(', ')})` : ''}`
       }
       case 'permissions': {
+        const action = (rest[0] || '').toLowerCase()
+        if (action === 'set') {
+          const tool = rest[1]
+          const level = String(rest[2] || '').toLowerCase()
+          if (!tool || !['allow', 'ask', 'deny'].includes(level)) return 'Usage: /jiuwen permissions set <tool> <allow|ask|deny>'
+          const r = await g.permissionsToolsUpdate(tool, level)
+          const got = r?.tools?.[tool]
+          return `Permission ${tool}=${got || level}.`
+        }
+        if (action === 'unset') {
+          const tool = rest[1]
+          if (!tool) return 'Usage: /jiuwen permissions unset <tool>'
+          await g.permissionsToolsDelete(tool)
+          return `Removed permission override for ${tool}.`
+        }
+        if (action && !['get', 'list'].includes(action)) return 'Usage: /jiuwen permissions [set <tool> <allow|ask|deny>|unset <tool>]'
         const [tools, rules] = await Promise.allSettled([g.permissionsToolsGet(), g.permissionsRulesGet()])
         const lines = []
         if (tools.status === 'fulfilled') {
@@ -257,14 +314,55 @@ export function createJiuwenCommand(deps) {
         } else lines.push(`tools: unavailable (${short(tools.reason?.message || tools.reason, 80)})`)
         if (rules.status === 'fulfilled') lines.push(`rules: ${(rules.value?.rules || []).length}`)
         else lines.push(`rules: unavailable (${short(rules.reason?.message || rules.reason, 80)})`)
-        return `Jiuwen permissions:\n${lines.join('\n')}`
+        return `Jiuwen permissions:
+${lines.join('\n')}`
       }
       case 'plugins': {
+        const action = (rest[0] || 'list').toLowerCase()
+        if (action === 'enable' || action === 'disable') {
+          const name = rest[1]
+          if (!name) return `Usage: /jiuwen plugins ${action} <name>`
+          const r = action === 'enable' ? await g.pluginsEnable(name) : await g.pluginsDisable(name)
+          if (r?.success === false) return `Plugin ${action} failed: ${r.detail || 'unknown'}`
+          return `Plugin ${name} ${action}d.`
+        }
+        if (action !== 'list') return 'Usage: /jiuwen plugins [enable|disable <name>]'
         const r = await g.pluginsList()
         const list = (r?.plugins || []).map(p => `${p.plugin_name || p.name}${p.enabled === false ? ' (disabled)' : ''}`)
         return `Jiuwen plugins: ${list.join(', ') || 'none'}`
       }
       case 'projects': {
+        const action = (rest[0] || 'list').toLowerCase()
+        const resolveProjectId = async (raw) => {
+          if (raw) return raw
+          const listed = await g.projectList().catch(() => null)
+          const projects = listed?.projects || []
+          const def = projects.find(p => p.is_default) || projects[0]
+          return def?.project_id || 'default'
+        }
+        if (action === 'info') {
+          const id = await resolveProjectId(rest[1])
+          const r = await g.projectInfo(id)
+          const p = r?.project || r
+          const pid = p?.project_id || r?.project_id || id || '?'
+          const bits = [`project ${p?.name || pid} (${pid})`]
+          if (p?.work_mode || r?.work_mode) bits.push(`mode=${p?.work_mode || r.work_mode}`)
+          if (p?.is_default || r?.is_default) bits.push('default')
+          if (p?.pinned || r?.pinned) bits.push('pinned')
+          if ((p?.session_count ?? r?.session_count) != null) bits.push(`sessions=${p?.session_count ?? r.session_count}`)
+          if (p?.project_dir || r?.project_dir) bits.push(`dir=${p?.project_dir || r.project_dir}`)
+          return bits.join('; ')
+        }
+        if (action === 'sessions') {
+          const id = await resolveProjectId(rest[1])
+          const r = await g.projectGetSessions(id)
+          const list = (r?.sessions || []).slice(0, 15).map(s => `- ${s.session_id || s.id}${s.title ? `  ${short(s.title, 40)}` : ''}`)
+          return list.length
+            ? `Project sessions (${r?.total ?? list.length}):
+${list.join('\n')}`
+            : `No sessions for project ${id || 'default'}`
+        }
+        if (action !== 'list') return 'Usage: /jiuwen projects [info|sessions [id]]'
         const r = await g.projectList()
         const seen = new Set()
         const list = (r?.projects || []).filter(p => { const k = p.project_id || p.name; if (seen.has(k)) return false; seen.add(k); return true }).map(p => `${p.name || p.project_id}${p.name && p.project_id ? ` (${p.project_id}${p.work_mode ? `, ${p.work_mode}` : ''})` : ''}${p.is_default ? ' [default]' : ''}${p.project_dir ? ` → ${p.project_dir}` : ''}`)
@@ -286,9 +384,62 @@ export function createJiuwenCommand(deps) {
         return `JiuwenSwarm ${r?.current_version || 'unknown'} (${r?.install_mode || '?'}, ${r?.platform || '?'})${latest}`
       }
       case 'heartbeat': {
+        const action = (rest[0] || 'get').toLowerCase()
+        if (action === 'set') {
+          const every = Number(rest[1])
+          if (!Number.isFinite(every) || every <= 0) return 'Usage: /jiuwen heartbeat set <every-seconds> [target]'
+          const target = rest[2]
+          const cur = await g.heartbeatConf().catch(() => ({}))
+          const r = await g.heartbeatSetConf({
+            every,
+            ...(target ? { target } : (cur?.target ? { target: cur.target } : {})),
+            ...(cur?.active_hours ? { active_hours: cur.active_hours } : {}),
+          })
+          return `Heartbeat set: every ${r?.every ?? every}s → ${r?.target || target || cur?.target || '?'}`
+        }
+        if (action === 'jobs') {
+          const r = await g.heartbeatJobList()
+          const jobs = r?.jobs || []
+          if (!jobs.length) return 'Jiuwen heartbeat jobs: none'
+          return `Jiuwen heartbeat jobs (${jobs.length}):
+${jobs.slice(0, 15).map(j => `- ${j.id || j.job_id || j.name || JSON.stringify(j).slice(0, 80)}`).join('\n')}`
+        }
+        if (action !== 'get') return 'Usage: /jiuwen heartbeat [set <every> [target]|jobs]'
         const r = await g.heartbeatConf()
         const h = r?.active_hours ? `, active ${r.active_hours.start}-${r.active_hours.end}` : ''
         return `Jiuwen heartbeat: every ${r?.every ?? '?'}s → ${r?.target || '?'}${h}`
+      }
+      case 'path': {
+        const r = await g.pathGet()
+        const bits = []
+        if (r?.chrome_path !== undefined) bits.push(`chrome=${r.chrome_path || '(empty)'}`)
+        if (r?.headless !== undefined) bits.push(`headless=${r.headless}`)
+        if (r?.decision_mode) bits.push(`decision=${r.decision_mode}${r.decision_provider ? `/${r.decision_provider}` : ''}${r.decision_model ? `:${r.decision_model}` : ''}`)
+        return bits.length ? `Jiuwen path: ${bits.join('; ')}` : `Jiuwen path: ${JSON.stringify(r).slice(0, 300)}`
+      }
+      case 'locale': {
+        const r = await g.localeGetConf()
+        return `Jiuwen locale: ${r?.preferred_language || JSON.stringify(r).slice(0, 200)}`
+      }
+      case 'commands': {
+        const r = await g.commandsList()
+        const list = (r?.commands || []).map(c => c.name || c.id).filter(Boolean)
+        return `Jiuwen gateway commands (${list.length}): ${list.slice(0, 40).join(', ') || 'none'}`
+      }
+      case 'templates': {
+        const r = await g.agentTemplatesList()
+        const list = (r?.templates || []).map(t => {
+          const name = t.packageName || t.displayName?.zh || t.displayName?.en || t.id || t.name
+          return typeof name === 'string' ? name : JSON.stringify(name)
+        })
+        return `Jiuwen agent templates (${list.length}): ${list.slice(0, 20).join(', ') || 'none'}`
+      }
+      case 'cron': {
+        const r = await g.cronJobList()
+        const jobs = r?.jobs || []
+        if (!jobs.length) return 'Jiuwen cron jobs: none'
+        return `Jiuwen cron jobs (${jobs.length}):
+${jobs.slice(0, 15).map(j => `- ${j.id || j.job_id || j.name || JSON.stringify(j).slice(0, 80)}`).join('\n')}`
       }
       case 'mcp': { const r = await g.mcpList(); return `Jiuwen MCP servers: ${(r?.items || []).map(x => `${x.name}${x.connection_state ? ` (${x.connection_state})` : ''}`).join(', ') || 'none'}` }
       case 'mcp-reset': {
@@ -304,7 +455,7 @@ export function createJiuwenCommand(deps) {
     run,
     definition: {
       name: 'jiuwen',
-      description: 'JiuwenSwarm: status, models/model, mode, pause/resume, rename, pin, fork, unmap/delete, goal, workflows, history, btw, recap, skill-toggle, plan-status, supplement, teams, compact, interrupt, sessions, skills, agents, tools, hooks, permissions, plugins, projects, archived, assets, version, heartbeat, mcp',
+      description: 'JiuwenSwarm: status, models/model/model-info, mode, pause/resume, rename, pin, fork, switch, archive/unarchive, unmap/delete, goal, workflows, history, btw, recap, skill-toggle, plan-status, supplement, teams, compact, interrupt, sessions, skills, agents, tools, hooks, permissions, plugins, projects, archived, assets, version, heartbeat, path, locale, commands, templates, cron, mcp',
       input: { hint: SUBCOMMANDS },
       async handler(invocation) {
         try {
