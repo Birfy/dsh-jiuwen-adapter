@@ -172,6 +172,17 @@ export function createJiuwenAdapter(LlmAdapterBase, deps) {
           options = await hydrateAttachments(options, deps.attachments?.(), deps.logger)
           const overrides = turnOverrides(cfg, options)
           if (!overrides.modelName && mapping.modelName) overrides.modelName = mapping.modelName // /jiuwen model <name>
+          // Per-session overrides from /jiuwen mode (and future skills/agentTemplate): request + catalog
+          // win over mapping; mapping wins over bare plugin defaults when those fields were only filled from cfg.
+          {
+            const req = options?.providerOptions?.jiuwen || options?.metadata?.jiuwen || options?.jiuwen || {}
+            const catalog = cfg.models.find(m => m.id === options?.model)
+            if (!req.chatMode && !catalog?.chatMode && mapping.chatMode) overrides.chatMode = mapping.chatMode
+            if (req.skills === undefined && mapping.skills) overrides.skills = mapping.skills
+            if (!req.agentTemplateName && !catalog?.agentTemplateName && mapping.agentTemplateName) {
+              overrides.agentTemplateName = mapping.agentTemplateName
+            }
+          }
           if (overrides.supportsUserInteraction === 'auto') overrides.supportsUserInteraction = Boolean(deps.hasUserQuestions?.())
           // Auxiliary calls (compaction, jiuwen titles) use a throwaway Jiuwen session + full transcript.
           const aux = Boolean(options.purpose)

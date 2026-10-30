@@ -139,7 +139,7 @@ wss.on('connection', (ws, req) => {
       return ok({ session_id: sid, turns: Math.ceil(msgs.length / 2), messages: msgs })
     }
     if (method === 'session.get_metadata') {
-      return ok({ session_id: params.session_id, runtime: { mode: 'agent' }, mock_auth: urlAuth })
+      return ok({ session_id: params.session_id, title: `mock-${params.session_id}`, runtime: { mode: 'agent' }, mock_auth: urlAuth })
     }
     if (method === 'skills.list') return ok({ skills: [{ name: 'mock-skill', description: 'mock' }] })
     if (method === 'agents.list') return ok({ agents: [{ name: 'mock-agent' }] })
@@ -150,8 +150,8 @@ wss.on('connection', (ws, req) => {
     if (method === 'models.list') {
       return ok({
         models: [
-          { id: 'jiuwen-default', name: 'Jiuwen Default' },
-          { id: 'jiuwen-swarm', name: 'Jiuwen Swarm' },
+          { id: 'jiuwen-default', model_name: 'jiuwen-default', name: 'Jiuwen Default' },
+          { id: 'jiuwen-swarm', model_name: 'jiuwen-swarm', name: 'Jiuwen Swarm' },
         ],
         active_model: 'jiuwen-default',
       })
@@ -176,6 +176,29 @@ wss.on('connection', (ws, req) => {
     }
     if (method === 'swarmflow.pause' || method === 'swarmflow.resume' || method === 'swarmflow.stop') {
       return ok({ ok: true, method })
+    }
+    if (method === 'session.rename') {
+      return ok({ session_id: params.session_id, title: params.title ?? '', previous_title: '' })
+    }
+    if (method === 'session.pin') {
+      return ok({ pinned: Boolean(params.pinned), pin_order: params.pinned ? 1 : null })
+    }
+    if (method === 'session.fork') {
+      return ok({ session_id: `fork_${params.session_id || 's'}_${Date.now().toString(36)}`, source_session_id: params.session_id })
+    }
+    if (method === 'session.delete') {
+      const sid = String(params.session_id || '')
+      HISTORY.delete(sid)
+      return ok({ session_id: sid, accepted: true })
+    }
+    if (method === 'command.goal') {
+      return ok({ action: params.action || 'get', objective: params.objective, session_id: params.session_id, status: params.action === 'clear' ? 'cleared' : 'ok' })
+    }
+    if (method === 'command.compact') {
+      return ok({ result: 'compressed', stats: { total_messages: 2, total_tokens: 10 } })
+    }
+    if (method === 'skills.toggle') {
+      return ok({ name: params.name, enabled: Boolean(params.enabled) })
     }
 
     ws.send(JSON.stringify({

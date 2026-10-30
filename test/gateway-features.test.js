@@ -306,6 +306,89 @@ test('/jiuwen command: status / models / model switch → model_name / bad sub',
   const st = await run('status')
   assert.equal(st.kind, 'success')
   assert.match(st.text, /dsh session cmd-s → Jiuwen session/)
+  assert.match(st.text, /title:/)
   assert.equal((await run('nope')).kind, 'success')
   assert.match((await run('nope')).text, /Unknown subcommand/)
+})
+
+test('/jiuwen mode persists and next chat.send includes that mode', async () => {
+  const registered = []
+  const adapters = new Map()
+  const ctx = {
+    llm: { registerAdapter(ids, a) { ids.forEach(i => adapters.set(i, a)); return () => {} } },
+    logger: { info() {}, warn() {}, error() {}, debug() {} }, provide(n, v) { this[n] = v }, on() {},
+    inject(deps, cb) { cb({ commands: { register(d) { registered.push(d); return () => {} } }, on() {} }) },
+  }
+  const mappingPath = join(dir, `mode-${Math.random()}.json`)
+  plugin.apply(ctx, { gatewayURL: URL_, mappingPath, finalGraceMs: 300 })
+  const def = registered.find(d => d.name === 'jiuwen')
+  const sid = 'mode-s'
+  const set = await def.handler({ agent: { id: sid }, rawInput: 'mode agent.plan' })
+  assert.equal(set.kind, 'success')
+  assert.match(set.text, /mode=agent\.plan/)
+  const a = adapters.get('jiuwen')
+  const cs = []
+  for await (const c of a.stream({ provider: 'jiuwen', model: 'jiuwen-default', sessionId: sid, messages: user('echo-params check') })) cs.push(c)
+  assert.match(txt(cs), /mode=agent\.plan/)
+  const cleared = await def.handler({ agent: { id: sid }, rawInput: 'mode default' })
+  assert.match(cleared.text, /default chat mode/)
+})
+
+test('/jiuwen pause resume rename pin goal workflows history unmap delete', async () => {
+  const registered = []
+  const adapters = new Map()
+  const ctx = {
+    llm: { registerAdapter(ids, a) { ids.forEach(i => adapters.set(i, a)); return () => {} } },
+    logger: { info() {}, warn() {}, error() {}, debug() {} }, provide(n, v) { this[n] = v }, on() {},
+    inject(deps, cb) { cb({ commands: { register(d) { registered.push(d); return () => {} } }, on() {} }) },
+  }
+  const mappingPath = join(dir, `cmds-${Math.random()}.json`)
+  plugin.apply(ctx, { gatewayURL: URL_, mappingPath, finalGraceMs: 300 })
+  const def = registered.find(d => d.name === 'jiuwen')
+  const api = ctx.jiuwenAdapter
+  const run = (id, raw) => def.handler({ agent: { id }, rawInput: raw })
+
+  assert.match((await run('p1', 'pause')).text, /pause/)
+  assert.match((await run('p1', 'resume')).text, /resume/)
+  const st = await debug()
+  assert.ok(st.interrupts.some(p => p.intent === 'pause'))
+  assert.ok(st.interrupts.some(p => p.intent === 'resume'))
+
+  assert.match((await run('rn', 'rename My Title')).text, /My Title/)
+  assert.match((await run('pn', 'pin')).text, /pinned/)
+  assert.match((await run('pn', 'pin off')).text, /unpinned/)
+
+  const goal = await run('g1', 'goal')
+  assert.equal(goal.kind, 'success')
+  assert.match(goal.text, /goal get/)
+  assert.match((await run('g1', 'goal set ship it')).text, /ship it/)
+
+  assert.match((await run('w1', 'workflows')).text, /No workflows|Workflows/)
+  // seed history then read it
+  const a = adapters.get('jiuwen')
+  for await (const _ of a.stream({ provider: 'jiuwen', model: 'jiuwen-default', sessionId: 'hist', messages: user('ping') })) { /* drain */ }
+  assert.match((await run('hist', 'history')).text, /History for|pong|ping/)
+
+  const fork = await run('fk', 'fork')
+  assert.equal(fork.kind, 'success')
+  assert.match(fork.text, /new session_id=|Forked/)
+  // mapping for fk must still exist
+  assert.ok(api.sessions.get('fk'))
+
+  const jwBefore = api.sessions.get('um')?.jiuwenSessionId || api.jiuwenSessionId('um')
+  assert.match((await run('um', 'unmap')).text, /Removed local mapping/)
+  assert.equal(api.sessions.get('um'), undefined)
+
+  api.jiuwenSessionId('del') // ensure mapping
+  assert.match((await run('del', 'delete')).text, /Jiuwen session .* deleted and local mapping cleared/)
+  assert.equal(api.sessions.get('del'), undefined)
+
+  // gateway helpers exposed
+  assert.equal(typeof api.gateway.sessionRename, 'function')
+  assert.equal(typeof api.gateway.sessionPin, 'function')
+  assert.equal(typeof api.gateway.goal, 'function')
+  assert.equal(typeof api.gateway.skillsToggle, 'function')
+  const toggled = await api.gateway.skillsToggle('mock-skill', true)
+  assert.equal(toggled.name, 'mock-skill')
+  assert.equal(toggled.enabled, true)
 })

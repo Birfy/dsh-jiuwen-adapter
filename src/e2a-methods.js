@@ -23,6 +23,7 @@ export const SESSION = Object.freeze({
   FORK: 'session.fork',
   SWITCH: 'session.switch',
   RENAME: 'session.rename',
+  PIN: 'session.pin',
 })
 
 export const SKILLS = Object.freeze({ LIST: 'skills.list', INSTALLED: 'skills.installed', GET: 'skills.get', TOGGLE: 'skills.toggle' })

@@ -12,6 +12,10 @@ import { randomUUID } from 'node:crypto'
  *   jiuwenSessionId: string,
  *   jiuwenAgentId?: string,
  *   botId?: string,
+ *   modelName?: string,
+ *   chatMode?: string,
+ *   skills?: string[],
+ *   agentTemplateName?: string,
  *   updatedAt: string,
  * }} SessionMapping
  */
@@ -67,6 +71,16 @@ export class SessionStore {
     this._put(mapping)
     this._save()
     return mapping
+  }
+
+  /** Drop a mapping from both indexes and persist (local unmap; does not call Gateway). */
+  remove(dshSessionId) {
+    const mapping = this.byDsh.get(dshSessionId)
+    if (!mapping) return false
+    this.byDsh.delete(dshSessionId)
+    if (mapping.jiuwenSessionId) this.byJiuwen.delete(mapping.jiuwenSessionId)
+    this._save()
+    return true
   }
 
   /**
@@ -135,6 +149,9 @@ export class SessionStore {
           ...(entry.lastRequestId ? { lastRequestId: String(entry.lastRequestId) } : {}),
           ...(entry.pendingQuestion ? { pendingQuestion: entry.pendingQuestion } : {}),
           ...(entry.modelName ? { modelName: String(entry.modelName) } : {}),
+          ...(entry.chatMode ? { chatMode: String(entry.chatMode) } : {}),
+          ...(Array.isArray(entry.skills) ? { skills: entry.skills.map(String) } : {}),
+          ...(entry.agentTemplateName ? { agentTemplateName: String(entry.agentTemplateName) } : {}),
           updatedAt: String(entry.updatedAt || new Date().toISOString()),
         })
       }

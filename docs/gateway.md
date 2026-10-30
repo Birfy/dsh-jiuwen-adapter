@@ -60,7 +60,7 @@
 - **文件/媒体**：`file.upload_chunk`、`media.persist/discard`、`document.persist/formats`
 - **项目/Git、cron、heartbeat、channel.*、permissions、memory.compute、hooks.list、updater.*、path.*** 等
 
-适配器 `ctx.jiuwenAdapter.gateway` 封装：`sessionList/sessionCreate/sessionDelete/sessionFork/sessionMetadata`、`historyGet/historyListTurns`、`skillsList/agentsList/teamTemplatesList/commandsList/modelsList/mcpList`、`memoryList/memoryStatus/filesList`、`interrupt(sid, intent)/chatCancel/chatResume/userAnswer`、`compact`、`workflows`，以及通用 `rpc(method, params)`。会话参数可传宿主 sessionId（自动映射）或 Jiuwen session_id。
+适配器 `ctx.jiuwenAdapter.gateway` 封装：`sessionList/sessionCreate/sessionDelete/sessionFork/sessionRename/sessionPin/sessionMetadata`、`historyGet/historyListTurns`、`skillsList/skillsToggle/agentsList/teamTemplatesList/commandsList/modelsList/mcpList`、`memoryList/memoryStatus/filesList`、`interrupt(sid, intent)/chatCancel/chatResume/userAnswer`、`compact`、`goal`、`workflows`，以及通用 `rpc(method, params)`。会话参数可传宿主 sessionId（自动映射）或 Jiuwen session_id。会话级 `chatMode` / `skills` / `agentTemplateName` 覆盖见 [dsh-integration.md](./dsh-integration.md#5-jiuwen-slash-command-dsh-command-registry)。
 
 实测（live :19000）：`session.list`、`skills.list`、`team.templates.list`、`models.list`、`commands.list`、`agents.list`、`session.create`、`chat.interrupt` 均 ok；`memory.list` 返回 ok=false（该版本未开放）。
 

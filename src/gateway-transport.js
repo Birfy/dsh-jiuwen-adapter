@@ -226,11 +226,28 @@ export class GatewayTransport {
   sessionCreate(extra = {}) { return this.rpc(SESSION.CREATE, { ...extra }) }
   sessionDelete(sessionId, extra = {}) { return this.rpc(SESSION.DELETE, { session_id: sessionId, ...extra }) }
   sessionFork(sessionId, extra = {}) { return this.rpc(SESSION.FORK, { session_id: sessionId, ...extra }) }
+  sessionRename(sessionId, title, extra = {}) {
+    return this.rpc(SESSION.RENAME, { session_id: sessionId, title, ...extra })
+  }
+  sessionPin(sessionId, pinned, extra = {}) {
+    return this.rpc(SESSION.PIN, { session_id: sessionId, pinned: Boolean(pinned), ...extra })
+  }
   skillsList(extra = {}) { return this.rpc(SKILLS.LIST, { ...extra }) }
+  skillsToggle(name, enabled, extra = {}) {
+    return this.rpc(SKILLS.TOGGLE, { name, enabled: Boolean(enabled), ...extra })
+  }
   agentsList(extra = {}) { return this.rpc(AGENTS.LIST, { ...extra }) }
   teamTemplatesList(extra = {}) { return this.rpc(TEAM.TEMPLATES_LIST, { ...extra }) }
   commandsList(extra = {}) { return this.rpc(COMMANDS.LIST, { ...extra }) }
   compact(sessionId, extra = {}) { return this.rpc(COMMANDS.COMPACT, { session_id: sessionId, ...extra }) }
+  goal(sessionId, { action, objective, ...extra } = {}) {
+    return this.rpc(COMMANDS.GOAL, {
+      session_id: sessionId,
+      ...(action !== undefined ? { action } : {}),
+      ...(objective !== undefined ? { objective } : {}),
+      ...extra,
+    })
+  }
   workflows(sessionId, action = 'list', extra = {}) {
     return this.rpc(SWARM.WORKFLOWS, { session_id: sessionId, action, ...extra })
   }

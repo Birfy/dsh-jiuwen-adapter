@@ -71,20 +71,33 @@ Verified first: dsh `dsh-compaction-basic` calls `ctx.llm.stream({ purpose: 'com
 
 When the host provides `ctx.commands` (`@deepseek-ai/dsh-commands`; web UI, ACP and other command-capable surfaces), the adapter registers one namespaced command — it does not shadow dsh's own `/compact`, `/goal`, `/plan`, …:
 
-| Command | Jiuwen RPC |
+| Command | Jiuwen RPC / behaviour |
 |---|---|
-| `/jiuwen status` | `models.list` (active model) + `session.get_metadata`; shows dsh → Jiuwen session mapping and turns |
+| `/jiuwen status` | `models.list` + `session.get_metadata`; mapping, turns, session overrides (mode/skills/agentTemplate), title |
 | `/jiuwen models` | `models.list` (★ = Jiuwen default) |
-| `/jiuwen model <name\|default>` | validated against `models.list`; persists a per-session `model_name` override for following `chat.send` |
+| `/jiuwen model <name\|default>` | validated against `models.list`; per-session `modelName` for following `chat.send` |
+| `/jiuwen mode [name\|default]` | show/set per-session `chatMode` (`default` clears); applied on following `chat.send` |
+| `/jiuwen pause` / `resume` | `chat.interrupt {intent:'pause'\|'resume'}` |
+| `/jiuwen rename <title>` | `session.rename` |
+| `/jiuwen pin [on\|off]` | `session.pin` (default on) |
+| `/jiuwen fork` | `session.fork`; reports new `session_id` (does not overwrite the current local mapping) |
+| `/jiuwen unmap` | drop local dsh↔Jiuwen mapping only (no Gateway delete) |
+| `/jiuwen delete` | `session.delete` then clear local mapping |
+| `/jiuwen goal [get\|set <text>\|pause\|resume\|clear]` | `command.goal` (default get) |
+| `/jiuwen workflows [list\|get <id>]` | `command.workflows` (default list) |
+| `/jiuwen history` | `history.list_turns` / `history.get` (capped ~15 turns) |
 | `/jiuwen compact` | `command.compact` on the mapped Jiuwen session |
 | `/jiuwen interrupt` | `chat.interrupt {intent:'cancel'}` |
 | `/jiuwen sessions` / `skills` / `agents` / `mcp` | `session.list` / `skills.list` / `agents.list` / `mcp.list` |
+| `/jiuwen mcp-reset` | disconnect + delete the dsh MCP registration (passthrough recovery) |
+
+Per-session overrides (`modelName`, `chatMode`, `skills`, `agentTemplateName`) live in the session map file; request `providerOptions.jiuwen` and catalog model fields still win over the mapping.
 
 `registerCommands: false` (`JIUWEN_REGISTER_COMMANDS=0`) disables it; the same handler is available as `ctx.jiuwenAdapter.command(sessionId, 'models')`. dsh headless has no command parser (a `/…` task is sent as text), so use the web UI / ACP there.
 
-Live (dsh 0.2.1-rc.2, via `ctx.commands.execute(agent, …)` inside headless): registry lists `compact, feedback, goal, jiuwen, permission, plan`; `/jiuwen status`, `models`, `model doubao-seed-2.0-mini`, `model nosuch` (rejected with the available list) and `skills` all returned from the live gateway.
+Live (dsh 0.2.1-rc.2, via `ctx.commands.execute(agent, …)` inside headless): registry lists `compact, feedback, goal, jiuwen, permission, plan`; `/jiuwen status`, `models`, `model doubao-seed-2.0-mini`, `model nosuch` (rejected with the available list) and `skills` all returned from the live gateway. Newer session RPCs (`session.rename` / `pin` / `fork` / `delete`, `command.goal`, `skills.toggle`) depend on the Gateway build — probe with `ctx.jiuwenAdapter.gateway.rpc` if a live call fails.
 
-中文：在 dsh 命令注册表上注册 `/jiuwen <子命令>`，映射到 Jiuwen 的 status / models / 模型切换 / compact / interrupt / sessions / skills / agents / mcp。
+中文：在 dsh 命令注册表上注册 `/jiuwen <子命令>`，覆盖 status / models / model / mode / pause / resume / rename / pin / fork / unmap / delete / goal / workflows / history / compact / interrupt / sessions / skills / agents / mcp / mcp-reset；会话级 mode/skills/agentTemplate 可覆盖默认配置。
 
 ## 6. `jiuwen/event` (declared Cordis event)
 

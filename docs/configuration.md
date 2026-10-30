@@ -32,10 +32,10 @@ Precedence: **environment variable > Cordis plugin config > default**（`provide
 | `emitUsage` | — | `true` | Emit `usage` chunk from `chat.usage_summary` |
 | `historyMode` | `JIUWEN_HISTORY_MODE` | `gateway` | `gateway`: after turn 1 send only new user text; `transcript`: always recent transcript |
 | `ignoreMessagePatterns` | — | `['^Current runtime context\\.']` | Regexes; matching user blocks (from match onward) are not forwarded |
-| `chatMode` | `JIUWEN_CHAT_MODE` | = `workMode` | chat.send `mode` (`agent`, `agent.plan`, `agent.fast`, `agent.work.normal`, `agent.code.normal`, `team`, `team.work.normal`, …) |
-| `agentTemplateName` | `JIUWEN_AGENT_TEMPLATE` | — | Jiuwen expert (`agent_template_name`) |
+| `chatMode` | `JIUWEN_CHAT_MODE` | = `workMode` | chat.send `mode` (`agent`, `agent.plan`, `agent.fast`, `agent.work.normal`, `agent.code.normal`, `team`, `team.work.normal`, …). Per-session override via `/jiuwen mode` (stored in the session map) |
+| `agentTemplateName` | `JIUWEN_AGENT_TEMPLATE` | — | Jiuwen expert (`agent_template_name`); may also be stored per-session in the map |
 | `agentGroupName` | `JIUWEN_AGENT_GROUP` | — | Jiuwen expert group for Team (`agent_group_name`) |
-| `skills` | `JIUWEN_SKILLS` (comma list) | — | Selected Jiuwen skills |
+| `skills` | `JIUWEN_SKILLS` (comma list) | — | Selected Jiuwen skills; may also be stored per-session in the map |
 | `forwardModelName` | `JIUWEN_FORWARD_MODEL=0` disables | `true` | Send non-catalog model ids as `model_name` |
 | `supportsUserInteraction` | `JIUWEN_SUPPORTS_USER_INTERACTION=1\|0` | `auto` | `auto`: tell Jiuwen it may ask when the host has `ctx.userQuestions` and a live answerer (not headless); questions are answered via dsh user-questions (see [dsh-integration.md](./dsh-integration.md)) |
 | `questionTimeoutMs` | `JIUWEN_QUESTION_TIMEOUT_MS` | `600000` | Max wait for a dsh answer, then `noUiAnswer` |
