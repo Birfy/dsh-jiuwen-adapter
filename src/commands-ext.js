@@ -56,6 +56,30 @@ const onOff = (raw) => { const v = String(raw || '').toLowerCase(); return ['on'
 const getPath = (obj, path) => String(path).split('.').filter(Boolean).reduce((o, k) => (o == null ? undefined : o[k]), obj)
 const jobLine = j2 => `- ${j2.id || j2.job_id}${j2.name ? `  ${short(j2.name, 40)}` : ''}${j2.enabled === false ? ' [disabled]' : (j2.enabled ? ' [enabled]' : '')}${j2.cron_expr ? `  "${j2.cron_expr}"` : ''}`
 
+const softGitMsg = (msg) => /git (operations )?not available|FORBIDDEN|git (is )?disabled|not enabled for this project/i.test(String(msg || ''))
+async function resolveProjectId(g, raw) {
+  if (raw) return raw
+  const l = await g.rpc('project.list', {}).catch(() => null)
+  const ps = l?.projects || []
+  return (ps.find(p => p.is_default) || ps[0])?.project_id || 'default'
+}
+function flattenTree(nodes, out = [], depth = 0) {
+  for (const n of nodes || []) {
+    const mark = (n.type === 'dir' || n.type === 'directory') ? '📁' : '📄'
+    out.push(`${'  '.repeat(depth)}${mark} ${n.path || n.name || '?'}${n.size != null ? ` (${n.size}b)` : ''}`)
+    if (Array.isArray(n.children)) flattenTree(n.children, out, depth + 1)
+  }
+  return out
+}
+function fileLines(files) {
+  if (!Array.isArray(files)) return []
+  return files.slice(0, 40).map(f => {
+    if (typeof f === 'string') return `- ${f}`
+    const mark = (f.type === 'dir' || f.type === 'directory') ? '📁' : '📄'
+    return `- ${mark} ${f.path || f.name || j(f, 40)}${f.size != null ? ` (${f.size}b)` : ''}`
+  })
+}
+
 /** Normalise a cron expr to 5 or 7 fields (Gateway rejects 6). 5-field → Quartz 7-field with second=0, year=*. */
 export function normalizeCronExpr(expr) {
   const parts = String(expr || '').trim().split(/\s+/).filter(Boolean)
@@ -277,17 +301,43 @@ export const EXT = {
     },
   },
   'git': {
-    usage: 'git [status|diff] [project_id]', group: 'Config & policy', methods: ['project.git.status'],
+    usage: 'git [status|diff|probe|turns|turn <id>] [project_id]', group: 'Config & policy', methods: ['project.git.status', 'project.git.probe', 'project.git.turn_diff_list', 'project.git.turn_diff'],
     async run({ g, rest }) {
       const a = (rest[0] || 'status').toLowerCase()
-      if (!['status', 'diff'].includes(a)) return 'Usage: /jiuwen git [status|diff] [project_id]'
-      let pid = rest[1]
-      if (!pid) {
-        const l = await g.rpc('project.list', {}).catch(() => null)
-        const ps = l?.projects || []
-        pid = (ps.find(p => p.is_default) || ps[0])?.project_id || 'default'
+      if (!['status', 'diff', 'probe', 'turns', 'turn'].includes(a)) return 'Usage: /jiuwen git [status|diff|probe|turns|turn <id>] [project_id]'
+      const pid = await resolveProjectId(g, a === 'turn' ? rest[2] : rest[1])
+      const call = async (method, params) => {
+        try { return await g.rpc(method, params) }
+        catch (e) {
+          const msg = String(e?.message || e)
+          if (softGitMsg(msg)) return { __soft: true, message: msg }
+          throw e
+        }
       }
-      const r = await g.rpc(a === 'diff' ? 'project.git.diff_status' : 'project.git.status', { project_id: pid })
+      if (a === 'probe') {
+        const r = await call('project.git.probe', { project_id: pid })
+        if (r?.__soft) return `Jiuwen git probe (${pid}): soft-failed — git disabled or unavailable (${short(r.message, 120)}).`
+        return `Jiuwen git probe (${pid}): ${r?.enabled === false ? 'disabled' : 'ok'}${r?.repo_root ? `, root=${r.repo_root}` : ''}${r?.status ? `, status=${r.status}` : ''}${r?.hint ? ` — ${short(r.hint, 120)}` : (r && !r.__soft ? `: ${j(r, 400)}` : '')}`
+      }
+      if (a === 'turns') {
+        const r = await call('project.git.turn_diff_list', { project_id: pid })
+        if (r?.__soft) return `Jiuwen git turns (${pid}): soft-failed — git disabled or unavailable (${short(r.message, 120)}).`
+        const turns = r?.turns || r?.items || r?.diffs || []
+        return Array.isArray(turns) && turns.length
+          ? `Jiuwen git turn diffs (${pid}, ${turns.length}):
+${turns.slice(0, 15).map(t => `- ${t.turn_id || t.id || '?'}: ${(t.files || t.changed_files || []).length || t.file_count || '?'} files${t.summary ? ` — ${short(t.summary, 60)}` : ''}`).join('\n')}`
+          : `Jiuwen git turn diffs (${pid}): none${r ? ` — ${j(r, 300)}` : ''}`
+      }
+      if (a === 'turn') {
+        const tid = rest[1]
+        if (!tid) return 'Usage: /jiuwen git turn <turn_id> [project_id]'
+        const r = await call('project.git.turn_diff', { project_id: pid, turn_id: tid })
+        if (r?.__soft) return `Jiuwen git turn ${tid} (${pid}): soft-failed — git disabled or unavailable (${short(r.message, 120)}).`
+        const files = r?.files || r?.changes || []
+        return `Jiuwen git turn ${tid} (${pid}): ${Array.isArray(files) && files.length ? files.slice(0, 30).map(f => `${f.status || '?'} ${f.path || f.file || j(f, 60)}`).join(', ') : j(r, 600)}`
+      }
+      const r = await call(a === 'diff' ? 'project.git.diff_status' : 'project.git.status', { project_id: pid })
+      if (r?.__soft) return `Jiuwen git ${a} (${pid}): soft-failed — git disabled or unavailable (${short(r.message, 120)}).`
       if (a === 'diff') {
         const files = r?.files || r?.changes || []
         return `Jiuwen git diff (${pid}): ${Array.isArray(files) && files.length ? files.slice(0, 30).map(f => `${f.status || '?'} ${f.path || f.file || j(f, 60)}`).join(', ') : j(r, 600)}`
@@ -328,6 +378,240 @@ export const EXT = {
       if ((rest[0] || 'formats') !== 'formats') return 'Usage: /jiuwen document formats (persist a file with /jiuwen doc persist <absolute host path>)'
       const r = await g.rpc('document.formats', {})
       return `Jiuwen forbidden document formats (${(r?.forbidden_formats || []).length}): ${(r?.forbidden_formats || []).join(' ')}`
+    },
+  },
+
+
+  // ── Round 4 read-only / soft-fail reversible ──
+  'skills files': {
+    usage: 'skills files <name> [path]', group: 'Skills & agents', methods: ['skills.files.list', 'skills.files.get'],
+    async run({ g, rest }) {
+      const name = rest[1]
+      if (!name) return 'Usage: /jiuwen skills files <name> [path]'
+      if (rest[2]) {
+        const path = rest.slice(2).join(' ')
+        const r = await g.rpc('skills.files.get', { name, path })
+        const body = r?.preview || r?.content || r?.text
+        return `Jiuwen skill file ${name}:${path}${r?.mime_type ? ` (${r.mime_type})` : ''}${r?.size != null ? `, ${r.size}b` : ''}:\n${body != null ? String(body).slice(0, 1500) : j(maskSecrets(r), 800)}`
+      }
+      const r = await g.rpc('skills.files.list', { name })
+      const files = r?.files || []
+      return `Jiuwen skill files ${r?.name || name} (${files.length}):\n${fileLines(files).join('\n') || 'none'}`
+    },
+  },
+  'skills retrieval': {
+    usage: 'skills retrieval [status|tree]', group: 'Skills & agents', methods: ['skills.retrieval.status', 'skills.retrieval.tree'],
+    async run({ g, rest }) {
+      const a = (rest[1] || 'status').toLowerCase()
+      if (a === 'tree') {
+        const r = await g.rpc('skills.retrieval.tree', {})
+        if (r?.unsupported || r?.tree_supported === false) return `Jiuwen skill retrieval tree: unsupported on this Gateway (${short(r?.detail, 160) || 'use skills list / search'}).`
+        const nodes = r?.nodes || r?.tree || []
+        return `Jiuwen skill retrieval tree (${nodes.length} top):\n${flattenTree(nodes).slice(0, 40).join('\n') || j(r, 600)}`
+      }
+      if (a !== 'status') return 'Usage: /jiuwen skills retrieval [status|tree]'
+      const r = await g.rpc('skills.retrieval.status', {})
+      return `Jiuwen skill retrieval: enabled=${r?.enabled}, index=${r?.index_enabled}, mode=${r?.mode || '?'}, strategy=${r?.effective_strategy || '?'}, candidates=${r?.candidate_scale || '?'} (~${r?.estimated_candidate_tokens ?? '?'} / budget ${r?.candidate_budget_tokens ?? '?'} tok)`
+    },
+  },
+  'skills graph': {
+    usage: 'skills graph [status|get]', group: 'Skills & agents', methods: ['skills.graph.status', 'skills.graph.get'],
+    async run({ g, rest }) {
+      const a = (rest[1] || 'status').toLowerCase()
+      if (a === 'get') {
+        const r = await g.rpc('skills.graph.get', {})
+        if (r?.success === false) return `Jiuwen skill graph: not ready — ${short(r?.detail || r?.error, 200)}`
+        return `Jiuwen skill graph: ${j(maskSecrets(r), 900)}`
+      }
+      if (a !== 'status') return 'Usage: /jiuwen skills graph [status|get]'
+      const r = await g.rpc('skills.graph.status', {})
+      return `Jiuwen skill graph status: exists=${r?.exists}, stale=${r?.stale}, skills=${r?.skill_count ?? '?'}, added=${r?.added_count ?? '?'}, removed=${r?.removed_count ?? '?'}${r?.graph_dir ? `, dir=${r.graph_dir}` : ''}`
+    },
+  },
+  'skills evolution': {
+    usage: 'skills evolution <name> [status|get]', group: 'Skills & agents', methods: ['skills.evolution.status', 'skills.evolution.get'],
+    async run({ g, rest }) {
+      const name = rest[1]
+      if (!name) return 'Usage: /jiuwen skills evolution <name> [status|get]'
+      const a = (rest[2] || 'status').toLowerCase()
+      if (a === 'get') {
+        const r = await g.rpc('skills.evolution.get', { name })
+        return `Jiuwen skill evolution ${r?.name || name}: exists=${r?.exists}, valid=${r?.valid}, version=${r?.version || '?'}, entries=${(r?.entries || []).length}`
+      }
+      if (a !== 'status') return 'Usage: /jiuwen skills evolution <name> [status|get]'
+      const r = await g.rpc('skills.evolution.status', { name })
+      return `Jiuwen skill evolution status ${r?.name || name}: exists=${r?.exists}${r?.updated_at ? `, updated=${r.updated_at}` : ''}`
+    },
+  },
+  'skills experience': {
+    usage: 'skills experience', group: 'Skills & agents', methods: ['skills.experience.list'],
+    async run({ g }) {
+      const r = await g.rpc('skills.experience.list', {})
+      const c = r?.candidates || r?.items || r?.experiences || []
+      return `Jiuwen skill experience: enabled=${r?.enabled}, candidates=${c.length}${c.length ? `:\n${c.slice(0, 10).map(x => `- ${x.name || x.id || j(x, 80)}`).join('\n')}` : ''}`
+    },
+  },
+  'template files': {
+    usage: 'template files <id> [path]', group: 'Skills & agents', methods: ['agent_templates.file.list', 'agent_templates.file.read'],
+    async run({ g, rest }) {
+      let id = rest[1]
+      if (!id) return 'Usage: /jiuwen template files <id|packageName> [path]'
+      if (!/^[0-9a-f]{16,}$/i.test(id)) {
+        const l = await g.rpc('agent_templates.list', {}).catch(() => null)
+        const hit = (l?.templates || []).find(t => [t.id, t.packageName, label(t.displayName)].includes(id))
+        if (hit?.id) id = hit.id
+      }
+      if (rest[2]) {
+        const path = rest.slice(2).join(' ')
+        const r = await g.rpc('agent_templates.file.read', { id, path })
+        const body = r?.preview || r?.content || r?.text
+        return `Jiuwen template file ${id}:${path}:\n${body != null ? String(body).slice(0, 1500) : j(maskSecrets(r), 800)}`
+      }
+      const r = await g.rpc('agent_templates.file.list', { id })
+      const tree = r?.tree || r?.files || []
+      const lines = Array.isArray(tree) && tree[0]?.children !== undefined ? flattenTree(tree) : fileLines(tree)
+      return `Jiuwen template files ${id} (${lines.length}):\n${lines.slice(0, 40).join('\n') || 'none'}`
+    },
+  },
+  'group files': {
+    usage: 'group files <id> [path]', group: 'Skills & agents', methods: ['agent_groups.file.list', 'agent_groups.file.read'],
+    async run({ g, rest }) {
+      const id = rest[1]
+      if (!id) return 'Usage: /jiuwen group files <id> [path]'
+      if (rest[2]) {
+        const path = rest.slice(2).join(' ')
+        const r = await g.rpc('agent_groups.file.read', { id, path })
+        const body = r?.preview || r?.content || r?.text
+        return `Jiuwen group file ${id}:${path}:\n${body != null ? String(body).slice(0, 1500) : j(maskSecrets(r), 800)}`
+      }
+      const r = await g.rpc('agent_groups.file.list', { id })
+      const tree = r?.tree || r?.files || []
+      const lines = Array.isArray(tree) && tree[0]?.children !== undefined ? flattenTree(tree) : fileLines(tree)
+      return `Jiuwen group files ${id} (${lines.length}):\n${lines.slice(0, 40).join('\n') || 'none'}`
+    },
+  },
+  'packages': {
+    usage: 'packages [list|show <id|name>]', group: 'System', methods: ['plugin_packages.list', 'plugin_packages.show'],
+    async run({ g, rest }) {
+      const a = (rest[0] || 'list').toLowerCase()
+      if (a === 'show') {
+        if (!rest[1]) return 'Usage: /jiuwen packages show <id|packageName>'
+        let id = rest[1]
+        if (!/^[0-9a-f]{16,}$/i.test(id)) {
+          const l = await g.rpc('plugin_packages.list', {}).catch(() => null)
+          const hit = (l?.packages || []).find(p => [p.id, p.packageName, label(p.displayName)].includes(id))
+          if (hit?.id) id = hit.id
+        }
+        const r = await g.rpc('plugin_packages.show', { id })
+        const p = r?.package || r || {}
+        return `Jiuwen plugin package ${label(p.displayName) || p.packageName || id} (${p.id || id}): ${short(label(p.displayDescription), 200) || '(no description)'}${p.installed !== undefined ? `\ninstalled: ${p.installed}` : ''}`
+      }
+      if (a !== 'list') return 'Usage: /jiuwen packages [list|show <id|name>]'
+      const r = await g.rpc('plugin_packages.list', {})
+      const list = r?.packages || []
+      return `Jiuwen plugin packages (${list.length}): ${list.slice(0, 20).map(p => `${p.packageName || label(p.displayName) || p.id}${p.installed === false ? ' (not installed)' : ''}`).join(', ') || 'none'}`
+    },
+  },
+  'extensions': {
+    usage: 'extensions', group: 'System', methods: ['extensions.list'],
+    async run({ g }) {
+      const r = await g.rpc('extensions.list', {})
+      const list = r?.extensions || r?.items || []
+      return `Jiuwen extensions (${list.length}): ${list.map(x => x.name || x.id || j(x, 40)).join(', ') || 'none'}`
+    },
+  },
+  'vendors': {
+    usage: 'vendors [list|models <vendor_key> <plan>]', group: 'Models & mode', methods: ['vendors.list', 'vendors.fetch_models'],
+    async run({ g, rest, tokens }) {
+      const a = (rest[0] || 'list').toLowerCase()
+      if (a === 'models') {
+        const vendor_key = rest[1]
+        const plan = rest[2]
+        if (!vendor_key || !plan) return 'Usage: /jiuwen vendors models <vendor_key> <plan>  (plan: token_plan|coding_plan|custom_api; never passes api_key — Gateway falls back to preset)'
+        if (Object.keys(kv(tokens.slice(1))).some(k => SECRET_KEY.test(k))) return 'Refusing to pass credentials through a slash command; configure keys in Jiuwen itself.'
+        const r = await g.rpc('vendors.fetch_models', { vendor_key, plan })
+        const models = r?.models || []
+        return `Jiuwen vendor models ${vendor_key}/${plan} (source=${r?.source || 'remote'}${r?.reason ? `, ${short(r.reason, 80)}` : ''}): ${models.slice(0, 20).join(', ') || 'none'}${models.length > 20 ? ` …+${models.length - 20}` : ''}`
+      }
+      if (a !== 'list') return 'Usage: /jiuwen vendors [list|models <vendor_key> <plan>]'
+      const r = await g.rpc('vendors.list', {})
+      const vendors = r?.vendors || r || {}
+      const keys = typeof vendors === 'object' && !Array.isArray(vendors) ? Object.keys(vendors) : (Array.isArray(vendors) ? vendors.map(v => v.key || v.name || v.id) : [])
+      return `Jiuwen vendors (${keys.length} groups): ${keys.slice(0, 30).join(', ') || j(maskSecrets(r), 500)}`
+    },
+  },
+  'openai': {
+    usage: 'openai [auth|models]', group: 'Models & mode', methods: ['openai_account.auth.status', 'openai_account.models.list'],
+    async run({ g, rest }) {
+      const a = (rest[0] || 'auth').toLowerCase()
+      if (a === 'models') {
+        const r = maskSecrets(await g.rpc('openai_account.models.list', {}))
+        const models = r?.models || []
+        return `Jiuwen OpenAI-account models (${models.length}${r?.auth?.authenticated === false ? ', not authenticated' : ''}): ${models.slice(0, 15).join(', ') || 'none'}`
+      }
+      if (!['auth', 'status'].includes(a)) return 'Usage: /jiuwen openai [auth|models]'
+      const r = maskSecrets(await g.rpc('openai_account.auth.status', {}))
+      return `Jiuwen OpenAI-account auth: authenticated=${r?.authenticated}, has_refresh=${r?.has_refresh_token}, needs_refresh=${r?.needs_refresh}${r?.error ? `, error=${short(r.error, 80)}` : ''}${r?.base_url ? `\nbase: ${r.base_url}` : ''}`
+    },
+  },
+  'health': {
+    usage: 'health', group: 'System', methods: ['health_check.get_conf'],
+    async run({ g }) {
+      const r = await g.rpc('health_check.get_conf', {})
+      const ah = r?.active_hours || {}
+      return `Jiuwen health_check: every=${r?.every ?? '?'}s, target=${r?.target || '?'}, active_hours=${ah.start || '?'}-${ah.end || '?'}`
+    },
+  },
+  'projects pinned': {
+    usage: 'projects pinned [project_id]', group: 'Config & policy', methods: ['project.pinned_sessions'],
+    async run({ g, rest }) {
+      const pid = await resolveProjectId(g, rest[1])
+      const r = await g.rpc('project.pinned_sessions', { project_id: pid })
+      const list = r?.sessions || []
+      return list.length
+        ? `Jiuwen pinned sessions (${pid}, ${list.length}):\n${list.slice(0, 15).map(s => `- ${s.session_id || s.id}${s.title ? `  ${short(s.title, 40)}` : ''}`).join('\n')}`
+        : `No pinned sessions for project ${pid}`
+    },
+  },
+  'projects cron': {
+    usage: 'projects cron [project_id]', group: 'Config & policy', methods: ['project.get_cron_sessions'],
+    async run({ g, rest }) {
+      const pid = await resolveProjectId(g, rest[1])
+      const r = await g.rpc('project.get_cron_sessions', { project_id: pid })
+      const list = r?.sessions || []
+      return list.length
+        ? `Jiuwen cron sessions (${pid}, ${r?.total ?? list.length}):\n${list.slice(0, 15).map(s => `- ${s.session_id || s.id}${s.cron_id ? ` cron=${s.cron_id}` : ''}${s.title ? `  ${short(s.title, 40)}` : ''}`).join('\n')}`
+        : `No cron-triggered sessions for project ${pid}`
+    },
+  },
+  'publish': {
+    usage: 'publish [describe|status|records|local] kind=<skill|agent_template|agent_group|plugin|mcp> local_id=<id>', group: 'System', methods: ['assets.publish.describe', 'assets.publish.status', 'assets.publish.records', 'assets.publish.local_status'],
+    async run({ g, rest, tokens }) {
+      const a = (rest[0] || 'describe').toLowerCase()
+      const method = { describe: 'assets.publish.describe', status: 'assets.publish.status', records: 'assets.publish.records', local: 'assets.publish.local_status', local_status: 'assets.publish.local_status' }[a]
+      if (!method) return 'Usage: /jiuwen publish [describe|status|records|local] kind=<kind> local_id=<id>  (read-only; Hub auth soft-fails)'
+      const p = kv(tokens.slice(1))
+      if (Object.keys(p).some(k => SECRET_KEY.test(k)) || p.auth) return 'Refusing to pass Hub credentials through a slash command.'
+      if (!p.kind || !p.local_id) return 'Usage: /jiuwen publish [describe|status|records|local] kind=<skill|agent_template|agent_group|plugin|mcp> local_id=<id>'
+      try {
+        const r = maskSecrets(await g.rpc(method, { kind: p.kind, local_id: p.local_id }))
+        return `Jiuwen assets.publish ${a} ${p.kind}/${p.local_id}: ${j(r, 900)}`
+      } catch (e) {
+        const msg = String(e?.message || e)
+        if (/AUTH_REQUIRED|RESOURCE_NOT_FOUND|INVALID_KIND|INVALID_PARAMETERS/i.test(msg)) {
+          return `Jiuwen assets.publish ${a} ${p.kind}/${p.local_id}: soft-failed — ${short(msg, 160)} (read-only Hub publish; sign in via Jiuwen UI if needed).`
+        }
+        throw e
+      }
+    },
+  },
+  'mcp cancel': {
+    usage: 'mcp cancel <name>', group: 'System', methods: ['mcp.cancel_connect'],
+    async run({ g, rest }) {
+      const name = rest[1]
+      if (!name) return 'Usage: /jiuwen mcp cancel <name>  (abort in-flight mcp.connect / wait_auth; idempotent)'
+      const r = await g.rpc('mcp.cancel_connect', { name })
+      return `Jiuwen mcp.cancel_connect ${name}: ${j(r, 400)}`
     },
   },
 
@@ -412,6 +696,25 @@ export const EXT = {
       return `Created Jiuwen heartbeat job ${job.id || '?'} "${job.name || p.name}" every ${every}s ${job.enabled ?? enabled ? 'enabled' : 'disabled'}. Remove with /jiuwen heartbeat delete ${job.id || '<id>'} confirm`
     },
   },
+
+  'heartbeat update': {
+    usage: 'heartbeat update <id> key=value…', group: 'Schedules', methods: ['heartbeat.job.update'],
+    async run({ g, sid, rest, tokens }) {
+      const id = rest[1]
+      const patch = kv(tokens.slice(2))
+      if (!id || !Object.keys(patch).length) return 'Usage: /jiuwen heartbeat update <id> name=<n> [prompt="<text>"] [every=<seconds>] [enabled=on|off]'
+      if (patch.every || patch.interval_seconds) {
+        const every = Number(patch.every || patch.interval_seconds)
+        if (!Number.isFinite(every) || every < 60) return 'heartbeat update: every must be ≥ 60 seconds'
+        patch.schedule = { type: 'interval', interval_seconds: every }
+        delete patch.every; delete patch.interval_seconds
+      }
+      const en = onOff(patch.enabled); if (en !== undefined) patch.enabled = en
+      const r = await g.rpc('heartbeat.job.update', { id, session_id: sid, patch })
+      const job = r?.job || r || {}
+      return `Updated Jiuwen heartbeat job ${id}: ${job.name || patch.name || ''} ${job.enabled === false ? 'disabled' : (job.enabled ? 'enabled' : '')}`.replace(/\s+/g, ' ').trim()
+    },
+  },
   'heartbeat toggle': {
     usage: 'heartbeat toggle <id> <on|off>', group: 'Schedules', methods: ['heartbeat.job.toggle'],
     async run({ g, sid, rest }) {
@@ -472,6 +775,26 @@ export const EXT = {
         return `Deleted Jiuwen permission rule ${id}.`
       }
       return 'Usage: /jiuwen permissions rule [add|update|delete] …'
+    },
+  },
+
+  'permissions set-all': {
+    usage: 'permissions set-all tool=level… confirm', group: 'Config & policy', methods: ['permissions.tools.set'],
+    async run({ g, tokens }) {
+      // Distinct from permissions.tools.update (single tool): replaces the entire user overlay.
+      const pairs = kv(tokens.slice(1))
+      const tools = {}
+      for (const [k, v] of Object.entries(pairs)) {
+        if (k === 'confirm' || k === '--confirm') continue
+        const level = String(v || '').toLowerCase()
+        if (!['allow', 'ask', 'deny'].includes(level)) return `Usage: /jiuwen permissions set-all tool=allow|ask|deny … confirm  (replaces user overlay; invalid level for ${k})`
+        tools[k] = level
+      }
+      if (!Object.keys(tools).length) return 'Usage: /jiuwen permissions set-all tool=allow|ask|deny … confirm  (bulk replace of user tool overlay; prefer /jiuwen permissions set for one tool)'
+      const no = needConfirm(tokens, 'replace the entire user permissions.tools overlay')
+      if (no) return no
+      await g.rpc('permissions.tools.set', { tools })
+      return `Replaced Jiuwen user permissions.tools overlay (${Object.keys(tools).length} tools): ${Object.entries(tools).map(([k, v]) => `${k}=${v}`).join(', ')}. Single-tool edits: /jiuwen permissions set|unset.`
     },
   },
   'continue-queued': {

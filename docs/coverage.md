@@ -1,19 +1,19 @@
 # Coverage: dsh-jiuwen-adapter vs JiuwenSwarm 0.2.7 Gateway
 
-Audit date: 2026-10-30 (UTC+8). Recounted after Round 3 (`heartbeat.job.create`, `cron.job.update`). Prior base: P0–P3 mapping work. Source of truth: `jiuwenswarm/gateway/channel_manager/web/app_web_handlers.py` (`_FORWARD_REQ_METHODS`, `_FORWARD_NO_LOCAL_HANDLER_METHODS`, every `register_method` / `_register_*` / tuple table) + `web/lifecycle_handlers.py`, in `/workspace/jiuwen-0.2.7/.venv`. TUI-only = strings in `channel_manager/tui/` not routed by the web channel.
+Audit date: 2026-10-30 (UTC+8). Recounted after Round 4 (skills files/retrieval/graph/evolution/experience, template/group files, packages, extensions, vendors, openai_account, health_check, project pinned/cron/git turns, assets.publish reads, mcp.cancel_connect, permissions.tools.set, heartbeat.job.update). Prior: Round 3. Source of truth: `jiuwenswarm/gateway/channel_manager/web/app_web_handlers.py` (`_FORWARD_REQ_METHODS`, `_FORWARD_NO_LOCAL_HANDLER_METHODS`, every `register_method` / `_register_*` / tuple table) + `web/lifecycle_handlers.py`, in `/workspace/jiuwen-0.2.7/.venv`. TUI-only = strings in `channel_manager/tui/` not routed by the web channel.
 
 ## Summary
 
 | Bucket | Count |
 |---|---|
 | Web `/ws` methods (total) | 334 |
-| Covered by adapter | 106 |
+| Covered by adapter | 138 |
 | Intentionally excluded (irreversible / credentials / host side effects) | 99 |
-| Uncovered | 129 |
+| Uncovered | 97 |
 | TUI-only (not reachable on /ws) | 35 |
 
-- Raw coverage: 106/334 = **31.7%** (was 104/334 = 31.1%; earlier 63/334 = 18.9%)
-- Coverage of the safe surface (total minus excluded): 106/235 = **45.1%** (was 104/235 = 44.3%)
+- Raw coverage: 138/334 = **41.3%** (was 106/334 = 31.7%; earlier 63/334 = 18.9%)
+- Coverage of the safe surface (total minus excluded): 138/235 = **58.7%** (was 106/235 = 45.1%)
 - Deletes moved from excluded to covered behind an explicit `confirm` argument: `cron.job.delete`, `heartbeat.job.delete`, `permissions.rules.delete`.
 - `schedule.*` (7) are wired but stay uncovered: live 0.2.7 `/ws` answers `unknown method`; the feature-detect cache hides them.
 
@@ -21,37 +21,40 @@ Adapter calls that 0.2.7 `/ws` does **not** route (live probe → `unknown metho
 
 Live probe 2026-10-30 (P1–P3, UTC+8): every newly covered method answered on :19000 except `schedule.*` (unknown method → soft-fail, hidden) — `project.git.*` reach the handler but the default project has git disabled; `models.validate` needs an api_key the adapter never passes; writes were reversed (cron job created disabled → toggled → deleted; permission rule added → updated → deleted; document persisted → `media.discard`; throwaway chat session deleted).
 
+
+Live probe Round 4 (2026-10-30, UTC+8, Cordis Context + `api.command`): 26 ok + 6 soft-fail (retrieval tree unsupported, graph not built, git disabled on default project, assets.publish AUTH_REQUIRED) + 0 fail; heartbeat create→update→delete reversed; Gateway state identical after (20 sessions, 0 cron, 43 tools, 37 rules, heartbeat conf, empty user_permissions overlay). `vendors.fetch_models` never passes `api_key` (preset fallback). `mcp.wait_auth` not mapped (holds RPC open for minutes). `permissions.tools.set` is bulk user-overlay replace (needs `confirm`); single-tool edits stay on `permissions.tools.update`.
+
 Earlier live probe (ws://127.0.0.1:19000/ws, empty params, read-only): routed ok: `models.list`, `permissions.tools.get`, `permissions.rules.get`, `session.archived.list`, `config.get`; `permissions.rules.update` and `tts.synthesize` reach validation (routed). Unknown on /ws: the 8 above plus `command.context`, `command.status`, `session.preview`, `memory.open`, `session.color_set`.
 
 ## Uncovered by area
 
 | Area | Methods | Usefulness |
 |---|---|---|
-| skills | 28: `skills.clawhub.download`, `skills.clawhub.search`, `skills.create_from_knowledge`, `skills.evolution.get`, `skills.evolution.save`, `skills.evolution.status`, `skills.experience.list`, `skills.experience.request`, `skills.files.get`, `skills.files.list`, `skills.graph.build`, `skills.graph.cancel`, `skills.graph.get`, `skills.graph.status`, `skills.marketplace.toggle`, `skills.rebuild`, `skills.retrieval.index_build`, `skills.retrieval.index_cancel`, `skills.retrieval.status`, `skills.retrieval.tree`, `skills.skillnet.evaluate`, `skills.skillnet.install_status`, `skills.skillnet.search`, `skills.swarmskillshub.detail`, `skills.swarmskillshub.recommend`, `skills.teamskillshub.info`, `skills.teamskillshub.search`, `skills.teamskillshub.validate` | skill discovery/search/retrieval/graph/evolution reads; search/online now covered; files/graph/evolution remain |
+| skills | 19: `skills.clawhub.download`, `skills.clawhub.search`, `skills.create_from_knowledge`, `skills.evolution.save`, `skills.experience.request`, `skills.graph.build`, `skills.graph.cancel`, `skills.marketplace.toggle`, `skills.rebuild`, `skills.retrieval.index_build`, `skills.retrieval.index_cancel`, `skills.skillnet.evaluate`, `skills.skillnet.install_status`, `skills.skillnet.search`, `skills.swarmskillshub.detail`, `skills.swarmskillshub.recommend`, `skills.teamskillshub.info`, `skills.teamskillshub.search`, `skills.teamskillshub.validate` | files/retrieval/graph/evolution/experience reads covered in Round 4; hub install/search/build writes remain |
 | personal_context | 18: `personal_context.context.get_node`, `personal_context.context.get_source`, `personal_context.context.search_pages`, `personal_context.context.stream_graph`, `personal_context.context.stream_tree`, `personal_context.fetch.create_service`, `personal_context.fetch.get_authorization_status`, `personal_context.fetch.get_run_status`, `personal_context.fetch.patch_service`, `personal_context.fetch.run_one`, `personal_context.fetch.start_service`, `personal_context.fetch.stop_run`, `personal_context.fetch.stop_service`, `personal_context.runtime.select_model`, `personal_context.runtime.start_agent_use`, `personal_context.runtime.start_collection`, `personal_context.runtime.stop_agent_use`, `personal_context.runtime.stop_collection` | personal-context runtime & fetch services; niche, mostly UI-driven |
-| project | 10: `project.create`, `project.get_cron_sessions`, `project.git.probe`, `project.git.turn_diff`, `project.git.turn_diff_list`, `project.pin`, `project.pinned_sessions`, `project.rename`, `project.restore`, `project.sessions.archive` | project CRUD-lite, pinning, git status/diff (read parts useful: git.status, git.diff_status, turn_diff) |
+| project | 5: `project.create`, `project.pin`, `project.rename`, `project.restore`, `project.sessions.archive` | pinned/cron sessions + git probe/turn_diff(_list) covered (soft-fail when git disabled); CRUD-lite remains |
 | channel | 10: `channel.dingtalk.get_conf`, `channel.discord.get_conf`, `channel.feishu.get_conf`, `channel.get`, `channel.slack.get_conf`, `channel.telegram.get_conf`, `channel.wechat.get_conf`, `channel.wecom.get_conf`, `channel.whatsapp.get_conf`, `channel.xiaoyi.get_conf` | IM channel conf reads (get_conf); low value inside DSH |
 | rsi | 10: `rsi.artifact.download`, `rsi.artifact.files.get`, `rsi.artifact.files.list`, `rsi.harness.rollback`, `rsi.harness.versions.list`, `rsi.report.get`, `rsi.task.get`, `rsi.task.list`, `rsi.tree.get`, `rsi.usage.get` | RSI dataset/task/report reads; research-only |
-| heartbeat | 1: `heartbeat.job.update` | create/toggle/run/cancel/delete covered in Round 3; update still open |
+| heartbeat | 0 | create/toggle/run/cancel/delete/update covered |
 | schedule | 8: `schedule.cancel`, `schedule.check_config`, `schedule.create`, `schedule.list`, `schedule.logs`, `schedule.run`, `schedule.status`, `schedule.update_config` | schedule list/status/logs — useful read-only |
 | cron | 0 | create/toggle/run/update/delete covered |
-| agent_groups | 3: `agent_groups.create`, `agent_groups.file.list`, `agent_groups.file.read` | agent group list/show/file reads |
-| agent_templates | 4: `agent_templates.create`, `agent_templates.file.list`, `agent_templates.file.read`, `agent_templates.update` | template show/file reads |
-| permissions | 1: `permissions.tools.set` | rules create/update, approval_overrides, owner_scopes.get — rule editing would complete /jiuwen permissions |
+| agent_groups | 1: `agent_groups.create` | list/show/file reads covered; create remains |
+| agent_templates | 2: `agent_templates.create`, `agent_templates.update` | list/show/file reads covered; create/update remain |
+| permissions | 0 | tools get/update/delete/set + rules + overrides/scopes covered |
 | team | 3: `team.binding.create`, `team.binding.generate`, `team.session.bind` | team.history.get, snapshot, bindings generate — history useful |
 | agents | 4: `agents.create`, `agents.disable`, `agents.enable`, `agents.update` | agent create/update/enable/disable — config mutations |
-| assets | 4: `assets.publish.describe`, `assets.publish.local_status`, `assets.publish.records`, `assets.publish.status` | assets.publish describe/status/records reads |
+| assets | 0 | publish describe/status/records/local_status covered (Hub AUTH soft-fails) |
 | harness | 4: `harness.activate`, `harness.deactivate`, `harness.packages`, `harness.packages.scan` | harness / rsi forwarders |
 | issue | 3: `issue.matrix`, `issue.state.list`, `issue.watch_once` | issue matrix/state/watch — niche |
-| mcp | 2: `mcp.cancel_connect`, `mcp.wait_auth` | mcp.show / cancel_connect / wait_auth — show is useful for /jiuwen mcp <name> |
-| plugin_packages | 3: `plugin_packages.create`, `plugin_packages.list`, `plugin_packages.show` | plugin package list/show/create |
+| mcp | 1: `mcp.wait_auth` | show + cancel_connect covered; wait_auth holds RPC open (not mapped) |
+| plugin_packages | 1: `plugin_packages.create` | list/show covered; create remains |
 | config | 1: `config.validate_model` | config.get/validate_model — read config, useful for /jiuwen config |
-| extensions | 2: `extensions.list`, `extensions.toggle` | extensions list/toggle |
+| extensions | 1: `extensions.toggle` | list covered; toggle remains |
 | memory | 1: `memory.compute` | memory.forbidden.get read |
 | models | 1: `models.replace_all` | models.validate/defaults — validate useful |
-| openai_account | 2: `openai_account.auth.status`, `openai_account.models.list` | auth status + models list reads |
-| vendors | 2: `vendors.fetch_models`, `vendors.list` | vendor list / fetch models |
-| health_check | 1: `health_check.get_conf` | health_check.get_conf read |
+| openai_account | 0 | auth.status + models.list covered |
+| vendors | 0 | list + fetch_models covered (never passes api_key) |
+| health_check | 0 | get_conf covered |
 | proactive | 1: `proactive.feedback` | proactive.feedback |
 | task | 1: `task.asr.transcribe` | task.asr.transcribe — voice input |
 | tts | 1: `tts.synthesize` | tts.synthesize — voice output |
@@ -72,8 +75,8 @@ Earlier live probe (ws://127.0.0.1:19000/ws, empty params, read-only): routed ok
 |---|---|---|
 | `acp.tool_response` | excluded | irreversible / credentials / host-side effect |
 | `agent_groups.create` | uncovered |  |
-| `agent_groups.file.list` | uncovered |  |
-| `agent_groups.file.read` | uncovered |  |
+| `agent_groups.file.list` | covered | /jiuwen group files <id> |
+| `agent_groups.file.read` | covered | /jiuwen group files <id> <path> |
 | `agent_groups.import_local` | excluded | irreversible / credentials / host-side effect |
 | `agent_groups.install` | excluded | irreversible / credentials / host-side effect |
 | `agent_groups.list` | covered | /jiuwen group list |
@@ -81,8 +84,8 @@ Earlier live probe (ws://127.0.0.1:19000/ws, empty params, read-only): routed ok
 | `agent_groups.uninstall` | excluded | irreversible / credentials / host-side effect |
 | `agent_templates.create` | uncovered |  |
 | `agent_templates.delete` | excluded | irreversible / credentials / host-side effect |
-| `agent_templates.file.list` | uncovered |  |
-| `agent_templates.file.read` | uncovered |  |
+| `agent_templates.file.list` | covered | /jiuwen template files <id> |
+| `agent_templates.file.read` | covered | /jiuwen template files <id> <path> |
 | `agent_templates.import_local` | excluded | irreversible / credentials / host-side effect |
 | `agent_templates.install` | excluded | irreversible / credentials / host-side effect |
 | `agent_templates.list` | covered | /jiuwen templates |
@@ -98,11 +101,11 @@ Earlier live probe (ws://127.0.0.1:19000/ws, empty params, read-only): routed ok
 | `agents.tools_list` | covered | /jiuwen tools |
 | `agents.update` | uncovered |  |
 | `assets.publish.commit` | excluded | irreversible / credentials / host-side effect |
-| `assets.publish.describe` | uncovered |  |
-| `assets.publish.local_status` | uncovered |  |
+| `assets.publish.describe` | covered | /jiuwen publish describe (soft-fail AUTH) |
+| `assets.publish.local_status` | covered | /jiuwen publish local (soft-fail) |
 | `assets.publish.prepare` | excluded | irreversible / credentials / host-side effect |
-| `assets.publish.records` | uncovered |  |
-| `assets.publish.status` | uncovered |  |
+| `assets.publish.records` | covered | /jiuwen publish records (soft-fail AUTH) |
+| `assets.publish.status` | covered | /jiuwen publish status (soft-fail AUTH) |
 | `channel.dingtalk.get_conf` | uncovered |  |
 | `channel.dingtalk.set_conf` | excluded | irreversible / credentials / host-side effect |
 | `channel.discord.get_conf` | uncovered |  |
@@ -146,12 +149,12 @@ Earlier live probe (ws://127.0.0.1:19000/ws, empty params, read-only): routed ok
 | `cron.job.preview` | covered | /jiuwen cron preview <id> |
 | `cron.job.run_now` | covered | /jiuwen cron run |
 | `cron.job.toggle` | covered | /jiuwen cron toggle |
-| `cron.job.update` | uncovered |  |
+| `cron.job.update` | covered | /jiuwen cron update <id> (Round 3) |
 | `document.formats` | covered | /jiuwen document formats |
 | `document.persist` | covered | /jiuwen doc persist + opt-in documentPersist |
 | `extensions.delete` | excluded | irreversible / credentials / host-side effect |
 | `extensions.import` | excluded | irreversible / credentials / host-side effect |
-| `extensions.list` | uncovered |  |
+| `extensions.list` | covered | /jiuwen extensions |
 | `extensions.toggle` | uncovered |  |
 | `external_cli.codex_install_status` | excluded | irreversible / credentials / host-side effect |
 | `external_cli.detect` | excluded | irreversible / credentials / host-side effect |
@@ -163,7 +166,7 @@ Earlier live probe (ws://127.0.0.1:19000/ws, empty params, read-only): routed ok
 | `harness.import` | excluded | irreversible / credentials / host-side effect |
 | `harness.packages` | uncovered |  |
 | `harness.packages.scan` | uncovered |  |
-| `health_check.get_conf` | uncovered |  |
+| `health_check.get_conf` | covered | /jiuwen health |
 | `health_check.set_conf` | excluded | irreversible / credentials / host-side effect |
 | `heartbeat.get_conf` | covered | /jiuwen heartbeat |
 | `heartbeat.job.cancel` | covered | /jiuwen heartbeat cancel |
@@ -175,7 +178,7 @@ Earlier live probe (ws://127.0.0.1:19000/ws, empty params, read-only): routed ok
 | `heartbeat.job.preview` | covered | /jiuwen heartbeat preview <id> |
 | `heartbeat.job.run_now` | covered | /jiuwen heartbeat run |
 | `heartbeat.job.toggle` | covered | /jiuwen heartbeat toggle |
-| `heartbeat.job.update` | uncovered |  |
+| `heartbeat.job.update` | covered | /jiuwen heartbeat update <id> |
 | `heartbeat.set_conf` | covered | /jiuwen heartbeat set |
 | `history.get` | covered | /jiuwen history |
 | `hooks.list` | covered | /jiuwen hooks |
@@ -186,7 +189,7 @@ Earlier live probe (ws://127.0.0.1:19000/ws, empty params, read-only): routed ok
 | `issue.watch_once` | uncovered |  |
 | `locale.get_conf` | covered | /jiuwen locale |
 | `locale.set_conf` | excluded | irreversible / credentials / host-side effect |
-| `mcp.cancel_connect` | uncovered |  |
+| `mcp.cancel_connect` | covered | /jiuwen mcp cancel <name> |
 | `mcp.connect` | covered | MCP passthrough bridge |
 | `mcp.delete_custom` | covered | /jiuwen mcp-reset confirm (own entries only) |
 | `mcp.disconnect` | covered | MCP bridge / mcp-reset |
@@ -209,8 +212,8 @@ Earlier live probe (ws://127.0.0.1:19000/ws, empty params, read-only): routed ok
 | `openai_account.auth.pending_login` | excluded | irreversible / credentials / host-side effect |
 | `openai_account.auth.poll_login` | excluded | irreversible / credentials / host-side effect |
 | `openai_account.auth.start_login` | excluded | irreversible / credentials / host-side effect |
-| `openai_account.auth.status` | uncovered |  |
-| `openai_account.models.list` | uncovered |  |
+| `openai_account.auth.status` | covered | /jiuwen openai [auth] |
+| `openai_account.models.list` | covered | /jiuwen openai models |
 | `path.get` | covered | /jiuwen path |
 | `path.select_directory` | excluded | irreversible / credentials / host-side effect |
 | `path.select_file` | excluded | irreversible / credentials / host-side effect |
@@ -226,7 +229,7 @@ Earlier live probe (ws://127.0.0.1:19000/ws, empty params, read-only): routed ok
 | `permissions.rules.update` | covered | /jiuwen permissions rule update |
 | `permissions.tools.delete` | covered | /jiuwen permissions unset |
 | `permissions.tools.get` | covered | /jiuwen permissions |
-| `permissions.tools.set` | uncovered |  |
+| `permissions.tools.set` | covered | /jiuwen permissions set-all … confirm |
 | `permissions.tools.update` | covered | /jiuwen permissions set |
 | `personal_context.context.get_node` | uncovered |  |
 | `personal_context.context.get_source` | uncovered |  |
@@ -257,8 +260,8 @@ Earlier live probe (ws://127.0.0.1:19000/ws, empty params, read-only): routed ok
 | `plugin_packages.create` | uncovered |  |
 | `plugin_packages.import_local` | excluded | irreversible / credentials / host-side effect |
 | `plugin_packages.install` | excluded | irreversible / credentials / host-side effect |
-| `plugin_packages.list` | uncovered |  |
-| `plugin_packages.show` | uncovered |  |
+| `plugin_packages.list` | covered | /jiuwen packages |
+| `plugin_packages.show` | covered | /jiuwen packages show <id> |
 | `plugin_packages.uninstall` | excluded | irreversible / credentials / host-side effect |
 | `plugins.disable` | covered | /jiuwen plugins disable |
 | `plugins.enable` | covered | /jiuwen plugins enable |
@@ -268,22 +271,22 @@ Earlier live probe (ws://127.0.0.1:19000/ws, empty params, read-only): routed ok
 | `plugins.uninstall` | excluded | irreversible / credentials / host-side effect |
 | `proactive.feedback` | uncovered |  |
 | `project.create` | uncovered |  |
-| `project.get_cron_sessions` | uncovered |  |
+| `project.get_cron_sessions` | covered | /jiuwen projects cron |
 | `project.get_sessions` | covered | /jiuwen projects sessions |
 | `project.git.commit` | excluded | irreversible / credentials / host-side effect |
 | `project.git.create_branch` | excluded | irreversible / credentials / host-side effect |
 | `project.git.diff_status` | covered | /jiuwen git diff [project] |
 | `project.git.init` | excluded | irreversible / credentials / host-side effect |
-| `project.git.probe` | uncovered |  |
+| `project.git.probe` | covered | /jiuwen git probe (soft-fail if disabled) |
 | `project.git.push` | excluded | irreversible / credentials / host-side effect |
 | `project.git.status` | covered | /jiuwen git status [project] |
 | `project.git.switch_branch` | excluded | irreversible / credentials / host-side effect |
-| `project.git.turn_diff` | uncovered |  |
-| `project.git.turn_diff_list` | uncovered |  |
+| `project.git.turn_diff` | covered | /jiuwen git turn <id> (soft-fail if disabled) |
+| `project.git.turn_diff_list` | covered | /jiuwen git turns (soft-fail if disabled) |
 | `project.info` | covered | /jiuwen projects info |
 | `project.list` | covered | /jiuwen projects |
 | `project.pin` | uncovered |  |
-| `project.pinned_sessions` | uncovered |  |
+| `project.pinned_sessions` | covered | /jiuwen projects pinned |
 | `project.remove` | excluded | irreversible / credentials / host-side effect |
 | `project.rename` | uncovered |  |
 | `project.restore` | uncovered |  |
@@ -334,18 +337,18 @@ Earlier live probe (ws://127.0.0.1:19000/ws, empty params, read-only): routed ok
 | `skills.clawhub.search` | uncovered |  |
 | `skills.clawhub.set_token` | excluded | irreversible / credentials / host-side effect |
 | `skills.create_from_knowledge` | uncovered |  |
-| `skills.evolution.get` | uncovered |  |
+| `skills.evolution.get` | covered | /jiuwen skills evolution <name> get |
 | `skills.evolution.save` | uncovered |  |
-| `skills.evolution.status` | uncovered |  |
-| `skills.experience.list` | uncovered |  |
+| `skills.evolution.status` | covered | /jiuwen skills evolution <name> |
+| `skills.experience.list` | covered | /jiuwen skills experience |
 | `skills.experience.request` | uncovered |  |
-| `skills.files.get` | uncovered |  |
-| `skills.files.list` | uncovered |  |
+| `skills.files.get` | covered | /jiuwen skills files <name> <path> |
+| `skills.files.list` | covered | /jiuwen skills files <name> |
 | `skills.get` | covered | /jiuwen skill-info |
 | `skills.graph.build` | uncovered |  |
 | `skills.graph.cancel` | uncovered |  |
-| `skills.graph.get` | uncovered |  |
-| `skills.graph.status` | uncovered |  |
+| `skills.graph.get` | covered | /jiuwen skills graph get |
+| `skills.graph.status` | covered | /jiuwen skills graph |
 | `skills.import_local` | excluded | irreversible / credentials / host-side effect |
 | `skills.import_upload` | excluded | irreversible / credentials / host-side effect |
 | `skills.install` | excluded | irreversible / credentials / host-side effect |
@@ -362,8 +365,8 @@ Earlier live probe (ws://127.0.0.1:19000/ws, empty params, read-only): routed ok
 | `skills.retrieval.index_build` | uncovered |  |
 | `skills.retrieval.index_cancel` | uncovered |  |
 | `skills.retrieval.search` | covered | /jiuwen skills search <q> |
-| `skills.retrieval.status` | uncovered |  |
-| `skills.retrieval.tree` | uncovered |  |
+| `skills.retrieval.status` | covered | /jiuwen skills retrieval |
+| `skills.retrieval.tree` | covered | /jiuwen skills retrieval tree |
 | `skills.skillnet.evaluate` | uncovered |  |
 | `skills.skillnet.install` | excluded | irreversible / credentials / host-side effect |
 | `skills.skillnet.install_status` | uncovered |  |
@@ -402,5 +405,5 @@ Earlier live probe (ws://127.0.0.1:19000/ws, empty params, read-only): routed ok
 | `updater.reset_source` | excluded | irreversible / credentials / host-side effect |
 | `updater.set_conf` | excluded | irreversible / credentials / host-side effect |
 | `updater.upgrade` | excluded | irreversible / credentials / host-side effect |
-| `vendors.fetch_models` | uncovered |  |
-| `vendors.list` | uncovered |  |
+| `vendors.fetch_models` | covered | /jiuwen vendors models <key> <plan> |
+| `vendors.list` | covered | /jiuwen vendors |

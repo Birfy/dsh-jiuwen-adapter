@@ -441,6 +441,75 @@ wss.on('connection', (ws, req) => {
         }
         case 'document.persist': log(); return reply({ media_items: (params.documents || []).map(d => ({ type: 'document', path: `/uploads/${d.filename || d.name}`, filename: d.filename || d.name })) })
         case 'media.discard': log(); return params.path ? reply({ ok: true, path: params.path }) : fail('path is required')
+        case 'skills.files.list': return params.name ? reply({ name: params.name, files: [{ path: 'SKILL.md', type: 'file', size: 12, mime_type: 'text/markdown' }, { path: 'refs', type: 'directory', size: null }] }) : fail('缺少参数: name')
+        case 'skills.files.get': {
+          if (!params.name) return fail('缺少参数: name')
+          if (!params.path) return fail('缺少参数: path')
+          if (params.path === 'refs') return fail('不允许预览目录')
+          return reply({ name: params.name, path: params.path, type: 'file', mime_type: 'text/markdown', size: 20, preview: '# mock skill file\n' })
+        }
+        case 'skills.retrieval.status': return reply({ enabled: true, index_enabled: false, mode: 'auto', candidate_scale: 'small', estimated_candidate_tokens: 100, candidate_budget_tokens: 2000, effective_strategy: 'legacy' })
+        case 'skills.retrieval.tree': return reply({ success: false, unsupported: true, tree_supported: false, nodes: [], detail: 'use list' })
+        case 'skills.graph.status': return reply({ success: true, exists: false, stale: true, skill_count: 3, added_count: 3, removed_count: 0, graph_dir: '/mock/graph' })
+        case 'skills.graph.get': return reply({ success: false, detail: '技能总谱不存在或不完整', graph_dir: '/mock/graph' })
+        case 'skills.evolution.status': return params.name ? reply({ name: params.name, exists: false }) : fail('缺少参数: name')
+        case 'skills.evolution.get': return params.name ? reply({ name: params.name, exists: false, valid: true, version: '1.0.0', entries: [] }) : fail('缺少参数: name')
+        case 'skills.experience.list': return reply({ success: true, enabled: false, candidates: [] })
+        case 'agent_templates.file.list': return params.id ? reply({ tree: [{ path: 'persona/', type: 'dir', children: [{ path: 'persona/a.md', type: 'file', size: 10, previewable: true }] }] }) : fail('invalid agent_template name: empty')
+        case 'agent_templates.file.read': return (params.id && params.path) ? reply({ path: params.path, preview: 'template body', size: 12 }) : fail('path required')
+        case 'agent_groups.file.list': return params.id ? reply({ tree: [{ path: 'agents/', type: 'dir', children: [{ path: 'agents/x.md', type: 'file', size: 5 }] }] }) : fail('invalid agent_group name: empty')
+        case 'agent_groups.file.read': return (params.id && params.path) ? reply({ path: params.path, preview: 'group body', size: 10 }) : fail('path required')
+        case 'plugin_packages.list': return reply({ packages: [{ id: 'pkg1', packageName: 'mock-pkg', displayName: { en: 'Mock Pkg' }, installed: true }] })
+        case 'plugin_packages.show': return params.id === 'pkg1' || params.id === 'mock-pkg' ? reply({ package: { id: 'pkg1', packageName: 'mock-pkg', displayName: { en: 'Mock Pkg' }, displayDescription: { en: 'desc' }, installed: true } }) : fail('SkillHub asset not found: ' + params.id)
+        case 'extensions.list': return reply({ extensions: [] })
+        case 'vendors.list': return reply({ vendors: { reasoning: { protocol_defaults: {} }, openai: { plans: ['custom_api'] } } })
+        case 'vendors.fetch_models': {
+          log()
+          if (!params.vendor_key || !params.plan) return fail('invalid plan: ')
+          if (!['token_plan', 'coding_plan', 'custom_api'].includes(params.plan)) return fail('invalid plan: ' + params.plan)
+          // never require api_key in mock — preset fallback
+          return reply({ models: ['mock-model-a', 'mock-model-b'], source: 'preset', reason: params.api_key ? 'remote' : 'api_key required for fetch' })
+        }
+        case 'openai_account.auth.status': return reply({ authenticated: false, has_refresh_token: false, needs_refresh: false, error: 'openai_account_auth_missing', base_url: 'https://chatgpt.com/backend-api/codex', access_token: '' })
+        case 'openai_account.models.list': return reply({ models: ['gpt-mock'], base_url: 'https://chatgpt.com/backend-api/codex', auth: { authenticated: false } })
+        case 'health_check.get_conf': return reply({ every: 3600, target: 'web', active_hours: { start: '08:00', end: '22:00' } })
+        case 'project.pinned_sessions': return reply({ sessions: [] })
+        case 'project.get_cron_sessions': return params.project_id ? reply({ sessions: [], total: 0 }) : fail('project_id is required')
+        case 'project.git.probe': case 'project.git.turn_diff_list': case 'project.git.turn_diff':
+          return fail('git operations not available for this project')
+        case 'assets.publish.describe': case 'assets.publish.status': case 'assets.publish.records':
+          return fail('AUTH_REQUIRED')
+        case 'assets.publish.local_status':
+          if (!params.kind || !params.local_id) return fail('INVALID_PARAMETERS')
+          return fail('RESOURCE_NOT_FOUND')
+        case 'mcp.cancel_connect': return params.name ? reply({ name: params.name, cancelled: true }) : fail('mcp name is required')
+        case 'mcp.wait_auth': return params.name ? reply({ name: params.name, type: 'connected' }) : fail('mcp name is required')
+        case 'permissions.tools.set': {
+          log()
+          if (!params.tools || typeof params.tools !== 'object') return fail('tools must be object')
+          return reply({ ok: true })
+        }
+        case 'cron.job.update': {
+          log()
+          if (!params.id || !params.patch || typeof params.patch !== 'object') return fail('id and patch required')
+          if (!CRON.has(params.id)) return fail('job not found')
+          Object.assign(CRON.get(params.id), params.patch)
+          return reply({ job: CRON.get(params.id) })
+        }
+        case 'heartbeat.job.create': {
+          log()
+          if (!params.name || !params.prompt) return fail('name and prompt required')
+          const job = { id: `hb-${HB.size + 1}`, name: params.name, prompt: params.prompt, enabled: Boolean(params.enabled), schedule: params.schedule }
+          HB.set(job.id, job); return reply({ job })
+        }
+        case 'heartbeat.job.update': {
+          log()
+          if (!params.id || !params.patch || typeof params.patch !== 'object') return fail('id and patch required')
+          if (SHAPE.v === '0.2.7' && !params.session_id) return fail('job belongs to another session')
+          if (!HB.has(params.id)) return fail('job not found')
+          Object.assign(HB.get(params.id), params.patch)
+          return reply({ job: HB.get(params.id) })
+        }
         default: break
       }
     }

@@ -229,3 +229,44 @@ Same Cordis host pattern (`Context` + `dsh-llm` + command handlers), JiuwenSwarm
 - `heartbeat.job.update` is routed but not mapped (create/toggle/run/cancel/delete cover the lifecycle).
 
 **Tests:** 102 → 112, all green. Secret grep on live outputs/logs: no raw `api_key` / `sk-…` leaks.
+
+## 12. Round 4 safe reads mapping (2026-10-30, UTC+8)
+
+Cordis host (`Context` + `dsh-llm` + `api.command`), JiuwenSwarm 0.2.7 on :19000, doubao-seed-2.0-mini. Snapshot before/after identical (20 sessions, 0 cron, 43 tool overrides, 37 permission rules, heartbeat conf, empty `user_permissions.yaml`). Live: 26 ok + 6 expected soft-fails + 0 hard fails; heartbeat create→update→delete reversed.
+
+**New `/jiuwen` surfaces → `/ws` methods**
+
+| Surface | RPC |
+|---|---|
+| `skills files <name> [path]` | `skills.files.list` / `skills.files.get` |
+| `skills retrieval [status\|tree]` | `skills.retrieval.status` / `skills.retrieval.tree` |
+| `skills graph [status\|get]` | `skills.graph.status` / `skills.graph.get` |
+| `skills evolution <name> [status\|get]` | `skills.evolution.status` / `skills.evolution.get` |
+| `skills experience` | `skills.experience.list` |
+| `template files <id> [path]` / `group files <id> [path]` | `agent_templates.file.*` / `agent_groups.file.*` |
+| `packages [list\|show]` | `plugin_packages.list` / `show` |
+| `extensions` | `extensions.list` |
+| `vendors [list\|models <key> <plan>]` | `vendors.list` / `vendors.fetch_models` (never passes `api_key`) |
+| `openai [auth\|models]` | `openai_account.auth.status` / `openai_account.models.list` |
+| `health` | `health_check.get_conf` |
+| `projects pinned\|cron` | `project.pinned_sessions` / `project.get_cron_sessions` |
+| `git probe\|turns\|turn <id>` (+ soft-fail on status/diff) | `project.git.probe` / `turn_diff_list` / `turn_diff` |
+| `publish …` (read-only) | `assets.publish.describe\|status\|records\|local_status` |
+| `mcp cancel <name>` | `mcp.cancel_connect` |
+| `permissions set-all … confirm` | `permissions.tools.set` (bulk user-overlay replace; distinct from `update`) |
+| `heartbeat update <id>` | `heartbeat.job.update` |
+
+**Live soft-fails (expected, not adapter bugs)**
+
+- `skills retrieval tree` → Gateway `unsupported` / `tree_supported=false`.
+- `skills graph get` → graph artifact missing until built in UI.
+- `git *` on default project → `git operations not available for this project` (soft-failed text).
+- `publish describe|status|records` → `AUTH_REQUIRED` without Hub login; `local` → `RESOURCE_NOT_FOUND` for unknown ids.
+- `vendors models` without a stored key → `source=preset` fallback (adapter never sends `api_key`).
+
+**Not mapped on purpose**
+
+- `mcp.wait_auth` — holds the RPC open for minutes (browser OAuth poll); use the Jiuwen UI.
+- Irreversible / credential / P4 voice / UI channels remain excluded.
+
+**Coverage / tests:** covered 106→138 / 334 (safe 45.1%→58.7%). Unit tests 112→118.
