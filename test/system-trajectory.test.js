@@ -110,6 +110,6 @@ test('trajectoryDetail=full renders structured steps in reasoning, no tool-call 
   assert.match(r, /\*\*Result\*\* ✓ `bash`/)
   assert.ok(!full.some(c => c.type === 'tool-call' || c.blockType === 'tool-call'))
   assert.equal(txt(full), 'pong-from-gateway-mock')
-  const sum = rsn(await host().run({ messages: user('ping') }))
+  const sum = rsn(await host({ trajectoryDetail: 'summary' }).run({ messages: user('ping') }))
   assert.match(sum, /🔧 bash \{"command":"echo ok"\}/); assert.doesNotMatch(sum, /#### Step/)
 })

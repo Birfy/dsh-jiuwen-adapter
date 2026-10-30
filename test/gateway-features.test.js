@@ -50,7 +50,7 @@ before(async () => {
 after(() => { gw?.kill(); rmSync(dir, { recursive: true, force: true }) })
 
 test('default: reasoning block carries Jiuwen reasoning + tool activity; text is clean; usage emitted; valid grammar', async () => {
-  const h = host()
+  const h = host({ trajectoryDetail: 'summary' })
   const events = []
   h.api.onEvent(e => events.push(e))
   const cs = await h.run({ messages: user('ping') })

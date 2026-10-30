@@ -87,7 +87,7 @@ test('generic host: plain chat + streaming via gateway mock', async () => {
 
 test('generic host: OpenAI-style tools in gateway mode are Jiuwen-owned (observed, not re-executed)', async () => {
   const ctx = minimalHost()
-  plugin.apply(ctx, { gatewayURL: `ws://127.0.0.1:${GW_PORT}/ws`, mappingPath: join(dir, 'm2.json') })
+  plugin.apply(ctx, { gatewayURL: `ws://127.0.0.1:${GW_PORT}/ws`, mappingPath: join(dir, 'm2.json'), trajectoryDetail: 'summary' })
   const chunks = []
   for await (const c of ctx.llm.stream({
     provider: 'jiuwen', model: 'jiuwen-default', sessionId: 'generic-2',
