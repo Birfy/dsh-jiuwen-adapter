@@ -5,9 +5,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **Default change:** `injectSystem` now defaults to `persona` (was `off`) and `trajectoryDetail` to `full` (was `summary`). Set `injectSystem: off` / `trajectoryDetail: summary` (or `JIUWEN_INJECT_SYSTEM=off` / `JIUWEN_TRAJECTORY_DETAIL=summary`) to restore the old behavior. Injection remains Jiuwen-session-only and fail-soft.
+
 ### Added
-- `injectSystem` (`off` default | `persona` | `full`): forward the host system prompt to Jiuwen once per mapped session as a `[System instructions from host]` prefix, hash-gated (stored in the session mapping), 8 KB cap, fail-soft.
-- `trajectoryDetail` (`summary` default | `full`): structured Markdown steps (tool, args, result, subtasks, todos, `trace.*`) in the reasoning block, 4 KB per item.
+- `injectSystem` (`off` | `persona` default | `full`): forward the host system prompt to Jiuwen once per mapped session as a `[System instructions from host]` prefix, hash-gated (stored in the session mapping), 8 KB cap, fail-soft.
+- `trajectoryDetail` (`summary` | `full` default): structured Markdown steps (tool, args, result, subtasks, todos, `trace.*`) in the reasoning block, 4 KB per item.
 
 ### Fixed
 - Card answer text no longer doubles when Jiuwen re-streams the pre-question text after an `ask_user` resume; a resumed final with no deltas is no longer dropped.

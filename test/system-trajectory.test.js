@@ -82,9 +82,14 @@ test('applySystemInjection: off/no markers → unchanged; hash gates resend; lat
   assert.equal(applySystemInjection('q', { get messages() { throw new Error('boom') } }, {}, 'full').query, 'q')
 })
 
-test('config defaults: injectSystem off, trajectoryDetail summary; bad values fall back', () => {
-  const c = loadConfig({}, { env: {} }); assert.equal(c.injectSystem, 'off'); assert.equal(c.trajectoryDetail, 'summary')
-  const d = loadConfig({ injectSystem: 'nope', trajectoryDetail: 'FULL' }, { env: {} }); assert.equal(d.injectSystem, 'off'); assert.equal(d.trajectoryDetail, 'full')
+test('config defaults: injectSystem persona, trajectoryDetail full; bad values fall back', () => {
+  const c = loadConfig({}, { env: {} }); assert.equal(c.injectSystem, 'persona'); assert.equal(c.trajectoryDetail, 'full')
+  const d = loadConfig({ injectSystem: 'nope', trajectoryDetail: 'FULL' }, { env: {} }); assert.equal(d.injectSystem, 'persona'); assert.equal(d.trajectoryDetail, 'full')
+})
+
+test('config opt-outs: off / summary still valid via raw and env', () => {
+  const c = loadConfig({ injectSystem: 'off', trajectoryDetail: 'summary' }, { env: {} }); assert.equal(c.injectSystem, 'off'); assert.equal(c.trajectoryDetail, 'summary')
+  const e = loadConfig({}, { env: { JIUWEN_INJECT_SYSTEM: 'off', JIUWEN_TRAJECTORY_DETAIL: 'summary' } }); assert.equal(e.injectSystem, 'off'); assert.equal(e.trajectoryDetail, 'summary')
 })
 
 test('live: persona sent once per Jiuwen session, resent on change', async () => {
