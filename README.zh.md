@@ -236,3 +236,5 @@ npm run bare-dsh      # 裸 dsh 安装/配置
 8. dsh 命令：`/jiuwen status|models|model|model-info|mode|pause|resume|rename|pin|fork|switch|archive|unarchive|unmap|delete|goal|workflows|history|btw|recap|skill-toggle|plan-status|supplement|teams|tools|hooks|permissions|plugins|projects|archived|assets|version|heartbeat|path|locale|commands|templates|cron|compact|interrupt|sessions|skills|agents|mcp|mcp-reset`（宿主有 `ctx.commands` 时注册；会话级 mode/skills/agentTemplate 可覆盖默认配置）。
 9. 结构化事件 `jiuwen/event` 已在 `index.d.ts` 声明类型，字段见 docs/dsh-integration.md §6。
 5. Jiuwen 前端 `channels/web/frontend/dist` 未构建；仅后端/WS 路径已验证。
+
+> 更新（2026-10-30）：`/jiuwen` 新增 config / memory / cron·heartbeat 读写 / permissions rule / team / template / group / git / continue-queued / swarm-stop / doc / media 子命令（删除需 `confirm`）；网关方法自动探测（unknown method 缓存并在 help 中隐藏）；可选桥接 `modelDiscovery`、`sessionSync`、`planBridge`、`typedEvents`、`documentPersist` 默认全部关闭。覆盖率见 docs/coverage.md（104/334）。

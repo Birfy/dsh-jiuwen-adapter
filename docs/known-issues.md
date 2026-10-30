@@ -125,3 +125,23 @@ Everything else passed live: `npm test` 58/58, `smoke:live` 13/13, the other `/j
 Observation: MCP passthrough serves tools that Jiuwen discovered at prewarm (`working_directory`). A tool name added later was not visible to `tool_search` on the same turn.
 
 Live after the fix (:19000, 0.2.7): `assets` gives the degrade message; `teams` gives `templates: jiuwen_team`, `teams: none` (via `team.bindings.list`); `model-info doubao-seed-2.0-mini` gives provider/api_base/profile/context=262144/default/api_key=set. The mock gateway has a 0.2.7 shape (`JIUWEN_GATEWAY_MOCK_SHAPE=0.2.7` or `debug.set_shape`), and a test covers it.
+
+## 8. P1–P3 mapping probe on 0.2.7 (2026-10-30, UTC+8)
+
+| Method | 0.2.7 `/ws` | Notes |
+|---|---|---|
+| `config.get` | OK | returns `api_key: "[REDACTED]"` already; adapter masks every secret-looking key again |
+| `mcp.show` | OK | needs the SkillHub asset **id** (`{id}`), not the name — adapter resolves name → id via `mcp.list` |
+| `agent_templates.show`, `agent_groups.show` | OK | param is `{id}`; the error text says `asset_id is required` but `asset_id`/`assetId` are not accepted |
+| `skills.retrieval.search`, `skills.online_search.search`, `memory.forbidden.get`, `personal_context.*` reads, `cron.job.meta/get/preview`, `heartbeat.job.meta`, `team.history.get`, `team.snapshot`, `agent_groups.list`, `document.formats`, `permissions.approval_overrides.get`, `permissions.owner_scopes.get` | OK | |
+| `project.git.status`, `project.git.diff_status` | routed | `git operations not available for this project` when the project has git disabled (default project here) |
+| `models.validate`, `config.validate_model` | routed | require `api_key` for non-OAuth providers; the adapter never passes keys, so on this box it reports Jiuwen's validation error |
+| `schedule.*` (7) | **unknown method** | listed in the web forward tables but not routed; feature-detected → hidden |
+| `cron.job.create/toggle/delete` | OK | cron expressions are normalised to 7 fields (`0 3 1 1 *` → `0 0 3 1 1 * *`); live probe job created disabled, toggled on/off, deleted |
+| `permissions.rules.create/update/delete` | OK | probe rule `dsh-probe-*` created → updated → deleted (rules 37 → 38 → 37) |
+| `session.message.continue_queued` | routed | `Session was not found` for a session that never ran a turn |
+| `swarmflow.stop` | routed | `工作流控制不可用…` when no team/workflow is awake |
+| `document.persist` | OK | local `path` items are validated and referenced in place (not copied); base64 items land in `sessions/<id>/uploads/` |
+| `media.discard` | OK | `{deleted: true}` for an uploads path; paths outside the session uploads dir are rejected by AgentServer |
+| `session.create` | OK | ignores a caller-provided `session_id` (always returns `web_…`) — why `sessionSync` does not pre-create Jiuwen sessions |
+| `cron.job.run_now`, `heartbeat.job.run_now/cancel` | not probed live | would start a real agent turn; covered by mock tests only |

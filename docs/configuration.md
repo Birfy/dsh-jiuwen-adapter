@@ -55,8 +55,18 @@ Precedence: **environment variable > Cordis plugin config > default**（`provide
 | `titleMode` | `JIUWEN_TITLE_MODE` | `local` | `purpose: session-title` answered locally (`local`) or by Jiuwen (`jiuwen`) |
 | `compactionMode` | `JIUWEN_COMPACTION_MODE` | `local` | `purpose: compaction`: `local` digest (no Jiuwen call) / `local+jiuwen` (+ `command.compact` on the Jiuwen session) / `jiuwen` (legacy aux turn) |
 | `registerCommands` | `JIUWEN_REGISTER_COMMANDS=0` disables | `true` | Register `/jiuwen <sub>` on `ctx.commands` ([dsh-integration.md](./dsh-integration.md#5-jiuwen-slash-command-dsh-command-registry)) |
+| `commandName` | `JIUWEN_COMMAND_NAME` | `jiuwen` | Slash command name. If another plugin owns `/jiuwen`, registration fails soft (warning) — pick a unique name |
+| `swarmflowStopOnAbort` | `JIUWEN_SWARMFLOW_STOP_ON_ABORT=0` disables | `true` | Host abort also sends `swarmflow.stop` for the last SwarmFlow run seen in that Jiuwen session (only when a run id was seen) |
+| `swarmflowReply` | — | `true` | SwarmFlow human turns (`source: swarmflow_human`) → `ctx.approval.request` → `chat.swarmflow_reply` (`approved` / `rejected (…)`; never fails open) |
+| `documentPersist` | `JIUWEN_DOCUMENT_PERSIST=1` | `false` | Opt-in: `document.persist` document attachments on the turn socket before `chat.send` (fail soft: originals are sent if it fails) |
+| `modelDiscovery` | `JIUWEN_MODEL_DISCOVERY=1` | `false` | **Opt-in.** Append Jiuwen `models.list` to this provider's catalog as unique ids `<discoveryPrefix><model_name>` (routed as `model_name`), and offer `llm.registerModelDiscovery(discoveryNamespace)` when the host has it. Never sets a default model |
+| `discoveryNamespace` | — | `jiuwen` | Settings namespace for `registerModelDiscovery`; requests for other providers get `[]` |
+| `discoveryPrefix` | — | `jiuwen-model:` | Id prefix for discovered models (keeps them distinct from `jiuwen-default` / other providers) |
+| `sessionSync` | `JIUWEN_SESSION_SYNC=1` | `false` | **Opt-in.** `session/created` → ensure the local Jiuwen mapping; `session/disposed` → clear pending question / SwarmFlow run (mapping kept). Jiuwen sessions only (header provider or existing mapping); no Gateway create/delete |
+| `planBridge` | `JIUWEN_PLAN_BRIDGE=1` | `false` | **Opt-in.** After a Jiuwen turn completes or a plan event arrives, read `session.plan_status` and mirror `in_plan` onto `ctx.planMode.set(agent, …)`. Jiuwen sessions with a live agent only |
+| `typedEvents` | `JIUWEN_TYPED_EVENTS=1` | `false` | **Opt-in.** Also emit `jiuwen/tool`, `jiuwen/plan`, `jiuwen/approval`, `jiuwen/swarm` (declared in `index.d.ts`). `jiuwen/event` is always emitted |
 | `traceFile` | `JIUWEN_TRACE_FILE` | — | Append JSONL trace of turns/events |
-| `serviceName` | — | `jiuwenAdapter` | ctx service name for the helper API (unique per instance) |
+| `serviceName` | — | `jiuwenAdapter` | ctx service name for the helper API (unique per instance). Exposed only via `ctx.provide`; a host without it (or a name clash) logs a warning instead of writing `ctx[serviceName]` |
 | `llmAdapterModule` | `JIUWEN_LLM_ADAPTER_MODULE` | — | Explicit module/path exporting `LlmAdapter` |
 | — | `DSH_NODE_MODULES` / `DSH_LLM_PATH` / `DSH_CORDIS_PATH` | global npm dsh install | Used by `scripts/cordis-load-smoke.mjs` only |
 
@@ -112,3 +122,7 @@ ctx.llm.stream({ provider: 'jiuwen', model: 'jiuwen-default', messages, provider
 ```
 
 Precedence: request > catalog model entry > plugin config.
+
+## Compatibility guarantees
+
+All flags off (the default) behave exactly like the pre-P3 adapter: no global listeners besides the plugin's own dispose, no host service is written except `ctx.provide(serviceName)`, no default model / permission preset / built-in command / tool is touched, and only namespaced names are used (`/jiuwen`, `jiuwen/*` events, `jiuwen_*` tools, `jiuwenAdapter`). Gateway methods are feature-detected (an `unknown method` answer is cached per Gateway URL; the subcommand soft-fails and disappears from `/jiuwen help`). Covered by `test/compat.test.js`.

@@ -130,6 +130,33 @@ Live (dsh 0.2.1-rc.2, via `ctx.commands.execute(agent, …)` inside headless): r
 
 中文：在 dsh 命令注册表上注册 `/jiuwen <子命令>`，覆盖 status / models / model / model-info / mode / pause / resume / rename / pin / fork / switch / archive / unarchive / unmap / delete / goal / workflows / history / btw / recap / skill-toggle / plan-status / supplement / teams / tools / hooks / permissions[set/unset] / plugins[enable/disable] / projects[info/sessions] / archived / assets / version / heartbeat[set/jobs] / path / locale / commands / templates / cron / compact / interrupt / sessions / skills[installed] / agents / mcp / mcp-reset；本地标题会兼容同步 `session.rename`；会话级 mode/skills/agentTemplate 可覆盖默认配置。
 
+### 5a. Extended subcommands (JiuwenSwarm 0.2.7 `/ws`)
+
+Read-only: `config [get] [dot.path]` (secrets incl. `api_key` masked as `***`), `mcp show <name|id>`, `skills search|online|show`, `memory [forbidden|context [status|config|services]]`, `cron get|preview <id>`, `cron meta`, `heartbeat job|preview <id>`, `heartbeat meta`, `schedule [list|status|logs|check]`, `team [history|snapshot]`, `template show <id|name>`, `group [list|show <id>]`, `git [status|diff] [project]`, `models validate` (uses Jiuwen's stored config; refuses `api_key=` args), `permissions overrides|scopes`, `document formats`.
+
+Safe writes (reversible; every delete needs a trailing `confirm`): `cron create name=.. expr="m h dom mon dow" [desc=..] [tz=..] [target=web] [mode=..] [enabled=off]` (created **disabled** unless `enabled=on`), `cron toggle <id> on|off`, `cron run <id>`, `cron delete <id> confirm`; `heartbeat toggle|run|cancel <id>`, `heartbeat delete <id> confirm`; `schedule create|run|cancel` (feature-detected); `permissions rule add tools=a,b pattern=.. action=allow|ask|deny [severity=..] [desc=..]`, `permissions rule update <id> key=value…`, `permissions rule delete <id> confirm`; `continue-queued` (`session.message.continue_queued`); `swarm-stop [run_id]`; `doc persist <host path>`; `media discard <uploads path> confirm`.
+
+Feature detection: the first `unknown method` for a Gateway method is cached per Gateway URL; that subcommand then soft-fails with *not available on this Gateway* and is hidden from `/jiuwen help`. `ctx.jiuwenAdapter.gateway.supports(method)` probes once; `gateway.unsupported()` lists the cache. On 0.2.7 only `schedule.*` is affected.
+
+Registration fails soft: the `commands.register` call runs inside a try/catch **inside** the inject callback, so a duplicate `/jiuwen` (another plugin) only logs a warning. Use `commandName` to pick another name.
+
+### 5b. SwarmFlow
+
+- Host abort during a SwarmFlow run: `chat.interrupt` **and** `swarmflow.stop {session_id, run_id}` (last run id seen on that Jiuwen session; `swarmflowStopOnAbort`).
+- SwarmFlow human turns (`chat.ask_user_question` with `source: swarmflow_human`) → `ctx.approval.request({ toolName: 'swarmflow:<agent>', reason: <prompt> })`; `allowed-once` → `chat.swarmflow_reply {run_id, correlation_id, answer: 'approved'}`, anything else (no UI, no agent, timeout) → `answer: 'rejected (…)'`. Never fails open.
+
+### 5c. Opt-in bridges (default OFF)
+
+| Flag | DSH side | Jiuwen side | Scope |
+|---|---|---|---|
+| `modelDiscovery` | `listModels` + `llm.registerModelDiscovery('jiuwen')` | `models.list` → ids `jiuwen-model:<model_name>` (routed as `model_name`) | own provider only |
+| `sessionSync` | `session/created`, `session/disposed` | local mapping upkeep (no Gateway create/delete) | sessions whose header provider is `jiuwen` or that already have a mapping |
+| `planBridge` | `ctx.planMode.set(agent, active)` | `session.plan_status.in_plan` after turn completion / plan events | jiuwen sessions with a live agent |
+| `typedEvents` | `jiuwen/tool`, `jiuwen/plan`, `jiuwen/approval`, `jiuwen/swarm` | derived from `jiuwen/event` | jiuwen turns only |
+| `documentPersist` | file blocks / `attachments` | `document.persist` before `chat.send` | jiuwen turns only |
+
+The DSH goal service is not bridged (Jiuwen goals stay behind `/jiuwen goal`): creating DSH goals would drive DSH's own goal rounds.
+
 ## 6. `jiuwen/event` (declared Cordis event)
 
 The adapter emits every structured Jiuwen activity as the Cordis event **`jiuwen/event`** (constant `JIUWEN_EVENT`), also available as `ctx.jiuwenAdapter.onEvent(fn)` and per request via `providerOptions.jiuwen.onEvent`. Types ship in [`index.d.ts`](../index.d.ts) (module augmentation of `@deepseek-ai/cordis` `Events` and `Context.jiuwenAdapter`).
@@ -151,6 +178,8 @@ ctx.on('jiuwen/event', (e: JiuwenEvent) => { if (e.type === 'tool_call') console
 | `interaction_answered` | `eventType`, `source`, `kind: question\|approval`, `outcome`, `answers` |
 | `error`, `interrupt`, `interrupt_result` | `message` / `intent` |
 | `raw` | `event` (any other Jiuwen event name, e.g. `context.usage`, `chat.output_phase`) |
+
+With `typedEvents: true` the same activity is also emitted as `jiuwen/tool` (tool_call/update/result), `jiuwen/approval` (ask_user / interaction_answered, `kind: question|approval|swarmflow`), `jiuwen/plan` (`{type:'plan', event, inPlan?, status?}`) and `jiuwen/swarm` (`{type:'swarm', event, runId?, summary?}`), all declared in `index.d.ts`.
 
 All events carry `dshSessionId`, `sessionId` (Jiuwen) and `requestId`; `raw` is the untouched Jiuwen payload (owned by JiuwenSwarm, may change). Live check: a co-loaded plugin's `ctx.on('jiuwen/event')` received events with `dshSessionId` (used by the command test in §5).
 
