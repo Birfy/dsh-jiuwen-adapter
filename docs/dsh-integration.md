@@ -52,10 +52,10 @@ Notes / risks:
 - Requires dsh and Jiuwen on the same host/user (the proxy reads the state dir). Concurrent dsh processes share one registration; a call goes to the newest live process exposing that tool.
 - Calls run outside dsh's tool scheduler (no dsh tool cards / pre-/post-execute hooks); approval is the gate. Prefer narrow allowlists; do not allowlist tools Jiuwen already has (bash/read/write…) unless you mean it.
 - Upgrading from the old per-process streamable-http registration: the first re-register replaces the old record; if that old server is gone Jiuwen may wedge once (see recovery).
-- **Recovery** if the Jiuwen worker sits at ~100 % CPU while idle / all turns get slower: `/jiuwen mcp-reset` (disconnect + delete while the proxy answers) and restart the JiuwenSwarm agentserver **and** gateway (killing the old worker process; it does not exit on SIGTERM when wedged). See known-issues.md.
+- **Recovery** if the Jiuwen worker sits at ~100 % CPU while idle / all turns get slower: `/jiuwen mcp-reset confirm` (disconnect + delete while the proxy answers; the next passthrough turn re-registers the identical proxy) and restart the JiuwenSwarm agentserver **and** gateway (killing the old worker process; it does not exit on SIGTERM when wedged). See known-issues.md.
 - Live (dsh 0.2.1-rc.2, first implementation): allowlist `working_directory` → Jiuwen called `mcp_dsh-tools_working_directory`, got the dsh cwd; with approval rejected Jiuwen received `dsh denied working_directory (rejected)`.
 
-中文（实验性）：默认仍剥离 dsh 工具；设 `toolPassthrough: mcp` + `toolAllowlist` 后，Jiuwen 只连接一个由它自己托管、常驻的 stdio MCP 代理（`bin/jiuwen-mcp-proxy.mjs`，每个 Jiuwen 后端注册一次），代理把调用转发给当前存活的 dsh 进程（`ep-<pid>.json`）；dsh 进程退出或被 kill -9 只会留下无效端点文件，不再逐进程 disconnect/delete，从而避开 Jiuwen 在关闭"服务端已消失"的 MCP 客户端时 worker 100% CPU 空转的 bug。每次调用仍需 dsh 审批（默认拒绝）。出现空转时：`/jiuwen mcp-reset` 后重启 Jiuwen agentserver + gateway。
+中文（实验性）：默认仍剥离 dsh 工具；设 `toolPassthrough: mcp` + `toolAllowlist` 后，Jiuwen 只连接一个由它自己托管、常驻的 stdio MCP 代理（`bin/jiuwen-mcp-proxy.mjs`，每个 Jiuwen 后端注册一次），代理把调用转发给当前存活的 dsh 进程（`ep-<pid>.json`）；dsh 进程退出或被 kill -9 只会留下无效端点文件，不再逐进程 disconnect/delete，从而避开 Jiuwen 在关闭"服务端已消失"的 MCP 客户端时 worker 100% CPU 空转的 bug。每次调用仍需 dsh 审批（默认拒绝）。出现空转时：`/jiuwen mcp-reset confirm` 后重启 Jiuwen agentserver + gateway。
 
 ## 4. dsh auxiliary calls (titles, compaction) don't run Jiuwen turns
 
@@ -85,7 +85,7 @@ When the host provides `ctx.commands` (`@deepseek-ai/dsh-commands`; web UI, ACP 
 | `/jiuwen switch` | `session.switch` on the mapped session |
 | `/jiuwen archive` / `unarchive` | `session.archive` / `session.unarchive` (`session_ids: [sid]`) |
 | `/jiuwen unmap` | drop local dsh↔Jiuwen mapping only (no Gateway delete) |
-| `/jiuwen delete` | `session.delete` then clear local mapping |
+| `/jiuwen delete confirm` | `session.delete` then clear local mapping (refuses without `confirm`; a never-used / already-deleted session only clears the mapping) |
 | `/jiuwen goal [get\|set <text>\|pause\|resume\|clear]` | `command.goal` (default get) |
 | `/jiuwen workflows [list\|get <id>]` | `command.workflows` (default list) |
 | `/jiuwen history` | `history.list_turns` / `history.get` (capped ~15 turns) |
@@ -112,7 +112,7 @@ When the host provides `ctx.commands` (`@deepseek-ai/dsh-commands`; web UI, ACP 
 | `/jiuwen compact` | `command.compact` on the mapped Jiuwen session |
 | `/jiuwen interrupt` | `chat.interrupt {intent:'cancel'}` |
 | `/jiuwen sessions` / `skills` [`installed`] / `agents` / `mcp` | `session.list` / `skills.list` (or `skills.installed`) / `agents.list` / `mcp.list` |
-| `/jiuwen mcp-reset` | disconnect + delete the dsh MCP registration (passthrough recovery) |
+| `/jiuwen mcp-reset confirm` | disconnect + delete the dsh MCP registration (passthrough recovery; the next passthrough turn re-registers it identically) |
 | `/jiuwen updater [check\|conf]` | `updater.get_status` / `updater.check` (read-only, 60s timeout) / `updater.get_conf`; never downloads or upgrades |
 | `/jiuwen agent <name>` | `agents.get` (description, model, tools) |
 | `/jiuwen skill-info <name>` | `skills.get` + `skills.versions.list` |
@@ -128,7 +128,7 @@ Per-session overrides (`modelName`, `chatMode`, `skills`, `agentTemplateName`) l
 
 Live (dsh 0.2.1-rc.2, via `ctx.commands.execute(agent, …)` inside headless): registry lists `compact, feedback, goal, jiuwen, permission, plan`; `/jiuwen status`, `models`, `model doubao-seed-2.0-mini`, `model nosuch` (rejected with the available list) and `skills` all returned from the live gateway. Newer session RPCs (`session.rename` / `pin` / `fork` / `delete`, `command.goal`, `skills.toggle`, `command.btw` / `command.recap`, `session.plan_status`, `team.*`, `skills.installed`) depend on the Gateway build — see [known-issues.md](./known-issues.md) live probe notes; probe with `ctx.jiuwenAdapter.gateway.rpc` if a live call fails.
 
-中文：在 dsh 命令注册表上注册 `/jiuwen <子命令>`，覆盖 status / models / model / model-info / mode / pause / resume / rename / pin / fork / switch / archive / unarchive / unmap / delete / goal / workflows / history / btw / recap / skill-toggle / plan-status / supplement / teams / tools / hooks / permissions[set/unset] / plugins[enable/disable] / projects[info/sessions] / archived / assets / version / heartbeat[set/jobs] / path / locale / commands / templates / cron / compact / interrupt / sessions / skills[installed] / agents / mcp / mcp-reset；本地标题会兼容同步 `session.rename`；会话级 mode/skills/agentTemplate 可覆盖默认配置。
+中文：在 dsh 命令注册表上注册 `/jiuwen <子命令>`，覆盖 status / models / model / model-info / mode / pause / resume / rename / pin / fork / switch / archive / unarchive / unmap / delete confirm / goal / workflows / history / btw / recap / skill-toggle / plan-status / supplement / teams / tools / hooks / permissions[set/unset] / plugins[enable/disable] / projects[info/sessions] / archived / assets / version / heartbeat[set/jobs] / path / locale / commands / templates / cron / compact / interrupt / sessions / skills[installed] / agents / mcp / mcp-reset confirm；本地标题会兼容同步 `session.rename`；会话级 mode/skills/agentTemplate 可覆盖默认配置。
 
 ### 5a. Extended subcommands (JiuwenSwarm 0.2.7 `/ws`)
 

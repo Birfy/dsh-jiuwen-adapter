@@ -101,3 +101,41 @@ test('tools/call: approval allowed-once executes dsh tool; no approval UI → de
   assert.equal(r.result.isError, false)
   await none.b.dispose()
 })
+
+test('mcp-reset: unregister then next prepare restores the identical registration in the same process', async () => {
+  rmSync(join(tmp, 'jiuwen-state.json'), { force: true })
+  const { b, calls } = bridge({})
+  await b.prepare(schemas, 's1')
+  const first = calls.find(c => c[0] === 'mcp.register_custom')[1]
+  await b.unregister()
+  calls.length = 0
+  await b.prepare(schemas, 's1')
+  assert.deepEqual(calls.map(c => c[0]), ['mcp.register_custom', 'mcp.connect'])
+  assert.deepEqual(calls[0][1], first)
+  calls.length = 0
+  await b.prepare(schemas, 's1')
+  assert.equal(calls.length, 0, 'only once after a reset')
+  await b.dispose()
+})
+
+test('schemas union drops tools of dead dsh processes', async () => {
+  rmSync(join(tmp, 'jiuwen-state.json'), { force: true })
+  const dir = join(tmp, 'state')
+  writeFileSync(join(dir, 'schemas.json'), JSON.stringify([{ name: 'stale_tool', description: 's', inputSchema: {} }]))
+  writeFileSync(join(dir, 'ep-999999999.json'), JSON.stringify({ pid: 999999999, url: 'x', token: 't', tools: ['stale_tool'] }))
+  const { b } = bridge({})
+  await b.prepare(schemas, 's1')
+  assert.deepEqual(JSON.parse(readFileSync(join(dir, 'schemas.json'), 'utf8')).map(t => t.name), ['read', 'web_fetch'])
+  rmSync(join(dir, 'ep-999999999.json'), { force: true })
+  await b.dispose()
+})
+
+test('/jiuwen mcp-reset requires a trailing confirm', async () => {
+  const { createJiuwenCommand } = await import('../src/commands.js')
+  let n = 0
+  const cmd = createJiuwenCommand({ sessions: { ensure: () => ({ jiuwenSessionId: 'j' }) }, gateway: () => ({}), config: () => ({ mcpServerName: 'dsh-tools' }), mcpBridge: { unregister: async () => { n++; return { disconnect: {}, delete: {} } } } })
+  assert.match(await cmd.run('s', 'mcp-reset'), /Refusing .*mcp-reset confirm/)
+  assert.equal(n, 0)
+  assert.match(await cmd.run('s', 'mcp-reset confirm'), /Removed Jiuwen MCP registration/)
+  assert.equal(n, 1)
+})

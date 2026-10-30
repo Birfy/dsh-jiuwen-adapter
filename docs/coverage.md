@@ -188,7 +188,7 @@ Earlier live probe (ws://127.0.0.1:19000/ws, empty params, read-only): routed ok
 | `locale.set_conf` | excluded | irreversible / credentials / host-side effect |
 | `mcp.cancel_connect` | uncovered |  |
 | `mcp.connect` | covered | MCP passthrough bridge |
-| `mcp.delete_custom` | covered | /jiuwen mcp-reset (own entries only) |
+| `mcp.delete_custom` | covered | /jiuwen mcp-reset confirm (own entries only) |
 | `mcp.disconnect` | covered | MCP bridge / mcp-reset |
 | `mcp.install` | excluded | irreversible / credentials / host-side effect |
 | `mcp.list` | covered | /jiuwen mcp |
@@ -319,7 +319,7 @@ Earlier live probe (ws://127.0.0.1:19000/ws, empty params, read-only): routed ok
 | `session.archive` | covered | /jiuwen archive |
 | `session.archived.list` | covered | /jiuwen archived |
 | `session.create` | covered | session mapping |
-| `session.delete` | covered | /jiuwen delete |
+| `session.delete` | covered | /jiuwen delete confirm |
 | `session.fork` | covered | /jiuwen fork |
 | `session.get_metadata` | covered | /jiuwen status |
 | `session.list` | covered | /jiuwen sessions |

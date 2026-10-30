@@ -316,7 +316,7 @@ export const EXT = {
   'document': {
     usage: 'document formats', group: 'System', methods: ['document.formats'],
     async run({ g, rest }) {
-      if ((rest[0] || 'formats') !== 'formats') return null
+      if ((rest[0] || 'formats') !== 'formats') return 'Usage: /jiuwen document formats (persist a file with /jiuwen doc persist <absolute host path>)'
       const r = await g.rpc('document.formats', {})
       return `Jiuwen forbidden document formats (${(r?.forbidden_formats || []).length}): ${(r?.forbidden_formats || []).join(' ')}`
     },

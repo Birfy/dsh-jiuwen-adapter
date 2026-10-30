@@ -15,7 +15,7 @@
  */
 import { createServer } from 'node:http'
 import { randomBytes, randomUUID } from 'node:crypto'
-import { mkdirSync, writeFileSync, readFileSync, renameSync, unlinkSync } from 'node:fs'
+import { mkdirSync, writeFileSync, readFileSync, renameSync, unlinkSync, readdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
@@ -35,6 +35,19 @@ export function isProxyConnected(record, reg) {
     && record.command === reg.command && JSON.stringify(record.args || []) === JSON.stringify(reg.args))
 }
 
+const alive = (pid) => { try { process.kill(pid, 0); return true } catch (e) { return e?.code === 'EPERM' } }
+/** Tool names advertised by live ep-<pid>.json endpoint files (dead pids ignored). */
+export function liveToolNames(dir) {
+  const out = new Set()
+  let files = []
+  try { files = readdirSync(dir).filter(n => /^ep-\d+\.json$/.test(n)) } catch { return out }
+  for (const n of files) {
+    const e = readJson(join(dir, n), null)
+    if (e && Number(e.pid) && alive(Number(e.pid))) for (const t of e.tools || []) out.add(t)
+  }
+  return out
+}
+
 export function matchesAllowlist(name, list) {
   return (list || []).some((p) => {
     if (p === '*') return true
@@ -45,6 +58,8 @@ export function matchesAllowlist(name, list) {
 
 export function createMcpBridge({ config, services, rpc, logger }) {
   let server, url, token, ready
+  /** Set by unregister(): the live proxy endpoint stays, but Jiuwen's registration must be re-created. */
+  let needsRegister = false
   /** name → schema, refreshed from every turn. */
   const schemas = new Map()
   let currentSessionId
@@ -119,10 +134,14 @@ export function createMcpBridge({ config, services, rpc, logger }) {
   function publishSchemas() {
     const f = join(stateDir(), 'schemas.json')
     const prev = readJson(f, [])
-    const byName = new Map(prev.map(t => [t.name, t]))
+    // Keep only names still served by a live dsh process: a dead process's tools would otherwise
+    // stay listed forever (and resurface after an mcp-reset reconnect).
+    const live = liveToolNames(stateDir())
+    const byName = new Map(prev.filter(t => live.has(t.name)).map(t => [t.name, t]))
+    const before = new Set(prev.map(t => t.name))
     let added = false
     for (const sch of schemas.values()) {
-      if (!byName.has(sch.name)) added = true
+      if (!before.has(sch.name)) added = true
       byName.set(sch.name, { name: sch.name, description: String(sch.description || sch.name).slice(0, 4000), inputSchema: sch.parameters || sch.inputSchema || { type: 'object', properties: {} } })
     }
     writeAtomic(f, JSON.stringify([...byName.values()]), 0o644)
@@ -194,6 +213,16 @@ export function createMcpBridge({ config, services, rpc, logger }) {
       if (!schemas.size) return null
       if (!ready) return start()
       const r = await ready
+      if (needsRegister && epFile) {
+        // After `/jiuwen mcp-reset` in this process: restore the identical stdio-proxy registration.
+        try {
+          writeAtomic(epFile, JSON.stringify({ pid: process.pid, url, token, ts: Date.now(), tools: [...schemas.keys()] }))
+          publishSchemas()
+          const out = { url, ...(await ensureRegistered(false)) }
+          needsRegister = false
+          return out
+        } catch (error) { return { url, error: String(error?.message || error) } }
+      }
       // Later turns of a long-lived host may expose more tools: refresh our endpoint + the union.
       const known = readJson(epFile || '', null)?.tools || []
       if (epFile && [...schemas.keys()].some(n => !known.includes(n))) {
@@ -217,6 +246,7 @@ export function createMcpBridge({ config, services, rpc, logger }) {
       const out = {}
       try { out.disconnect = await rpc('mcp.disconnect', { name }, { timeoutMs }) } catch (e) { out.disconnect = String(e?.message || e) }
       try { out.delete = await rpc('mcp.delete_custom', { name }, { timeoutMs }) } catch (e) { out.delete = String(e?.message || e) }
+      needsRegister = true
       return out
     },
     _handle: handle,

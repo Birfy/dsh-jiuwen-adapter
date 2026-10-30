@@ -7,18 +7,18 @@ import { isUnknownMethod } from './features.js'
 import { findExt, extHelp, tokenize } from './commands-ext.js'
 
 export const SUBCOMMANDS =
-  'status | models | model <name|default> | model-info <id|name> | mode [name|default] | pause | resume | rename <title> | pin [on|off] | fork | switch | archive | unarchive | unmap | delete | goal [get|set <text>|pause|resume|clear] | workflows [list|get <id>] | history | btw <question> | recap | skill-toggle <name> <on|off> | plan-status | supplement <text> | teams | compact | interrupt | sessions | skills [installed] | agents | tools | hooks | permissions [set <tool> <allow|ask|deny>|unset <tool>] | plugins [enable|disable <name>] | projects [info|sessions [id]] | archived | assets | version | heartbeat [set <every> [target]|jobs] | path | locale | commands | templates | cron | updater [check|conf] | agent <name> | skill-info <name> | marketplaces | bindings | mcp | mcp-reset | help'
+  'status | models | model <name|default> | model-info <id|name> | mode [name|default] | pause | resume | rename <title> | pin [on|off] | fork | switch | archive | unarchive | unmap | delete confirm | goal [get|set <text>|pause|resume|clear] | workflows [list|get <id>] | history | btw <question> | recap | skill-toggle <name> <on|off> | plan-status | supplement <text> | teams | compact | interrupt | sessions | skills [installed] | agents | tools | hooks | permissions [set <tool> <allow|ask|deny>|unset <tool>] | plugins [enable|disable <name>] | projects [info|sessions [id]] | archived | assets | version | heartbeat [set <every> [target]|jobs] | path | locale | commands | templates | cron | updater [check|conf] | agent <name> | skill-info <name> | marketplaces | bindings | mcp | mcp-reset confirm | help'
 
 /**
  * @param {{ sessions: import('./session-store.js').SessionStore, gateway: () => import('./gateway-transport.js').GatewayTransport, config: () => any, mcpBridge?: any }} deps
  */
 export const HELP_GROUPS = [
-  ['Session', 'status, rename <title>, pin [on|off], fork, switch, archive, unarchive, unmap, delete, sessions, archived, assets, history'],
+  ['Session', 'status, rename <title>, pin [on|off], fork, switch, archive, unarchive, unmap, delete confirm, sessions, archived, assets, history'],
   ['Turn control', 'pause, resume, interrupt, compact, btw <question>, recap, supplement <text>, goal [get|set <text>|pause|resume|clear], plan-status, workflows [list|get <id>]'],
   ['Models & mode', 'models, model <name|default>, model-info <id|name>, mode [name|default]'],
   ['Skills & agents', 'skills [installed], skill-info <name>, skill-toggle <name> <on|off>, marketplaces, agents, agent <name>, tools, templates, teams, bindings'],
   ['Config & policy', 'hooks, permissions [set <tool> <allow|ask|deny>|unset <tool>], plugins [enable|disable <name>], heartbeat [set <every> [target]|jobs], cron, path, locale, commands, projects [info|sessions [id]]'],
-  ['System', 'version, updater [check|conf], mcp, mcp-reset, help'],
+  ['System', 'version, updater [check|conf], mcp, mcp-reset confirm, help'],
 ]
 export const helpText = (name = 'jiuwen', isUnsupported) => `Usage: /${name} <subcommand>\n${[...HELP_GROUPS.map(([k, v]) => `${k}: ${v}`), ...extHelp(isUnsupported)].join('\n')}`
 
@@ -30,6 +30,8 @@ export function createJiuwenCommand(deps) {
     if (['off', 'false', '0'].includes(v)) return false
     return undefined
   }
+  const hasConfirm = (tokens) => tokens.some(t => t === 'confirm' || t === '--confirm')
+  const cmdName = () => deps.config()?.commandName || 'jiuwen'
   const short = (s, n = 120) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n)
   async function run(sessionId, rawInput) {
     const [sub = 'status', ...rest] = String(rawInput || '').trim().split(/\s+/).filter(Boolean)
@@ -172,7 +174,13 @@ export function createJiuwenCommand(deps) {
         return `Removed local mapping for dsh session ${dshId} (Jiuwen session ${sid} left intact).`
       }
       case 'delete': {
-        await g.sessionDelete(sid)
+        if (!hasConfirm(rest)) return `Refusing to delete Jiuwen session ${sid} without confirmation: re-run /${cmdName()} delete confirm (or /${cmdName()} unmap to drop only the local mapping).`
+        try { await g.sessionDelete(sid) } catch (e) {
+          // Never-used mapping (no turn yet) or already deleted on the Gateway: still clear locally.
+          if (!/session (was )?not found/i.test(String(e?.message || e))) throw e
+          deps.sessions.remove?.(dshId)
+          return `Jiuwen session ${sid} does not exist on the Gateway (no turns yet or already deleted); local mapping cleared for dsh session ${dshId}.`
+        }
         deps.sessions.remove?.(dshId)
         return `Jiuwen session ${sid} deleted and local mapping cleared for dsh session ${dshId}.`
       }
@@ -201,7 +209,12 @@ export function createJiuwenCommand(deps) {
         if (action === 'get') {
           const id = rest[1]
           if (!id) return 'Usage: /jiuwen workflows get <id>'
-          const r = await g.workflows(sid, 'get', { workflow_id: id, id })
+          // 0.2.7 names the action `get_workflow`; older builds used `get`.
+          let r
+          try { r = await g.workflows(sid, 'get_workflow', { workflow_id: id, id }) } catch (e) {
+            if (!/unknown action/i.test(String(e?.message || e))) throw e
+            r = await g.workflows(sid, 'get', { workflow_id: id, id })
+          }
           return `Workflow ${id}: ${JSON.stringify(r).slice(0, 400)}`
         }
         return 'Usage: /jiuwen workflows [list|get <id>]'
@@ -487,6 +500,7 @@ ${jobs.slice(0, 15).map(j => `- ${j.id || j.job_id || j.name || JSON.stringify(j
       case 'mcp': { const r = await g.mcpList(); return `Jiuwen MCP servers: ${(r?.items || []).map(x => `${x.name}${x.connection_state ? ` (${x.connection_state})` : ''}`).join(', ') || 'none'}` }
       case 'mcp-reset': {
         if (!deps.mcpBridge?.unregister) return 'dsh tool passthrough is not available'
+        if (!hasConfirm(rest)) return `Refusing to remove Jiuwen MCP registration "${deps.config().mcpServerName}" without confirmation: re-run /${cmdName()} mcp-reset confirm (the next passthrough turn re-registers it).`
         const r = await deps.mcpBridge.unregister()
         const ok = (x) => (x && typeof x === 'object' ? (x.ok === false ? 'failed' : 'ok') : String(x))
         return `Removed Jiuwen MCP registration "${deps.config().mcpServerName}" (disconnect: ${ok(r.disconnect)}, delete: ${ok(r.delete)}); the next passthrough turn re-registers it`

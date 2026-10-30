@@ -392,7 +392,10 @@ test('/jiuwen pause resume rename pin goal workflows history unmap delete', asyn
   assert.equal(api.sessions.get('um'), undefined)
 
   api.jiuwenSessionId('del') // ensure mapping
-  assert.match((await run('del', 'delete')).text, /Jiuwen session .* deleted and local mapping cleared/)
+  const refused = await run('del', 'delete')
+  assert.match(refused.text, /Refusing to delete Jiuwen session .*delete confirm/)
+  assert.ok(api.sessions.get('del'), 'mapping kept without confirm')
+  assert.match((await run('del', 'delete confirm')).text, /Jiuwen session .* deleted and local mapping cleared/)
   assert.equal(api.sessions.get('del'), undefined)
 
   // gateway helpers exposed

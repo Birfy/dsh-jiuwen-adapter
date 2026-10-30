@@ -169,4 +169,26 @@ Real `@deepseek-ai/cordis` Context + `dsh-llm` LlmRuntime + `dsh-commands` Comma
 - MCP passthrough serves tools Jiuwen saw at AgentServer prewarm (`working_directory` passed live, approval-gated); a brand-new tool name is still invisible to `tool_search` across turns and reconnects until AgentServer restarts.
 - `git status|diff` → `git operations not available for this project` (default project has no git). `models validate` needs an `api_key`, which the adapter refuses to pass. `schedule.*`, `command.recap`, `session.assets.list` remain unrouted (soft-fail).
 - `mode=openai` (path C fallback) has no live target: port 18092 is the AgentServer WebSocket, not an OpenAI-compatible HTTP server.
-- `/jiuwen delete` deletes without a trailing `confirm` (unlike the P2 deletes) — unchanged, by design of the original command.
+- ~~`/jiuwen delete` deletes without a trailing `confirm`~~ — fixed in round 2 (§10): `/jiuwen delete confirm`.
+
+## 10. Round 2 live edge tests (2026-10-30, UTC+8)
+
+Same real Cordis host (`Context` + `dsh-llm` + `dsh-commands`), JiuwenSwarm 0.2.7, doubao-seed-2.0-mini. 105 bad/missing-argument variants of every subcommand (usage text or a clean `Jiuwen: "<gateway error>"`; no throw, no stack trace, no `[object Object]`), unicode/Chinese + emoji (turn, rename, status title, history), 30 k-char input, 5 k-char rename, 3 concurrent sessions (0/193 cross-session events), abort after 2.5 s and after 300 ms then a new turn, 4 s turn timeout (`TIMEOUT`, next turn fine), Gateway restart mid-stream (`TRANSPORT: Gateway WebSocket closed`, then command + turn reconnect), image attachment (base64 PNG → "red"), `compactionMode: local+jiuwen` (local digest + `command.compact` ok), mapping persistence across plugin dispose + reload, two instances (`jiuwen-a`/`/jwa`, `jiuwen-b`/`/jwb`) concurrently, all P3 flags on for 6 turns incl. a bash tool call, `api_key` values grepped in every output/log (0 hits). Gateway state snapshot before/after identical (MCP list differs only in presigned icon URLs).
+
+**Adapter bugs found and fixed**
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `/jiuwen mcp-reset` then a passthrough turn in the same process never re-registered `dsh-tools` (`mcp.show` → `SkillHub asset not found`) | the bridge cached its first `prepare()` result; only new tool names triggered `ensureRegistered` | `unregister()` marks the bridge dirty; the next `prepare()` re-registers the identical stdio proxy (`register_custom` + `connect`; same command/args/timeout_s; Jiuwen `state.json` record byte-identical) |
+| after a reconnect the proxy listed tools of long-dead dsh processes (a stale tool from an earlier run resurfaced) | `schemas.json` union never pruned | union keeps only names advertised by live `ep-<pid>.json` files |
+| `/jiuwen mcp-reset` and `/jiuwen delete` ran without confirmation | — | both require a trailing `confirm` (`unmap` stays local and confirm-free) |
+| `/jiuwen workflows get <id>` → `unknown action: get` | 0.2.7 names it `get_workflow` | send `get_workflow`, fall back to `get` on older builds |
+| `/jiuwen delete confirm` on a never-used mapping → `session not found`, local mapping left behind | delete threw before clearing the mapping | on `session not found` the mapping is still cleared and reported |
+| `/jiuwen document bogus` → `Unknown subcommand "document"` | ext returned `null` | prints `document formats` usage |
+
+**Expected / gateway-side**
+
+- Lookups of non-existent ids/names (`cron get`, `heartbeat job`, `skill-info`, `agent`, `mcp show`, `template/group show`, `projects sessions`) surface Jiuwen's own message (often Chinese, e.g. `未找到 skill`); `fork`/`continue-queued` on a session with no turns → `source session not found` / `Session was not found` (the Jiuwen session is created lazily on the first turn).
+- `media discard /etc/passwd confirm` → `path is outside session uploads` (Gateway guard).
+- Gateway restart mid-stream ends the turn with `TRANSPORT`; the in-flight answer is lost (Jiuwen does not resume a turn on a new socket); the next command/turn reconnects transparently.
+- `/jiuwen rename` accepts very long titles (5000 chars) — Jiuwen stores them as is.

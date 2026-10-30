@@ -78,7 +78,7 @@ for await (const c of ctx.llm.stream({
 - **Multimodal**: image/file parts (data URL or readable path) → `media_items`.
 - **Sessions**: host `sessionId` → stable Jiuwen `session_id`, persisted at `mappingPath`.
 - **E2A helpers**: `ctx.jiuwenAdapter.gateway.{historyGet, modelsList, mcpList, memoryList, filesList, chatCancel, workflows, sessionRename, sessionPin, goal, btw, recap, planStatus, skillsToggle, skillsInstalled, teamList, …}`.
-- **Slash command**: `/jiuwen status|models|model|model-info|mode|pause|resume|rename|pin|fork|switch|archive|unarchive|unmap|delete|goal|workflows|history|btw|recap|skill-toggle|plan-status|supplement|teams|tools|hooks|permissions|plugins|projects|archived|assets|version|heartbeat|path|locale|commands|templates|cron|updater|agent|skill-info|marketplaces|bindings|help|compact|interrupt|sessions|skills|agents|mcp|mcp-reset` (when the host has `ctx.commands`).
+- **Slash command**: `/jiuwen status|models|model|model-info|mode|pause|resume|rename|pin|fork|switch|archive|unarchive|unmap|delete confirm|goal|workflows|history|btw|recap|skill-toggle|plan-status|supplement|teams|tools|hooks|permissions|plugins|projects|archived|assets|version|heartbeat|path|locale|commands|templates|cron|updater|agent|skill-info|marketplaces|bindings|help|compact|interrupt|sessions|skills|agents|mcp|mcp-reset confirm` (when the host has `ctx.commands`).
 
 ## Gateway features (primary mode)
 
