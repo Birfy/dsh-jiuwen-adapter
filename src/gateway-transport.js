@@ -200,6 +200,66 @@ export class GatewayTransport {
   historyGet(sessionId, extra = {}) {
     return this.rpc(HISTORY.GET, { session_id: sessionId, ...extra })
   }
+  /**
+   * history.get on JiuwenSwarm ≥0.2.7 only acks (`{accepted:true}`) and streams the page as
+   * `history.message` events (page_idx is 1-based, newest first; a final `{status:'done'}` frame).
+   * Collect one page, reassemble `_part` splits, return `{ messages }` oldest → newest.
+   */
+  async historyMessages(sessionId, { page_idx = 1, timeoutMs = 20_000, ...extra } = {}) {
+    if (!this.WebSocketImpl) throw Object.assign(new Error('WebSocket unavailable'), { code: 'TRANSPORT' })
+    const ws = await this._connect(buildGatewayWsUrl(this.gatewayURL, this.auth))
+    try {
+      await this._awaitAck(ws, Math.min(15_000, this.requestTimeoutMs))
+      const id = `rpc-${randomUUID()}`
+      const records = []
+      const parts = new Map()
+      const meta = {}
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => { cleanup(); records.length ? resolve() : reject(Object.assign(new Error('RPC history.get timed out'), { code: 'TIMEOUT' })) }, timeoutMs)
+        const cleanup = () => { clearTimeout(timer); ws.removeEventListener('message', onMessage) }
+        const onMessage = (event) => {
+          let f
+          try { f = JSON.parse(String(event.data)) } catch { return }
+          if (f.type === 'res' && f.id === id) {
+            if (f.ok === false) { cleanup(); reject(Object.assign(new Error(JSON.stringify(f.error || f.payload || f)), { code: 'TRANSPORT' })) }
+            return
+          }
+          if (f.type !== 'event') return
+          const p = f.payload || {}
+          if (f.event === 'chat.error' && (!p.request_id || p.request_id === id)) {
+            cleanup()
+            if (/history not found/i.test(String(p.error || ''))) resolve()
+            else reject(Object.assign(new Error(String(p.error || 'history.get failed')), { code: 'TRANSPORT' }))
+            return
+          }
+          if (f.event !== 'history.message') return
+          if (p.status === 'done' || p.status === 'error') {
+            Object.assign(meta, { total_pages: p.total_pages, page_idx: p.page_idx, has_more: p.has_more, next_cursor: p.next_cursor })
+            cleanup()
+            if (p.status === 'error') reject(Object.assign(new Error(String(p.error || 'history.get failed')), { code: p.code || 'TRANSPORT' }))
+            else resolve()
+            return
+          }
+          const m = p.message
+          if (!m || typeof m !== 'object') return
+          const part = m._part
+          if (part && part.record_id) {
+            const slot = parts.get(part.record_id) || { m: { ...m }, chunks: [] }
+            slot.chunks[part.part_idx] = String(m.content ?? '')
+            if (!parts.has(part.record_id)) { parts.set(part.record_id, slot); records.push(slot.m) }
+            if (slot.chunks.filter(x => x !== undefined).length === part.total_parts) { slot.m.content = slot.chunks.join(''); delete slot.m._part }
+            return
+          }
+          records.push(m)
+        }
+        ws.addEventListener('message', onMessage)
+        ws.send(JSON.stringify({ type: 'req', id, method: HISTORY.GET, params: { session_id: sessionId, page_idx, ...extra } }))
+      })
+      return { ...meta, records, messages: records.slice().reverse() }
+    } finally {
+      try { ws.close() } catch { /* ignore */ }
+    }
+  }
   historyListTurns(sessionId, extra = {}) {
     return this.rpc(HISTORY.LIST_TURNS, { session_id: sessionId, ...extra })
   }
@@ -247,7 +307,8 @@ export class GatewayTransport {
   sessionList(extra = {}) { return this.rpc(SESSION.LIST, { ...extra }) }
   sessionCreate(extra = {}) { return this.rpc(SESSION.CREATE, { ...extra }) }
   sessionDelete(sessionId, extra = {}) { return this.rpc(SESSION.DELETE, { session_id: sessionId, ...extra }) }
-  sessionFork(sessionId, extra = {}) { return this.rpc(SESSION.FORK, { session_id: sessionId, ...extra }) }
+  // 0.2.7 AgentServer reads source_session_id (session_id kept for older Gateways).
+  sessionFork(sessionId, extra = {}) { return this.rpc(SESSION.FORK, { session_id: sessionId, source_session_id: sessionId, ...extra }) }
   sessionRename(sessionId, title, extra = {}) {
     return this.rpc(SESSION.RENAME, { session_id: sessionId, title, ...extra })
   }

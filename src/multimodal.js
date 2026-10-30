@@ -106,3 +106,37 @@ export function attachMediaToChatParams(params, media) {
     files: media.filesHint,
   }
 }
+
+/** dsh-llm ≥0.2 projects every file block to this handle text before the adapter sees it. */
+const FILE_HANDLE_RE = /\[File ("(?:[^"\\]|\\.)*") \((\d+) bytes, sha256:[0-9a-f]+\): verbatim read-only copy saved at ("(?:[^"\\]|\\.)*")\./g
+const MIME_BY_EXT = { pdf: 'application/pdf', txt: 'text/plain', md: 'text/markdown', csv: 'text/csv', json: 'application/json', html: 'text/html', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' }
+
+/**
+ * Recover document attachments from dsh-llm file handle texts in the LAST user message (so a file is
+ * persisted once, on the turn it was attached) and append them as `file` blocks for documentPersist.
+ * Messages without handles are returned unchanged.
+ */
+export function fileBlocksFromHandles(options) {
+  const messages = options?.messages
+  if (!Array.isArray(messages)) return options
+  let idx = -1
+  for (let i = messages.length - 1; i >= 0; i--) if (messages[i]?.role === 'user') { idx = i; break }
+  if (idx < 0) return options
+  const msg = messages[idx]
+  const blocks = typeof msg.content === 'string' ? [{ type: 'text', text: msg.content }] : (Array.isArray(msg.content) ? msg.content : [])
+  if (blocks.some(b => b?.type === 'file')) return options
+  const files = []
+  for (const b of blocks) {
+    if (b?.type !== 'text' || typeof b.text !== 'string') continue
+    for (const m of b.text.matchAll(FILE_HANDLE_RE)) {
+      let name, path
+      try { name = JSON.parse(m[1]); path = JSON.parse(m[3]) } catch { continue }
+      const ext = String(name).split('.').pop().toLowerCase()
+      files.push({ type: 'file', attachment: { name, path, bytes: Number(m[2]), mimeType: MIME_BY_EXT[ext] || 'application/octet-stream' } })
+    }
+  }
+  if (!files.length) return options
+  const next = messages.slice()
+  next[idx] = { ...msg, content: [...blocks, ...files] }
+  return { ...options, messages: next }
+}

@@ -158,6 +158,25 @@ wss.on('connection', (ws, req) => {
     // Unary RPCs
     const ok = (payload) => ws.send(JSON.stringify({ type: 'res', id: frame.id, ok: true, payload }))
     const err = (message) => ws.send(JSON.stringify({ type: 'res', id: frame.id, ok: false, error: { message } }))
+    if (method === 'history.get' && SHAPE.v === '0.2.7') {
+      // 0.2.7: ack, then stream `history.message` records (page_idx 1-based, newest first) + done.
+      const sid = String(params.session_id || '')
+      ok({ accepted: true, session_id: sid })
+      const msgs = HISTORY.get(sid) || []
+      const evt = (payload) => ws.send(JSON.stringify({ type: 'event', event: payload.event_type || 'history.message', payload }))
+      if (!msgs.length || Number(params.page_idx ?? 0) < 1) return evt({ event_type: 'chat.error', error: 'invalid page_idx or session history not found', is_complete: true, session_id: sid, request_id: frame.id })
+      for (const m of msgs.slice().reverse()) {
+        const rec = m.role === 'assistant' ? { ...m, event_type: 'chat.final' } : m
+        const text = String(rec.content ?? '')
+        if (text.length > 40) {
+          // exercise `_part` reassembly on long records
+          const parts = [text.slice(0, 20), text.slice(20)]
+          parts.forEach((c, i) => evt({ event_type: 'history.message', session_id: sid, message: { ...rec, content: c, _part: { record_id: `r-${text.length}`, part_idx: i, total_parts: 2 } } }))
+        } else evt({ event_type: 'history.message', session_id: sid, message: rec })
+      }
+      return evt({ event_type: 'history.message', status: 'done', session_id: sid, total_pages: 1, page_idx: 1 })
+    }
+    if (method === 'history.list_turns' && SHAPE.v === '0.2.7') return err('unknown method: history.list_turns')
     if (method === 'history.get') {
       const sid = String(params.session_id || '')
       return ok({ session_id: sid, messages: HISTORY.get(sid) || [], has_more: false })
@@ -241,6 +260,7 @@ wss.on('connection', (ws, req) => {
       return ok({ pinned: Boolean(params.pinned), pin_order: params.pinned ? 1 : null })
     }
     if (method === 'session.fork') {
+      if (SHAPE.v === '0.2.7' && !params.source_session_id) return err('source_session_id is required')
       return ok({ session_id: `fork_${params.session_id || 's'}_${Date.now().toString(36)}`, source_session_id: params.session_id })
     }
     if (method === 'session.delete') {
@@ -385,11 +405,11 @@ wss.on('connection', (ws, req) => {
         case 'cron.job.run_now': log(); return CRON.has(params.id) ? reply({ accepted: true, run_id: 'cr-1' }) : fail('job not found')
         case 'cron.job.delete': log(); return CRON.delete(params.id) ? reply({ ok: true }) : fail('job not found')
         case 'heartbeat.job.meta': return reply({ limits: { min_interval_seconds: 60 }, schedule_types: ['interval'] })
-        case 'heartbeat.job.get': return HB.has(params.id) ? reply({ job: HB.get(params.id) }) : fail('job not found')
+        case 'heartbeat.job.get': if (SHAPE.v === '0.2.7' && !params.session_id) return fail('job belongs to another session'); return HB.has(params.id) ? reply({ job: HB.get(params.id) }) : fail('job not found')
         case 'heartbeat.job.preview': return HB.has(params.id) ? reply({ next_runs: [] }) : fail('job not found')
-        case 'heartbeat.job.toggle': log(); if (!HB.has(params.id)) return fail('job not found'); HB.get(params.id).enabled = Boolean(params.enabled); return reply({ job: HB.get(params.id) })
-        case 'heartbeat.job.run_now': case 'heartbeat.job.cancel': log(); return HB.has(params.id) ? reply({ accepted: true }) : fail('job not found')
-        case 'heartbeat.job.delete': log(); return HB.delete(params.id) ? reply({ ok: true }) : fail('job not found')
+        case 'heartbeat.job.toggle': log(); if (SHAPE.v === '0.2.7' && !params.session_id) return fail('job belongs to another session'); if (!HB.has(params.id)) return fail('job not found'); HB.get(params.id).enabled = Boolean(params.enabled); return reply({ job: HB.get(params.id) })
+        case 'heartbeat.job.run_now': case 'heartbeat.job.cancel': log(); if (SHAPE.v === '0.2.7' && !params.session_id) return fail('job belongs to another session'); return HB.has(params.id) ? reply({ accepted: true }) : fail('job not found')
+        case 'heartbeat.job.delete': log(); if (SHAPE.v === '0.2.7' && !params.session_id) return fail('job belongs to another session'); return HB.delete(params.id) ? reply({ ok: true }) : fail('job not found')
         case 'team.history.get': return sid ? reply({ records: [{ summary: 'lead assigned task' }], total: 1 }) : fail('session_id is required')
         case 'team.snapshot': return reply({ members: [{ name: 'lead' }], tasks: [], team_id: 't1' })
         case 'agent_templates.show': return params.id === 't1' ? reply({ template: { id: 't1', displayName: { zh: '工程质量顾问' }, displayDescription: { zh: 'desc' }, installed: true } }) : fail('asset_id is required')

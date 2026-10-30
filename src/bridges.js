@@ -85,7 +85,7 @@ export function createPlanBridge({ services, gateway, sessions, logger, debounce
   return function onEvent(e) {
     const sid = e?.dshSessionId
     if (!sid) return
-    const done = e.type === 'processing_status' && e.isComplete
+    const done = e.type === 'turn_end' || (e.type === 'processing_status' && e.isComplete)
     const plan = /plan/i.test(String(e.event || '')) || e.eventType === 'plan.approval_required'
     if (!done && !plan) return
     clearTimeout(timers.get(sid))

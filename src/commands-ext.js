@@ -57,6 +57,17 @@ const getPath = (obj, path) => String(path).split('.').filter(Boolean).reduce((o
 const jobLine = j2 => `- ${j2.id || j2.job_id}${j2.name ? `  ${short(j2.name, 40)}` : ''}${j2.enabled === false ? ' [disabled]' : (j2.enabled ? ' [enabled]' : '')}${j2.cron_expr ? `  "${j2.cron_expr}"` : ''}`
 const needConfirm = (tokens, what) => (tokens.some(t => t === 'confirm' || t === '--confirm') ? null : `Refusing to ${what} without confirmation: re-run with a trailing \`confirm\`.`)
 
+/** One readable line per team.history record (0.2.7 records carry empty `content` for tool/team events). */
+export function teamRecordLine(x) {
+  const who = x?.member_name || x?.from_member || x?.role || '?'
+  const text = (typeof x?.content === 'string' && x.content.trim()) ? x.content
+    : x?.summary || x?.message
+    || (x?.event_type === 'chat.tool_call' ? `🔧 ${x.tool_call?.name || x.tool_call?.function?.name || 'tool'}` : '')
+    || (x?.event_type === 'chat.tool_result' ? `↳ ${x.tool_name || 'tool'} ${x.success === false ? 'failed' : 'ok'}` : '')
+    || (x?.event_type ? `${x.event_type}${x.event?.type || typeof x.event === 'string' ? ` ${x.event?.type || x.event}` : ''}` : j(x, 100))
+  return `[${who}] ${short(text, 120)}`
+}
+
 /**
  * @typedef {{ g: any, sid: string, dshId: string, rest: string[], tokens: string[], deps: any }} ExtCtx
  * @type {Record<string, { usage: string, group: string, methods: string[], run: (c: ExtCtx) => Promise<string> }>}
@@ -173,17 +184,17 @@ export const EXT = {
   },
   'heartbeat job': {
     usage: 'heartbeat job <id>', group: 'Schedules', methods: ['heartbeat.job.get'],
-    async run({ g, rest }) {
+    async run({ g, sid, rest }) {
       if (!rest[1]) return 'Usage: /jiuwen heartbeat job <id>'
-      const r = await g.rpc('heartbeat.job.get', { id: rest[1] })
+      const r = await g.rpc('heartbeat.job.get', { id: rest[1], session_id: sid })
       return `Jiuwen heartbeat job ${rest[1]}: ${j(maskSecrets(r?.job || r), 900)}`
     },
   },
   'heartbeat preview': {
     usage: 'heartbeat preview <id>', group: 'Schedules', methods: ['heartbeat.job.preview'],
-    async run({ g, rest }) {
+    async run({ g, sid, rest }) {
       if (!rest[1]) return 'Usage: /jiuwen heartbeat preview <id>'
-      return `Jiuwen heartbeat preview ${rest[1]}: ${j(await g.rpc('heartbeat.job.preview', { id: rest[1] }), 700)}`
+      return `Jiuwen heartbeat preview ${rest[1]}: ${j(await g.rpc('heartbeat.job.preview', { id: rest[1], session_id: sid }), 700)}`
     },
   },
   'heartbeat meta': {
@@ -214,7 +225,7 @@ export const EXT = {
         const r = await g.rpc('team.history.get', { session_id: sid })
         const recs = r?.records || []
         return recs.length
-          ? `Jiuwen team history for ${sid} (${r?.total ?? recs.length}):\n${recs.slice(-15).map((x, i) => `${i + 1}. ${short(x.summary || x.content || x.message || j(x, 100), 120)}`).join('\n')}`
+          ? `Jiuwen team history for ${sid} (${r?.total ?? recs.length}):\n${recs.slice(-15).map((x, i) => `${i + 1}. ${teamRecordLine(x)}`).join('\n')}`
           : `No team history for session ${sid}`
       }
       if (a === 'snapshot') {
@@ -358,28 +369,28 @@ export const EXT = {
   },
   'heartbeat toggle': {
     usage: 'heartbeat toggle <id> <on|off>', group: 'Schedules', methods: ['heartbeat.job.toggle'],
-    async run({ g, rest }) {
+    async run({ g, sid, rest }) {
       const enabled = onOff(rest[2])
       if (!rest[1] || enabled === undefined) return 'Usage: /jiuwen heartbeat toggle <id> <on|off>'
-      const r = await g.rpc('heartbeat.job.toggle', { id: rest[1], enabled })
+      const r = await g.rpc('heartbeat.job.toggle', { id: rest[1], session_id: sid, enabled })
       return `Jiuwen heartbeat job ${rest[1]} ${(r?.job?.enabled ?? enabled) ? 'enabled' : 'disabled'}.`
     },
   },
   'heartbeat run': {
     usage: 'heartbeat run <id>', group: 'Schedules', methods: ['heartbeat.job.run_now'],
-    async run({ g, rest }) { if (!rest[1]) return 'Usage: /jiuwen heartbeat run <id>'; await g.rpc('heartbeat.job.run_now', { id: rest[1] }); return `Triggered Jiuwen heartbeat job ${rest[1]} now.` },
+    async run({ g, sid, rest }) { if (!rest[1]) return 'Usage: /jiuwen heartbeat run <id>'; await g.rpc('heartbeat.job.run_now', { id: rest[1], session_id: sid }); return `Triggered Jiuwen heartbeat job ${rest[1]} now.` },
   },
   'heartbeat cancel': {
     usage: 'heartbeat cancel <id>', group: 'Schedules', methods: ['heartbeat.job.cancel'],
-    async run({ g, rest }) { if (!rest[1]) return 'Usage: /jiuwen heartbeat cancel <id>'; await g.rpc('heartbeat.job.cancel', { id: rest[1] }); return `Cancelled the running Jiuwen heartbeat job ${rest[1]}.` },
+    async run({ g, sid, rest }) { if (!rest[1]) return 'Usage: /jiuwen heartbeat cancel <id>'; await g.rpc('heartbeat.job.cancel', { id: rest[1], session_id: sid }); return `Cancelled the running Jiuwen heartbeat job ${rest[1]}.` },
   },
   'heartbeat delete': {
     usage: 'heartbeat delete <id> confirm', group: 'Schedules', methods: ['heartbeat.job.delete'],
-    async run({ g, rest, tokens }) {
+    async run({ g, sid, rest, tokens }) {
       if (!rest[1] || rest[1] === 'confirm') return 'Usage: /jiuwen heartbeat delete <id> confirm'
       const no = needConfirm(tokens.slice(2), `delete heartbeat job ${rest[1]}`)
       if (no) return no
-      await g.rpc('heartbeat.job.delete', { id: rest[1] })
+      await g.rpc('heartbeat.job.delete', { id: rest[1], session_id: sid })
       return `Deleted Jiuwen heartbeat job ${rest[1]}.`
     },
   },

@@ -15,6 +15,7 @@ import { prepareBrainRequest, callKind } from './agent-brain.js'
 import { appendFileSync } from 'node:fs'
 import { failureFromError, emitTextReply } from './stream-emit.js'
 import { toGatewayQuery, contentToText } from './messages.js'
+import { fileBlocksFromHandles } from './multimodal.js'
 
 /**
  * @param {typeof import('@deepseek-ai/dsh-llm').LlmAdapter | null} LlmAdapterBase
@@ -186,6 +187,7 @@ export function createJiuwenAdapter(LlmAdapterBase, deps) {
             `[dsh-jiuwen] brain=jiuwen gateway chat.send kind=${kind} dsh=${dshSessionId} jiuwen=${mapping.jiuwenSessionId} model=${options.model}`,
           )
           options = await hydrateAttachments(options, deps.attachments?.(), deps.logger)
+          if (cfg.documentPersist) options = fileBlocksFromHandles(options)
           const overrides = turnOverrides(cfg, options)
           if (!overrides.modelName && mapping.modelName) overrides.modelName = mapping.modelName // /jiuwen model <name>
           // Per-session overrides from /jiuwen mode (and future skills/agentTemplate): request + catalog
@@ -233,6 +235,9 @@ export function createJiuwenAdapter(LlmAdapterBase, deps) {
               if (!aux && (info.reason?.kind === 'stop' || info.reason?.kind === 'aborted')) {
                 deps.sessions.recordTurn?.(dshSessionId, { requestId: info.requestId, pendingQuestion: info.pendingQuestion })
               }
+              // Turns usually end on the terminal chat.final grace, before Gateway's processing_status
+              // {is_complete} arrives, so bridges (planBridge) key off this explicit turn_end event.
+              if (!aux) { try { deps.onEvent?.({ dshSessionId, type: 'turn_end', sessionId: turnMapping.jiuwenSessionId, requestId: info.requestId, reason: info.reason }) } catch { /* ignore */ } }
             },
           })
           } finally {

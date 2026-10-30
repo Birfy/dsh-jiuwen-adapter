@@ -144,4 +144,29 @@ Live after the fix (:19000, 0.2.7): `assets` gives the degrade message; `teams` 
 | `document.persist` | OK | local `path` items are validated and referenced in place (not copied); base64 items land in `sessions/<id>/uploads/` |
 | `media.discard` | OK | `{deleted: true}` for an uploads path; paths outside the session uploads dir are rejected by AgentServer |
 | `session.create` | OK | ignores a caller-provided `session_id` (always returns `web_…`) — why `sessionSync` does not pre-create Jiuwen sessions |
-| `cron.job.run_now`, `heartbeat.job.run_now/cancel` | not probed live | would start a real agent turn; covered by mock tests only |
+| `cron.job.run_now`, `heartbeat.job.run_now/cancel` | OK (live, §9) | throwaway disabled jobs: cron run → `run <id>:<ts>`; heartbeat run → `status: running` → cancel → `disabled`; both deleted |
+
+## 9. Full live run through the real Cordis host (2026-10-30, UTC+8)
+
+Real `@deepseek-ai/cordis` Context + `dsh-llm` LlmRuntime + `dsh-commands` CommandRuntime (`commands.execute('/jiuwen …')`), JiuwenSwarm 0.2.7 on :19000, model doubao-seed-2.0-mini. Every `/jiuwen` subcommand/variant, chat flows and each P3 flag were run; state (cron, heartbeat conf/jobs, permission tools/rules/overrides, plugins, skills, archived, sessions) was snapshotted before and verified identical after; 28 throwaway sessions deleted.
+
+**Adapter bugs found and fixed**
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `/jiuwen history` always "No history" | 0.2.7 `history.get` only acks `{accepted:true}` and streams the page as `history.message` events (`page_idx` 1-based, newest first, `_part` splits, final `{status:'done'}`); `history.list_turns` is unknown | `GatewayTransport.historyMessages()` collects/reassembles one page; `/jiuwen history` uses it; `api.gateway.historyMessages(sid)` |
+| `/jiuwen fork` → `source_session_id is required` | AgentServer 0.2.7 reads `source_session_id` | send both `session_id` and `source_session_id` |
+| `heartbeat job/preview/toggle/run/cancel/delete` → `job belongs to another session`; `heartbeat jobs` empty | heartbeat jobs are session-scoped; the connection session comes from `params.session_id` | pass the mapped Jiuwen `session_id` on every heartbeat job RPC |
+| planBridge never synced | turns end on the terminal `chat.final` grace, before `processing_status{is_complete}` | adapter emits `{type:'turn_end'}`; planBridge syncs on it |
+| documentPersist never fired under real dsh | `dsh-llm` ≥0.2 projects every `file` block into handle text (`[File "x" (N bytes, sha256:…): verbatim read-only copy saved at "<path>"…]`) before the adapter sees it | with `documentPersist` on, file handles in the last user message become document items → `document.persist` |
+| `/jiuwen team history` printed raw JSON | 0.2.7 records carry empty `content` for tool/team events | readable `[member] 🔧 tool` / `↳ tool ok` / `event` lines |
+
+**Gateway-side / environment limits (not adapter bugs)**
+
+- `permission_interrupt` is not triggerable on this install: with `permissions set bash ask` *and* `deny`, bash still ran without an interrupt (tool-level permissions are not enforced for the web channel agent here). The approval → `ctx.approval.request` path stays covered by mock tests; `ask_user_interrupt` → `ctx.userQuestions.ask` passed live.
+- SwarmFlow: a team (`/jiuwen mode team.work.normal`) wakes and runs (team history/snapshot OK) but emits no SwarmFlow `run_id`; `swarmflow.stop` answers `工作流控制不可用，发送一条消息唤醒团队后即可使用。` once the team is idle, so abort→`swarmflow.stop` cannot be exercised live. Host abort → `chat.interrupt` passed.
+- Legacy chat modes (`agent.fast`, `code.normal`) are normalised by Jiuwen to `agent`; use canonical modes (`agent.code.normal`, `team.work.normal`, …) for per-session overrides — `agent.code.normal` is recorded in `session.get_metadata`.
+- MCP passthrough serves tools Jiuwen saw at AgentServer prewarm (`working_directory` passed live, approval-gated); a brand-new tool name is still invisible to `tool_search` across turns and reconnects until AgentServer restarts.
+- `git status|diff` → `git operations not available for this project` (default project has no git). `models validate` needs an `api_key`, which the adapter refuses to pass. `schedule.*`, `command.recap`, `session.assets.list` remain unrouted (soft-fail).
+- `mode=openai` (path C fallback) has no live target: port 18092 is the AgentServer WebSocket, not an OpenAI-compatible HTTP server.
+- `/jiuwen delete` deletes without a trailing `confirm` (unlike the P2 deletes) — unchanged, by design of the original command.

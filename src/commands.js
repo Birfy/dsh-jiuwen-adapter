@@ -209,6 +209,11 @@ export function createJiuwenCommand(deps) {
       case 'history': {
         let r
         try { r = await g.historyListTurns(sid) } catch { r = await g.historyGet(sid) }
+        // 0.2.7: history.get only acks and streams `history.message` events → collect them.
+        if (r?.accepted && !r?.messages && typeof g.historyMessages === 'function') {
+          const page = await g.historyMessages(sid)
+          r = { messages: (page.messages || []).filter(m => m && (m.role === 'user' || m.event_type === 'chat.final' || (!m.event_type && m.content))) }
+        }
         const msgs = r?.messages || r?.turns || []
         const rows = (Array.isArray(msgs) ? msgs : []).slice(-15).map((m, i) => {
           if (typeof m === 'string') return `${i + 1}. ${short(m, 100)}`
@@ -436,7 +441,7 @@ ${list.join('\n')}`
           return `Heartbeat set: every ${r?.every ?? every}s → ${r?.target || target || cur?.target || '?'}`
         }
         if (action === 'jobs') {
-          const r = await g.heartbeatJobList()
+          const r = await g.heartbeatJobList({ session_id: sid })
           const jobs = r?.jobs || []
           if (!jobs.length) return 'Jiuwen heartbeat jobs: none'
           return `Jiuwen heartbeat jobs (${jobs.length}):

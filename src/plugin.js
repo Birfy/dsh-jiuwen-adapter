@@ -137,6 +137,8 @@ export function apply(ctx, config = {}) {
       unsupported: () => features.unsupported(readConfig().gatewayURL),
       historyGet: (sid, extra) => gatewayFor().historyGet(jw(sid), extra),
       historyListTurns: (sid, extra) => gatewayFor().historyListTurns(jw(sid), extra),
+      /** Collect one streamed history.get page (0.2.7: ack + `history.message` events). */
+      historyMessages: (sid, extra) => gatewayFor().historyMessages(jw(sid), extra),
       sessionMetadata: (sid, extra) => gatewayFor().sessionMetadata(jw(sid), extra),
       sessionList: (extra) => gatewayFor().sessionList(extra),
       sessionCreate: (extra) => gatewayFor().sessionCreate(extra),
