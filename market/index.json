@@ -57,11 +57,11 @@
       "versions": [
         {
           "version": "0.2.0",
-          "publishTimestamp": 1793367030,
+          "publishTimestamp": 1793367816,
           "source": {
             "type": "git",
             "url": "https://github.com/Birfy/dsh-jiuwen-adapter",
-            "commit": "1fe6a0e7bff9a6bb965271e95c707c49c279eff5"
+            "commit": "10a502b0e760c24aa217ba9cb09d971af1a605dc"
           },
           "engines": {
             "dsh": ">=0.2.1-rc.2 <0.3.0"
