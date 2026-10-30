@@ -12,11 +12,14 @@ import { GatewayTransport } from './gateway-transport.js'
 import { createInteractor } from './interaction.js'
 import { createMcpBridge } from './mcp-bridge.js'
 import { createJiuwenCommand } from './commands.js'
+import { createFeatureCache } from './features.js'
 
 export { Config }
 export const name = 'llm-jiuwen'
 /** Cordis event carrying structured Jiuwen activity (see index.d.ts / docs/dsh-integration.md). */
 export const JIUWEN_EVENT = 'jiuwen/event'
+/** Typed, namespaced events (opt-in: config.typedEvents). */
+export const JIUWEN_TYPED_EVENTS = Object.freeze({ tool: 'jiuwen/tool', plan: 'jiuwen/plan', approval: 'jiuwen/approval', swarm: 'jiuwen/swarm' })
 export const inject = ['llm']
 
 export { createJiuwenAdapter as JiuwenLlmAdapter }
@@ -84,9 +87,10 @@ export function apply(ctx, config = {}) {
   const registration = ctx.llm.registerAdapter([cfg.provider], adapter)
 
   const bridge = createToolBridge(cfg)
+  const features = createFeatureCache()
   const gatewayFor = () => {
     const c = readConfig()
-    return new GatewayTransport({
+    const t = new GatewayTransport({
       gatewayURL: c.gatewayURL,
       userId: c.userId,
       authToken: c.authToken,
@@ -99,6 +103,10 @@ export function apply(ctx, config = {}) {
       requestTimeoutMs: c.requestTimeoutMs,
       surfaceToolEvents: c.surfaceGatewayToolEvents,
     })
+    // Every unary helper goes through this.rpc → feature-detect cache (unknown methods fail fast).
+    t.rpc = features.wrap(c.gatewayURL, t.rpc.bind(t))
+    t.features = features
+    return t
   }
   /** Accept a host session id (mapped) or a raw Jiuwen session id. */
   const jw = (sid) => sessions.get(String(sid))?.jiuwenSessionId || sid
@@ -114,6 +122,10 @@ export function apply(ctx, config = {}) {
     /** Unary E2A helpers (history/models/mcp/memory/files/swarm) — brain stays on Jiuwen. */
     gateway: {
       rpc: (method, params, opts) => gatewayFor().rpc(method, params, opts),
+      /** Probe a Gateway method once (cached): true when /ws routes it. Never throws. */
+      supports: (method, params) => { const t = gatewayFor(); return features.probe(readConfig().gatewayURL, (m, p, o) => GatewayTransport.prototype.rpc.call(t, m, p, o), method, params) },
+      /** Methods this Gateway answered `unknown method` for (cached). */
+      unsupported: () => features.unsupported(readConfig().gatewayURL),
       historyGet: (sid, extra) => gatewayFor().historyGet(jw(sid), extra),
       historyListTurns: (sid, extra) => gatewayFor().historyListTurns(jw(sid), extra),
       sessionMetadata: (sid, extra) => gatewayFor().sessionMetadata(jw(sid), extra),
@@ -179,14 +191,22 @@ export function apply(ctx, config = {}) {
   exposeService(ctx, cfg.serviceName, api, logger)
 
   // `/jiuwen <sub>` slash command when the host has a command registry (dsh-commands).
-  const command = createJiuwenCommand({ sessions, gateway: gatewayFor, config: readConfig, mcpBridge })
+  const command = createJiuwenCommand({ sessions, gateway: gatewayFor, config: readConfig, mcpBridge, features })
   api.command = command.run
   if (cfg.registerCommands !== false && typeof ctx.inject === 'function') {
     try {
       ctx.inject(['commands'], (c) => {
-        const dispose = c.commands.register(command.definition)
-        if (typeof c.effect === 'function') c.effect(function* () { yield dispose }, 'llm-jiuwen command')
-        else c.on?.('dispose', dispose)
+        // Fail soft inside the inject callback: a duplicate name or a registry error must not
+        // break the host fiber (or other plugins sharing it).
+        try {
+          const dispose = c.commands.register({ ...command.definition, name: cfg.commandName })
+          if (typeof dispose === 'function') {
+            if (typeof c.effect === 'function') c.effect(function* () { yield () => { try { dispose() } catch { /* ignore */ } } }, 'llm-jiuwen command')
+            else c.on?.('dispose', () => { try { dispose() } catch { /* ignore */ } })
+          }
+        } catch (error) {
+          logger.warn?.(`[dsh-jiuwen] could not register /${cfg.commandName} (${error?.message || error}); set config.commandName to a unique name`)
+        }
       })
     } catch (error) {
       logger.debug?.(`[dsh-jiuwen] commands registry unavailable: ${error?.message || error}`)
@@ -217,18 +237,19 @@ export function apply(ctx, config = {}) {
  */
 export /** Expose the helper API on ctx under `serviceName` (generic across Cordis versions). */
 function exposeService(ctx, serviceName, api, logger) {
-  const attempts = [
-    () => ctx.provide?.(serviceName, api),
-    () => ctx.set?.(serviceName, api),
-    () => { ctx[serviceName] = api },
-  ]
-  for (const attempt of attempts) {
-    try {
-      attempt()
-      if (ctx[serviceName] === api || typeof ctx.provide === 'function') return
-    } catch { /* try next */ }
+  // Only the sanctioned Cordis service API: never assign ctx[serviceName] directly (that could
+  // shadow another plugin's service or a Context method).
+  if (typeof ctx.provide !== 'function') {
+    logger.warn?.(`[dsh-jiuwen] host has no ctx.provide; helper service ctx.${serviceName} not exposed`)
+    return false
   }
-  logger.warn?.(`[dsh-jiuwen] could not expose ctx.${serviceName} (another instance owns it?); set config.serviceName to a unique name`)
+  try {
+    ctx.provide(serviceName, api)
+    return true
+  } catch (error) {
+    logger.warn?.(`[dsh-jiuwen] could not provide ctx.${serviceName} (${error?.message || error}); set config.serviceName to a unique name`)
+    return false
+  }
 }
 
 function loadLlmAdapter(logger, cfg = {}, env = process.env) {

@@ -3,7 +3,7 @@
  * A single namespaced command avoids clashing with dsh built-ins (/compact, /goal, …).
  */
 
-const isUnknownMethod = e => /unknown method/i.test(String(e?.message || e))
+import { isUnknownMethod } from './features.js'
 
 export const SUBCOMMANDS =
   'status | models | model <name|default> | model-info <id|name> | mode [name|default] | pause | resume | rename <title> | pin [on|off] | fork | switch | archive | unarchive | unmap | delete | goal [get|set <text>|pause|resume|clear] | workflows [list|get <id>] | history | btw <question> | recap | skill-toggle <name> <on|off> | plan-status | supplement <text> | teams | compact | interrupt | sessions | skills [installed] | agents | tools | hooks | permissions [set <tool> <allow|ask|deny>|unset <tool>] | plugins [enable|disable <name>] | projects [info|sessions [id]] | archived | assets | version | heartbeat [set <every> [target]|jobs] | path | locale | commands | templates | cron | updater [check|conf] | agent <name> | skill-info <name> | marketplaces | bindings | mcp | mcp-reset | help'
@@ -19,7 +19,7 @@ export const HELP_GROUPS = [
   ['Config & policy', 'hooks, permissions [set <tool> <allow|ask|deny>|unset <tool>], plugins [enable|disable <name>], heartbeat [set <every> [target]|jobs], cron, path, locale, commands, projects [info|sessions [id]]'],
   ['System', 'version, updater [check|conf], mcp, mcp-reset, help'],
 ]
-export const helpText = () => `Usage: /jiuwen <subcommand>\n${HELP_GROUPS.map(([k, v]) => `${k}: ${v}`).join('\n')}`
+export const helpText = (name = 'jiuwen') => `Usage: /${name} <subcommand>\n${HELP_GROUPS.map(([k, v]) => `${k}: ${v}`).join('\n')}`
 
 export function createJiuwenCommand(deps) {
   const names = (list, key = 'name') => (Array.isArray(list) ? list : []).map(x => (typeof x === 'string' ? x : x?.[key] || x?.name || x?.id)).filter(Boolean)
@@ -517,8 +517,8 @@ ${jobs.slice(0, 15).map(j => `- ${j.id || j.job_id || j.name || JSON.stringify(j
         const t = r?.teams || r?.bindings || []
         return `Jiuwen team bindings: ${names(t, 'team_name').join(', ') || 'none'}`
       }
-      case 'help': return helpText()
-      default: return `Unknown subcommand "${sub}".\n${helpText()}`
+      case 'help': return helpText(deps.config()?.commandName)
+      default: return `Unknown subcommand "${sub}".\n${helpText(deps.config()?.commandName)}`
     }
   }
   return {

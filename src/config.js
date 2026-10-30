@@ -158,6 +158,8 @@ export function resolveConfig(raw = {}, opts = {}) {
     mcpRpcTimeoutMs: Number(raw.mcpRpcTimeoutMs ?? env.JIUWEN_MCP_RPC_TIMEOUT_MS ?? 30_000),
     /** Register the `/jiuwen` slash command on ctx.commands when available. */
     registerCommands: raw.registerCommands !== false && env.JIUWEN_REGISTER_COMMANDS !== '0',
+    /** Slash command name (default 'jiuwen'); change it if another plugin already owns /jiuwen. */
+    commandName: String(raw.commandName || env.JIUWEN_COMMAND_NAME || 'jiuwen').replace(/^\//, ''),
     /** Reply sent to Jiuwen when it asked but no dsh answerer exists. */
     noUiAnswer: String(raw.noUiAnswer || 'No interactive user is available. Proceed with your best judgment and state your assumptions.'),
     /** Cancel in-flight Jiuwen turn (chat.interrupt intent=cancel) when the host aborts. */

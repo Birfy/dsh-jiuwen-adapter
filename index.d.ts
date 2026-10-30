@@ -3,6 +3,13 @@
  * Every event also carries `dshSessionId` (host session), `sessionId` (Jiuwen session) and `requestId` (chat.send id).
  */
 export declare const JIUWEN_EVENT: 'jiuwen/event'
+/** Typed event names (emitted only when config.typedEvents is on; `jiuwen/event` is always emitted). */
+export declare const JIUWEN_TYPED_EVENTS: {
+  readonly tool: 'jiuwen/tool'
+  readonly plan: 'jiuwen/plan'
+  readonly approval: 'jiuwen/approval'
+  readonly swarm: 'jiuwen/swarm'
+}
 
 interface JiuwenEventBase {
   readonly dshSessionId?: string
@@ -30,6 +37,14 @@ export type JiuwenEvent = JiuwenEventBase & (
   | { type: 'raw'; event: string }
 )
 
+export type JiuwenToolEvent = JiuwenEvent & { type: 'tool_call' | 'tool_update' | 'tool_result' }
+export type JiuwenApprovalEvent = JiuwenEventBase & (
+  | { type: 'ask_user'; questions: unknown[] }
+  | { type: 'interaction_answered'; eventType: string; source?: string; kind: 'question' | 'approval' | 'swarmflow'; outcome?: string; requestIdOfQuestion?: string; answers: unknown[] }
+)
+export type JiuwenPlanEvent = JiuwenEventBase & { type: 'plan'; event: string; inPlan?: boolean; status?: string }
+export type JiuwenSwarmEvent = JiuwenEventBase & { type: 'swarm'; event: string; runId?: string; summary?: string }
+
 export interface JiuwenAdapterService {
   readonly provider: string
   onEvent(listener: (event: JiuwenEvent) => void): () => void
@@ -38,6 +53,10 @@ export interface JiuwenAdapterService {
   command(dshSessionId: string, input: string): Promise<string>
   gateway: Record<string, (...args: any[]) => Promise<any>> & {
     rpc(method: string, params?: Record<string, unknown>, opts?: { timeoutMs?: number }): Promise<any>
+    /** Probe once (cached per Gateway URL) whether `/ws` routes a method. Never throws. */
+    supports(method: string, params?: Record<string, unknown>): Promise<boolean>
+    /** Methods cached as `unknown method` for the configured Gateway. */
+    unsupported(): string[]
   }
   [key: string]: unknown
 }
@@ -45,6 +64,10 @@ export interface JiuwenAdapterService {
 declare module '@deepseek-ai/cordis' {
   interface Events {
     'jiuwen/event'(event: JiuwenEvent): void
+    'jiuwen/tool'(event: JiuwenToolEvent): void
+    'jiuwen/plan'(event: JiuwenPlanEvent): void
+    'jiuwen/approval'(event: JiuwenApprovalEvent): void
+    'jiuwen/swarm'(event: JiuwenSwarmEvent): void
   }
   interface Context {
     jiuwenAdapter: JiuwenAdapterService
