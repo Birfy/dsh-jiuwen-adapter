@@ -5,7 +5,7 @@
 
 import { isUnknownMethod } from './features.js'
 import { formatGatewayError } from './gateway-transport.js'
-import { findExt, extHelp, tokenize } from './commands-ext.js'
+import { findExt, extHelp, tokenize, EXT } from './commands-ext.js'
 
 export const SUBCOMMANDS =
   'status | models | model <name|default> | model-info <id|name> | mode [name|default] | pause | resume | rename <title> | pin [on|off] | fork | switch | archive | unarchive | unmap | delete confirm | goal [get|set <text>|pause|resume|clear] | workflows [list|get <id>] | history | btw <question> | recap | skill-toggle <name> <on|off> | plan-status | supplement <text> | teams | compact | interrupt | sessions | skills [installed] | agents | tools | hooks | permissions [set <tool> <allow|ask|deny>|unset <tool>] | plugins [enable|disable <name>] | projects [info|sessions [id]] | archived | assets | version | heartbeat [set <every> [target]|jobs] | path | locale | commands | templates | cron | updater [check|conf] | agent <name> | skill-info <name> | marketplaces | bindings | mcp | mcp-reset confirm | help'
@@ -551,8 +551,8 @@ ${jobs.slice(0, 15).map(j => `- ${j.id || j.job_id || j.name || JSON.stringify(j
     run,
     definition: {
       name: 'jiuwen',
-      description: 'JiuwenSwarm: status, models/model/model-info, mode, pause/resume, rename, pin, fork, switch, archive/unarchive, unmap/delete, goal, workflows, history, btw, recap, skill-toggle, plan-status, supplement, teams, compact, interrupt, sessions, skills, agents, tools, hooks, permissions, plugins, projects, archived, assets, version, heartbeat, path, locale, commands, templates, cron, updater, agent, skill-info, marketplaces, bindings, mcp, config, memory, team, template, group, git, schedule, help',
-      input: { hint: SUBCOMMANDS },
+      description: `JiuwenSwarm: status, models/model/model-info, mode, pause/resume, rename, pin, fork, switch, archive/unarchive, unmap/delete, goal, workflows, history, btw, recap, skill-toggle, plan-status, supplement, teams, compact, interrupt, sessions, skills, agents, tools, hooks, permissions, plugins, projects, archived, assets, version, heartbeat, path, locale, commands, templates, cron, updater, agent, skill-info, marketplaces, bindings, mcp, config, memory, team, template, group, git, schedule, ${[...new Set(Object.keys(EXT).map(k => k.split(' ')[0]))].join(', ')}, help`,
+      input: { hint: `${SUBCOMMANDS} | ${Object.values(EXT).map(e => e.usage).join(' | ')}` },
       async handler(invocation) {
         try {
           return { kind: 'success', text: await run(invocation.agent?.id, invocation.rawInput) }

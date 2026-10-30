@@ -510,6 +510,26 @@ wss.on('connection', (ws, req) => {
           Object.assign(HB.get(params.id), params.patch)
           return reply({ job: HB.get(params.id) })
         }
+        case 'channel.get': return reply({ channels: [{ channel_id: 'web' }, { channel_id: 'tui' }] })
+        case 'channel.feishu.get_conf': return reply({ config: { enabled: false, apps: [{ name: 'a', app_id: 'cli_1', app_secret: 'very-secret', encrypt_key: 'ek', verification_token: 'vt' }] } })
+        case 'rsi.task.list': return reply({ tasks: [{ task_id: 'rt1', status: 'done' }] })
+        case 'rsi.harness.versions.list': return reply({ active_installation_id: null, versions: [] })
+        case 'rsi.task.get': case 'rsi.report.get': case 'rsi.tree.get': case 'rsi.usage.get': case 'rsi.artifact.files.list':
+          return params.task_id === 'rt1' ? reply({ task_id: 'rt1', ok: true, token: 'tok-x' }) : fail(params.task_id ? `任务不存在: ${params.task_id}` : 'task_id 必填')
+        case 'personal_context.context.search_pages': return reply({ results: [{ title: `page about ${params.query}` }] })
+        case 'personal_context.fetch.get_run_status': return reply({ services: [] })
+        case 'personal_context.fetch.get_authorization_status': return params.provider ? reply({ provider: params.provider, authorized: false }) : fail('请求参数无效')
+        case 'issue.matrix': case 'issue.state.list': return fail(`unknown method: ${method}`)
+        case 'harness.packages': return reply({ error: '缺少 GitCode Access Token' })
+        case 'skills.teamskillshub.search': return reply({ issues: [{ title: 'team-skill' }] })
+        case 'skills.teamskillshub.info': return reply({ packages: [], active_package_ids: [], native_version: { id: 'native', extension_name: 'Native Agent' } })
+        case 'skills.swarmskillshub.detail': return reply({ success: false, detail: 'asset_id 无效' })
+        case 'skills.swarmskillshub.recommend': return reply({ items: [{ name: 'rec-1' }] })
+        case 'skills.skillnet.search': case 'skills.clawhub.search': return params.q ? reply({ success: true, items: [{ name: `${method.split('.')[1]}-hit` }] }) : reply({ success: false, detail: '缺少参数: q' })
+        case 'skills.marketplace.toggle': log(); return reply({ name: params.name, enabled: Boolean(params.enabled) })
+        case 'extensions.toggle': log(); return reply({ name: params.name, enabled: Boolean(params.enabled) })
+        case 'project.rename': log(); return params.project_id === 'default' ? fail('default project cannot be renamed') : reply({ project: { project_id: params.project_id, name: params.name } })
+        case 'project.pin': log(); return reply({ project: { project_id: params.project_id, pinned: Boolean(params.pinned) } })
         default: break
       }
     }

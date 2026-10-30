@@ -270,3 +270,16 @@ Cordis host (`Context` + `dsh-llm` + `api.command`), JiuwenSwarm 0.2.7 on :19000
 - Irreversible / credential / P4 voice / UI channels remain excluded.
 
 **Coverage / tests:** covered 106→138 / 334 (safe 45.1%→58.7%). Unit tests 112→118.
+
+### 12a. Round 5: remaining safe reads + full regression (2026-10-30, UTC+8)
+
+Added `channels` / `channels conf <name>` (`channel.get`, `channel.*.get_conf`; `app_secret`, `encrypt_key`, `*_token`, `webhook_url` masked), `rsi …` (8 reads), `context …` (5 personal-context reads), `issues` (wired; `issue.*` unknown on 0.2.7 → soft-fail, hidden from help once both methods are probed), `harness packages` (soft-fails without a GitCode token), `skills hub …` (TeamSkillsHub / SwarmSkillsHub / SkillNet / ClawHub search/detail/recommend/info; nothing installed), `marketplace toggle`, `extensions toggle`, `projects rename|pin`.
+
+Full regression through the Cordis host: every `/jiuwen` subcommand (148 checks incl. usage paths and reversible writes: rename/pin/archive, skill-toggle, marketplace toggle, permissions set/unset, cron and heartbeat create→update→delete, permission rule add→update→delete, fork + cleanup, delete confirm) plus a live chat turn (`r5-pong`). 14 checks returned Gateway errors, all expected and rendered as clean `Jiuwen: …` text. Gateway state before/after byte-identical (sessions, cron, heartbeat conf, tool overrides, rules, projects, marketplaces, extensions, plugins, skill enablement, archived, `user_permissions.yaml`).
+
+**Fixed:** the `/jiuwen` command `description` and `input.hint` listed only the built-in subcommands; they are now generated from the extension table, so host UIs/autocomplete show every extended subcommand.
+
+**Gateway-side (not adapter bugs):** the default project cannot be renamed or pinned; `/jiuwen fork` prints the full new session id (the live script truncated it when matching, so the throwaway fork was cleaned by hand).
+
+**Coverage / tests:** covered 138→172 / 334 (safe 58.7%→73.2%). Unit tests 118→124.
+

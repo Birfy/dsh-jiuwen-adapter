@@ -4,7 +4,7 @@
  * Writes are reversible; deletes need an explicit trailing `confirm` argument.
  */
 
-const SECRET_KEY = /(api_?key|token|secret|passw(or)?d|cookie|authorization|credential|private_?key|access_?key|client_?secret)/i
+const SECRET_KEY = /(api_?key|token|secret|passw(or)?d|cookie|authorization|credential|private_?key|access_?key|client_?secret|encrypt_?key|aes_?key|signing_?key|webhook_?url)/i
 
 /** Deep-copy `value` replacing secret-looking fields with `***` (or `(empty)`). */
 export function maskSecrets(value, depth = 0) {
@@ -615,6 +615,148 @@ ${turns.slice(0, 15).map(t => `- ${t.turn_id || t.id || '?'}: ${(t.files || t.ch
     },
   },
 
+
+  // ── Round 5 reads / reversible toggles ──
+  'channels': {
+    usage: 'channels [conf <name>]', group: 'System', methods: ['channel.get'],
+    async run({ g, rest }) {
+      const a = (rest[0] || 'list').toLowerCase()
+      const NAMES = ['dingtalk', 'discord', 'feishu', 'slack', 'telegram', 'wechat', 'wecom', 'whatsapp', 'xiaoyi']
+      if (a === 'conf') {
+        const name = String(rest[1] || '').toLowerCase()
+        if (!NAMES.includes(name)) return `Usage: /jiuwen channels conf <${NAMES.join('|')}> (secrets masked)`
+        const r = maskSecrets(await g.rpc(`channel.${name}.get_conf`, {}))
+        return `Jiuwen channel ${name} conf (secrets masked): ${j(r?.config ?? r, 1200)}`
+      }
+      if (a !== 'list') return 'Usage: /jiuwen channels [conf <name>]'
+      const r = await g.rpc('channel.get', {})
+      const list = r?.channels || []
+      return `Jiuwen channels (${list.length}): ${list.map(c => c.channel_id || c.name || c.id).join(', ') || 'none'}`
+    },
+  },
+  'rsi': {
+    usage: 'rsi [tasks|task|report|tree|usage|files <task_id> [path]|versions]', group: 'System', methods: ['rsi.task.list'],
+    async run({ g, rest }) {
+      const a = (rest[0] || 'tasks').toLowerCase()
+      if (a === 'tasks' || a === 'list') {
+        const r = await g.rpc('rsi.task.list', {})
+        const ts = r?.tasks || []
+        return `Jiuwen RSI tasks (${ts.length}): ${ts.slice(0, 20).map(x => `${x.task_id || x.id}${x.status ? ` [${x.status}]` : ''}`).join(', ') || 'none'}`
+      }
+      if (a === 'versions') {
+        const r = await g.rpc('rsi.harness.versions.list', {})
+        return `Jiuwen RSI harness versions (${(r?.versions || []).length}; active=${r?.active_installation_id || 'none'}): ${(r?.versions || []).slice(0, 15).map(v => v.version || v.installation_id || v.id).join(', ') || 'none'}`
+      }
+      const m = { task: 'rsi.task.get', report: 'rsi.report.get', tree: 'rsi.tree.get', usage: 'rsi.usage.get', files: 'rsi.artifact.files.list' }[a]
+      const id = rest[1]
+      if (!m || !id) return 'Usage: /jiuwen rsi [tasks|versions|task|report|tree|usage <task_id>|files <task_id> [path]]'
+      if (a === 'files' && rest[2]) {
+        const r = maskSecrets(await g.rpc('rsi.artifact.files.get', { task_id: id, path: rest.slice(2).join(' ') }))
+        return `Jiuwen RSI artifact ${id}:${rest.slice(2).join(' ')}:\n${String(r?.preview ?? r?.content ?? j(r, 1200)).slice(0, 1500)}`
+      }
+      return `Jiuwen RSI ${a} ${id}: ${j(maskSecrets(await g.rpc(m, { task_id: id })), 1200)}`
+    },
+  },
+  'context': {
+    usage: 'context [search <q>|node <id>|source <id>|auth <provider>|runs]', group: 'Config & policy', methods: ['personal_context.context.search_pages'],
+    async run({ g, rest }) {
+      const a = (rest[0] || '').toLowerCase()
+      const arg = rest.slice(1).join(' ')
+      if (a === 'runs') {
+        const r = await g.rpc('personal_context.fetch.get_run_status', {})
+        const s = r?.services || []
+        return `Jiuwen personal context fetch runs (${s.length}): ${s.map(x => `${x.service_id || x.name}${x.state ? `=${x.state}` : ''}`).join(', ') || 'none'}`
+      }
+      const m = { search: ['personal_context.context.search_pages', 'query'], node: ['personal_context.context.get_node', 'node_id'], source: ['personal_context.context.get_source', 'source_id'], auth: ['personal_context.fetch.get_authorization_status', 'provider'] }[a]
+      if (!m || !arg) return 'Usage: /jiuwen context [search <query>|node <id>|source <id>|auth <provider>|runs] (personal context, read-only)'
+      const r = maskSecrets(await g.rpc(m[0], { [m[1]]: arg }))
+      if (a === 'search') {
+        const res = r?.results || []
+        return `Jiuwen personal context search "${arg}" (${res.length}): ${res.slice(0, 10).map(x => x.title || x.node_id || x.id || j(x, 60)).join('; ') || 'none'}`
+      }
+      return `Jiuwen personal context ${a} ${arg}: ${j(r, 1200)}`
+    },
+  },
+  'issues': {
+    usage: 'issues [matrix|states]', group: 'System', methods: ['issue.matrix', 'issue.state.list'],
+    async run({ g, rest }) {
+      const a = (rest[0] || 'states').toLowerCase()
+      const m = { matrix: 'issue.matrix', states: 'issue.state.list', state: 'issue.state.list' }[a]
+      if (!m) return 'Usage: /jiuwen issues [matrix|states]'
+      return `Jiuwen ${m}: ${j(maskSecrets(await g.rpc(m, {})), 900)}`
+    },
+  },
+  'harness': {
+    usage: 'harness packages', group: 'System', methods: ['harness.packages'],
+    async run({ g, rest }) {
+      if ((rest[0] || 'packages').toLowerCase() !== 'packages') return 'Usage: /jiuwen harness packages (read-only)'
+      const r = maskSecrets(await g.rpc('harness.packages', {}))
+      if (r?.error) return `Jiuwen harness packages: soft-failed — ${short(r.error, 200)}`
+      const ps = r?.packages || r?.items || []
+      return `Jiuwen harness packages (${ps.length}): ${ps.slice(0, 20).map(x => x.name || x.id || j(x, 40)).join(', ') || 'none'}`
+    },
+  },
+  'skills hub': {
+    usage: 'skills hub <team|team-info|swarm <asset_id>|recommend <asset_id>|skillnet|clawhub> [query]', group: 'Skills & agents', methods: ['skills.teamskillshub.search', 'skills.teamskillshub.info', 'skills.swarmskillshub.detail', 'skills.swarmskillshub.recommend', 'skills.skillnet.search', 'skills.clawhub.search'],
+    async run({ g, rest }) {
+      const which = (rest[1] || '').toLowerCase()
+      const q = rest.slice(2).join(' ')
+      const soft = r => (r?.success === false ? `soft-failed — ${short(r.detail || r.error || r.code, 160)}` : null)
+      if (which === 'team-info') {
+        const r = await g.rpc('skills.teamskillshub.info', {})
+        return `Jiuwen TeamSkillsHub: packages=${(r?.packages || []).length}, active=${(r?.active_package_ids || []).join(', ') || 'none'}${r?.native_version ? `, native=${r.native_version.extension_name || r.native_version.id}` : ''}`
+      }
+      const spec = {
+        team: ['skills.teamskillshub.search', { query: q, q }, r => r?.issues || r?.items || r?.results],
+        swarm: ['skills.swarmskillshub.detail', { asset_id: q }, null],
+        recommend: ['skills.swarmskillshub.recommend', { asset_id: q }, r => r?.items || r?.recommendations],
+        skillnet: ['skills.skillnet.search', { q, query: q }, r => r?.items || r?.results || r?.skills],
+        clawhub: ['skills.clawhub.search', { q, query: q }, r => r?.items || r?.results || r?.skills],
+      }[which]
+      if (!spec || (!q && which !== 'team')) return 'Usage: /jiuwen skills hub <team [query]|team-info|swarm <asset_id>|recommend <asset_id>|skillnet <query>|clawhub <query>> (read-only; nothing installed)'
+      const r = maskSecrets(await g.rpc(spec[0], spec[1]))
+      const s = soft(r); if (s) return `Jiuwen skills hub ${which}: ${s}`
+      const items = spec[2] ? spec[2](r) : null
+      if (Array.isArray(items)) return `Jiuwen skills hub ${which}${q ? ` "${q}"` : ''} (${items.length}; read-only): ${items.slice(0, 10).map(x => x.name || x.title || x.id || j(x, 60)).join('; ') || 'none'}`
+      return `Jiuwen skills hub ${which} ${q}: ${j(r, 900)}`
+    },
+  },
+  'marketplace': {
+    usage: 'marketplace toggle <name> <on|off>', group: 'Skills & agents', methods: ['skills.marketplace.toggle'],
+    async run({ g, rest }) {
+      const enabled = onOff(rest[2])
+      if ((rest[0] || '').toLowerCase() !== 'toggle' || !rest[1] || enabled === undefined) return 'Usage: /jiuwen marketplace toggle <name> <on|off> (see /jiuwen marketplaces)'
+      const r = await g.rpc('skills.marketplace.toggle', { name: rest[1], enabled })
+      return `Jiuwen skill marketplace ${rest[1]} ${(r?.enabled ?? r?.marketplace?.enabled ?? enabled) ? 'enabled' : 'disabled'}.`
+    },
+  },
+  'extensions toggle': {
+    usage: 'extensions toggle <name> <on|off>', group: 'System', methods: ['extensions.toggle'],
+    async run({ g, rest }) {
+      const enabled = onOff(rest[2])
+      if (!rest[1] || enabled === undefined) return 'Usage: /jiuwen extensions toggle <name> <on|off>'
+      const r = await g.rpc('extensions.toggle', { name: rest[1], enabled })
+      return `Jiuwen extension ${rest[1]} ${(r?.enabled ?? enabled) ? 'enabled' : 'disabled'}.`
+    },
+  },
+  'projects rename': {
+    usage: 'projects rename <project_id> <name>', group: 'Config & policy', methods: ['project.rename'],
+    async run({ g, rest }) {
+      const pid = rest[1]; const name = rest.slice(2).join(' ')
+      if (!pid || !name) return 'Usage: /jiuwen projects rename <project_id> <new name>'
+      const r = await g.rpc('project.rename', { project_id: pid, name })
+      return `Renamed Jiuwen project ${pid} → ${r?.project?.name || r?.name || name}.`
+    },
+  },
+  'projects pin': {
+    usage: 'projects pin <project_id> [on|off]', group: 'Config & policy', methods: ['project.pin'],
+    async run({ g, rest }) {
+      const pid = rest[1]; const pinned = rest[2] === undefined ? true : onOff(rest[2])
+      if (!pid || pinned === undefined) return 'Usage: /jiuwen projects pin <project_id> [on|off]'
+      const r = await g.rpc('project.pin', { project_id: pid, pinned })
+      return `Jiuwen project ${pid} ${(r?.project?.pinned ?? r?.pinned ?? pinned) ? 'pinned' : 'unpinned'}.`
+    },
+  },
   // ── P2 safe writes (reversible; deletes need `confirm`) ──
   'cron create': {
     usage: 'cron create name=<n> expr="<m h dom mon dow>" [desc=..] [tz=..] [target=web] [mode=agent] [enabled=off]', group: 'Schedules', methods: ['cron.job.create'],
