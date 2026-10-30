@@ -306,6 +306,13 @@ export class GatewayTransport {
   pathGet(extra = {}) { return this.rpc(SYSTEM.PATH_GET, { ...extra }) }
   localeGetConf(extra = {}) { return this.rpc(SYSTEM.LOCALE_GET_CONF, { ...extra }) }
   cronJobList(extra = {}) { return this.rpc(SYSTEM.CRON_JOB_LIST, { ...extra }) }
+  updaterCheck(extra = {}) { return this.rpc(SYSTEM.UPDATER_CHECK, { ...extra }, { timeoutMs: 60_000 }) }
+  updaterConf(extra = {}) { return this.rpc(SYSTEM.UPDATER_GET_CONF, { ...extra }) }
+  agentsGet(name, extra = {}) { return this.rpc(AGENTS.GET, { name, ...extra }) }
+  skillsGet(name, extra = {}) { return this.rpc(SKILLS.GET, { name, ...extra }) }
+  skillsVersionsList(name, extra = {}) { return this.rpc(SKILLS.VERSIONS_LIST, { name, ...extra }) }
+  skillsMarketplaceList(extra = {}) { return this.rpc(SKILLS.MARKETPLACE_LIST, { ...extra }) }
+  teamBindingsList(extra = {}) { return this.rpc(TEAM.BINDINGS_LIST, { ...extra }) }
   agentTemplatesList(extra = {}) { return this.rpc(SYSTEM.AGENT_TEMPLATES_LIST, { ...extra }) }
 
   _connect(url, signal) {

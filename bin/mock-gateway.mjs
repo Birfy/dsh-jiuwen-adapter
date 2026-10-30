@@ -138,6 +138,7 @@ wss.on('connection', (ws, req) => {
 
     // Unary RPCs
     const ok = (payload) => ws.send(JSON.stringify({ type: 'res', id: frame.id, ok: true, payload }))
+    const err = (message) => ws.send(JSON.stringify({ type: 'res', id: frame.id, ok: false, error: { message } }))
     if (method === 'history.get') {
       const sid = String(params.session_id || '')
       return ok({ session_id: sid, messages: HISTORY.get(sid) || [], has_more: false })
@@ -290,6 +291,14 @@ wss.on('connection', (ws, req) => {
       if (params.active_hours) HEARTBEAT.active_hours = { ...params.active_hours }
       return ok({ ...HEARTBEAT, active_hours: { ...HEARTBEAT.active_hours } })
     }
+    if (method === 'updater.check') return ok({ current_version: '9.9.9', latest_version: '10.0.0', has_update: true, state: 'update_available' })
+    if (method === 'updater.get_conf') return ok({ enabled: true, release_api_type: 'pypi', repo_owner: 'openJiuwen', repo_name: 'jiuwenswarm', install_mode: 'pip' })
+    if (method === 'agents.get') return params.name === 'mock-agent' ? ok({ agent: { name: 'mock-agent', description: 'Mock agent', tools: ['bash'] } }) : err(`Agent 不存在: ${params.name}`)
+    if (method === 'skills.get') return ok({ name: params.name, description: 'Mock skill', enabled: true })
+    if (method === 'skills.versions.list') return ok({ success: true, name: params.name, default_version: '1.0', versions: [{ version: '1.0' }] })
+    if (method === 'skills.marketplace.list') return ok({ marketplaces: [{ name: 'anthropic', enabled: false }, { name: 'builtin', enabled: true }] })
+    if (method === 'team.bindings.list') return ok({ teams: [{ team_name: 'mock-team' }] })
+    if (method === 'debug.hang') return
     if (method === 'heartbeat.job.list') return ok({ jobs: [{ id: 'hb-job-1', name: 'mock-hb' }] })
     if (method === 'path.get') return ok({ chrome_path: '', headless: true, decision_mode: 'llm', decision_provider: 'openrouter', decision_model: 'typesafe/jev-1.13' })
     if (method === 'locale.get_conf') return ok({ preferred_language: 'zh' })

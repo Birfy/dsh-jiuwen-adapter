@@ -545,3 +545,57 @@ test('/jiuwen archive switch permissions set/unset plugins enable/disable heartb
   assert.equal((await g.pluginsDisable('old-plugin')).success, true)
   assert.equal((await g.modelsGet('mdl_default_primary')).model.model_id, 'mdl_default_primary')
 })
+
+test('/jiuwen updater agent skill-info marketplaces bindings help + validation/errors', async () => {
+  const registered = []
+  const ctx = {
+    llm: { registerAdapter() { return () => {} } },
+    logger: { info() {}, warn() {}, error() {}, debug() {} }, provide(n, v) { this[n] = v }, on() {},
+    inject(deps, cb) { cb({ commands: { register(d) { registered.push(d); return () => {} } }, on() {} }) },
+  }
+  plugin.apply(ctx, { gatewayURL: URL_, mappingPath: join(dir, `cmds5-${Math.random()}.json`), finalGraceMs: 300 })
+  const def = registered.find(d => d.name === 'jiuwen')
+  const call = (raw) => def.handler({ agent: { id: 'n5' }, rawInput: raw })
+  const run = async (raw) => { const r = await call(raw); assert.equal(r.kind, 'success', r.text); return r.text }
+  assert.match(await run('updater'), /updater status: 9\.9\.9 → update available: 10\.0\.0/)
+  assert.match(await run('updater check'), /updater check: .*state=update_available/)
+  assert.match(await run('updater conf'), /enabled, source pypi \(openJiuwen\/jiuwenswarm\)/)
+  assert.match(await run('updater upgrade'), /Usage: \/jiuwen updater/)
+  assert.match(await run('agent'), /Usage: \/jiuwen agent <name>/)
+  assert.match(await run('agent mock-agent'), /Mock agent[\s\S]*tools: bash/)
+  const missing = await call('agent nope')
+  assert.equal(missing.kind, 'error'); assert.match(missing.text, /Agent 不存在: nope/)
+  assert.match(await run('skill-info'), /Usage/)
+  assert.match(await run('skill-info skill-creator'), /Mock skill[\s\S]*versions: 1\.0 \(default 1\.0\)/)
+  assert.match(await run('marketplaces'), /\(2\): anthropic \(disabled\), builtin/)
+  assert.match(await run('bindings'), /mock-team/)
+  const help = await run('help')
+  for (const k of ['Session:', 'Turn control:', 'Models & mode:', 'Skills & agents:', 'Config & policy:', 'System:']) assert.ok(help.includes(k), k)
+  const unk = await run('frobnicate')
+  assert.match(unk, /Unknown subcommand "frobnicate"[\s\S]*Session:/)
+  for (const s of ['updater', 'agent', 'skill-info', 'marketplaces', 'bindings', 'help']) assert.match(def.input.hint, new RegExp(s))
+})
+
+test('rpc timeout rejects promptly and transport recovers on next call', async () => {
+  const { GatewayTransport } = await import('../src/gateway-transport.js')
+  const g = new GatewayTransport({ gatewayURL: URL_, requestTimeoutMs: 5000 })
+  const t0 = Date.now()
+  await assert.rejects(g.rpc('debug.hang', {}, { timeoutMs: 300 }), /time|out/i)
+  assert.ok(Date.now() - t0 < 3000)
+  const r = await g.updaterStatus()
+  assert.equal(r.current_version, '9.9.9')
+})
+
+test('connection refused yields a clear /jiuwen error hint', async () => {
+  const registered = []
+  const ctx = {
+    llm: { registerAdapter() { return () => {} } },
+    logger: { info() {}, warn() {}, error() {}, debug() {} }, provide(n, v) { this[n] = v }, on() {},
+    inject(deps, cb) { cb({ commands: { register(d) { registered.push(d); return () => {} } }, on() {} }) },
+  }
+  plugin.apply(ctx, { gatewayURL: 'ws://127.0.0.1:1/ws', mappingPath: join(dir, `cmds6-${Math.random()}.json`), requestTimeoutMs: 2000 })
+  const def = registered.find(d => d.name === 'jiuwen')
+  const r = await def.handler({ agent: { id: 'n6' }, rawInput: 'version' })
+  assert.equal(r.kind, 'error')
+  assert.match(r.text, /^Jiuwen: /)
+})

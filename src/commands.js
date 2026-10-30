@@ -4,11 +4,21 @@
  */
 
 export const SUBCOMMANDS =
-  'status | models | model <name|default> | model-info <id|name> | mode [name|default] | pause | resume | rename <title> | pin [on|off] | fork | switch | archive | unarchive | unmap | delete | goal [get|set <text>|pause|resume|clear] | workflows [list|get <id>] | history | btw <question> | recap | skill-toggle <name> <on|off> | plan-status | supplement <text> | teams | compact | interrupt | sessions | skills [installed] | agents | tools | hooks | permissions [set <tool> <allow|ask|deny>|unset <tool>] | plugins [enable|disable <name>] | projects [info|sessions [id]] | archived | assets | version | heartbeat [set <every> [target]|jobs] | path | locale | commands | templates | cron | mcp | mcp-reset'
+  'status | models | model <name|default> | model-info <id|name> | mode [name|default] | pause | resume | rename <title> | pin [on|off] | fork | switch | archive | unarchive | unmap | delete | goal [get|set <text>|pause|resume|clear] | workflows [list|get <id>] | history | btw <question> | recap | skill-toggle <name> <on|off> | plan-status | supplement <text> | teams | compact | interrupt | sessions | skills [installed] | agents | tools | hooks | permissions [set <tool> <allow|ask|deny>|unset <tool>] | plugins [enable|disable <name>] | projects [info|sessions [id]] | archived | assets | version | heartbeat [set <every> [target]|jobs] | path | locale | commands | templates | cron | updater [check|conf] | agent <name> | skill-info <name> | marketplaces | bindings | mcp | mcp-reset | help'
 
 /**
  * @param {{ sessions: import('./session-store.js').SessionStore, gateway: () => import('./gateway-transport.js').GatewayTransport, config: () => any, mcpBridge?: any }} deps
  */
+export const HELP_GROUPS = [
+  ['Session', 'status, rename <title>, pin [on|off], fork, switch, archive, unarchive, unmap, delete, sessions, archived, assets, history'],
+  ['Turn control', 'pause, resume, interrupt, compact, btw <question>, recap, supplement <text>, goal [get|set <text>|pause|resume|clear], plan-status, workflows [list|get <id>]'],
+  ['Models & mode', 'models, model <name|default>, model-info <id|name>, mode [name|default]'],
+  ['Skills & agents', 'skills [installed], skill-info <name>, skill-toggle <name> <on|off>, marketplaces, agents, agent <name>, tools, templates, teams, bindings'],
+  ['Config & policy', 'hooks, permissions [set <tool> <allow|ask|deny>|unset <tool>], plugins [enable|disable <name>], heartbeat [set <every> [target]|jobs], cron, path, locale, commands, projects [info|sessions [id]]'],
+  ['System', 'version, updater [check|conf], mcp, mcp-reset, help'],
+]
+export const helpText = () => `Usage: /jiuwen <subcommand>\n${HELP_GROUPS.map(([k, v]) => `${k}: ${v}`).join('\n')}`
+
 export function createJiuwenCommand(deps) {
   const names = (list, key = 'name') => (Array.isArray(list) ? list : []).map(x => (typeof x === 'string' ? x : x?.[key] || x?.name || x?.id)).filter(Boolean)
   const pinValue = (raw) => {
@@ -448,20 +458,60 @@ ${jobs.slice(0, 15).map(j => `- ${j.id || j.job_id || j.name || JSON.stringify(j
         const ok = (x) => (x && typeof x === 'object' ? (x.ok === false ? 'failed' : 'ok') : String(x))
         return `Removed Jiuwen MCP registration "${deps.config().mcpServerName}" (disconnect: ${ok(r.disconnect)}, delete: ${ok(r.delete)}); the next passthrough turn re-registers it`
       }
-      default: return `Unknown subcommand "${sub}". Usage: /jiuwen ${SUBCOMMANDS}`
+      case 'updater': {
+        const action = (rest[0] || 'status').toLowerCase()
+        if (action === 'conf') {
+          const r = await g.updaterConf()
+          return `Jiuwen updater: ${r?.enabled === false ? 'disabled' : 'enabled'}, source ${r?.release_api_type || '?'}${r?.repo_owner ? ` (${r.repo_owner}/${r.repo_name || '?'})` : ''}, install ${r?.install_mode || '?'}`
+        }
+        if (action !== 'status' && action !== 'check') return 'Usage: /jiuwen updater [check|conf]'
+        const r = action === 'check' ? await g.updaterCheck() : await g.updaterStatus()
+        const state = r?.has_update ? `update available: ${r.latest_version}` : (r?.latest_version ? `up to date (latest ${r.latest_version})` : 'no check result yet')
+        return `Jiuwen updater ${action}: ${r?.current_version || 'unknown'} → ${state} [state=${r?.state || '?'}]${r?.error ? ` error: ${short(r.error, 100)}` : ''} (read-only; does not download or upgrade)`
+      }
+      case 'agent': {
+        if (!arg) return 'Usage: /jiuwen agent <name> (see /jiuwen agents)'
+        const r = await g.agentsGet(arg)
+        const a = r?.agent || r || {}
+        const tools = Array.isArray(a.tools) ? a.tools : []
+        return `Jiuwen agent ${a.name || arg}: ${short(a.description, 160) || '(no description)'}${a.model ? `\nmodel: ${a.model}` : ''}${tools.length ? `\ntools: ${names(tools).join(', ')}` : ''}`
+      }
+      case 'skill-info': {
+        if (!arg) return 'Usage: /jiuwen skill-info <name> (see /jiuwen skills)'
+        const [info, vers] = await Promise.allSettled([g.skillsGet(arg), g.skillsVersionsList(arg)])
+        if (info.status === 'rejected') throw info.reason
+        const s = info.value || {}
+        const v = vers.status === 'fulfilled' ? (vers.value?.versions || []) : []
+        const vtxt = v.length ? names(v, 'version').join(', ') : 'none'
+        return `Jiuwen skill ${s.name || arg}: ${short(s.description, 160) || '(no description)'}${s.enabled === false ? ' [disabled]' : ''}\nversions: ${vtxt}${vers.value?.default_version ? ` (default ${vers.value.default_version})` : ''}`
+      }
+      case 'marketplaces': {
+        const r = await g.skillsMarketplaceList()
+        const m = Array.isArray(r?.marketplaces) ? r.marketplaces : []
+        return `Jiuwen skill marketplaces (${m.length}): ${m.map(x => `${x.name}${x.enabled === false ? ' (disabled)' : ''}`).join(', ') || 'none'}`
+      }
+      case 'bindings': {
+        const r = await g.teamBindingsList()
+        const t = r?.teams || r?.bindings || []
+        return `Jiuwen team bindings: ${names(t, 'team_name').join(', ') || 'none'}`
+      }
+      case 'help': return helpText()
+      default: return `Unknown subcommand "${sub}".\n${helpText()}`
     }
   }
   return {
     run,
     definition: {
       name: 'jiuwen',
-      description: 'JiuwenSwarm: status, models/model/model-info, mode, pause/resume, rename, pin, fork, switch, archive/unarchive, unmap/delete, goal, workflows, history, btw, recap, skill-toggle, plan-status, supplement, teams, compact, interrupt, sessions, skills, agents, tools, hooks, permissions, plugins, projects, archived, assets, version, heartbeat, path, locale, commands, templates, cron, mcp',
+      description: 'JiuwenSwarm: status, models/model/model-info, mode, pause/resume, rename, pin, fork, switch, archive/unarchive, unmap/delete, goal, workflows, history, btw, recap, skill-toggle, plan-status, supplement, teams, compact, interrupt, sessions, skills, agents, tools, hooks, permissions, plugins, projects, archived, assets, version, heartbeat, path, locale, commands, templates, cron, updater, agent, skill-info, marketplaces, bindings, mcp, help',
       input: { hint: SUBCOMMANDS },
       async handler(invocation) {
         try {
           return { kind: 'success', text: await run(invocation.agent?.id, invocation.rawInput) }
         } catch (error) {
-          return { kind: 'error', text: `Jiuwen: ${String(error?.message || error).slice(0, 500)}` }
+          const msg = String(error?.message || error)
+          const hint = /unknown method/i.test(msg) ? ' (this Gateway build does not route it on /ws)' : (/timed? ?out|ETIMEDOUT/i.test(msg) ? ' (Gateway did not answer in time)' : (/ECONNREFUSED|connect|WebSocket/i.test(msg) ? ` (is the Gateway running at ${deps.config()?.gatewayURL || 'the configured URL'}?)` : ''))
+          return { kind: 'error', text: `Jiuwen: ${msg.slice(0, 500)}${hint}` }
         }
       },
     },

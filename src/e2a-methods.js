@@ -29,8 +29,8 @@ export const SESSION = Object.freeze({
   UNARCHIVE: 'session.unarchive',
 })
 
-export const SKILLS = Object.freeze({ LIST: 'skills.list', INSTALLED: 'skills.installed', GET: 'skills.get', TOGGLE: 'skills.toggle' })
-export const AGENTS = Object.freeze({ LIST: 'agents.list', TOOLS_LIST: 'agents.tools_list' })
+export const SKILLS = Object.freeze({ LIST: 'skills.list', INSTALLED: 'skills.installed', GET: 'skills.get', TOGGLE: 'skills.toggle', VERSIONS_LIST: 'skills.versions.list', MARKETPLACE_LIST: 'skills.marketplace.list' })
+export const AGENTS = Object.freeze({ LIST: 'agents.list', TOOLS_LIST: 'agents.tools_list', GET: 'agents.get' })
 /** Read-only workspace / runtime introspection (Gateway web channel). */
 export const SYSTEM = Object.freeze({
   HOOKS_LIST: 'hooks.list',
@@ -47,6 +47,8 @@ export const SYSTEM = Object.freeze({
   SESSION_ARCHIVED_LIST: 'session.archived.list',
   SESSION_ASSETS_LIST: 'session.assets.list',
   UPDATER_STATUS: 'updater.get_status',
+  UPDATER_CHECK: 'updater.check',
+  UPDATER_GET_CONF: 'updater.get_conf',
   HEARTBEAT_GET_CONF: 'heartbeat.get_conf',
   HEARTBEAT_SET_CONF: 'heartbeat.set_conf',
   HEARTBEAT_JOB_LIST: 'heartbeat.job.list',
@@ -55,7 +57,7 @@ export const SYSTEM = Object.freeze({
   CRON_JOB_LIST: 'cron.job.list',
   AGENT_TEMPLATES_LIST: 'agent_templates.list',
 })
-export const TEAM = Object.freeze({ TEMPLATES_LIST: 'team.templates.list', LIST: 'team.list', HISTORY_GET: 'team.history.get' })
+export const TEAM = Object.freeze({ TEMPLATES_LIST: 'team.templates.list', LIST: 'team.list', HISTORY_GET: 'team.history.get', BINDINGS_LIST: 'team.bindings.list' })
 export const COMMANDS = Object.freeze({ LIST: 'commands.list', COMPACT: 'command.compact', GOAL: 'command.goal', BTW: 'command.btw', RECAP: 'command.recap' })
 
 export const HISTORY = Object.freeze({

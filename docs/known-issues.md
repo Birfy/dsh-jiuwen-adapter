@@ -81,3 +81,20 @@ Probed for archive/unarchive, plugins enable/disable, permissions tools update/d
 | `session.preview` / `diagnosis.list` / `command.recap` / `memory.list` | still FAIL — unknown method (unchanged from §3–4) |
 
 Adapter exposes `/jiuwen archive|unarchive|switch|model-info|path|locale|commands|templates|cron` plus expansions of `permissions` / `plugins` / `heartbeat` / `projects`. Live probes that mutate must reverse (unarchive/delete throwaway sessions; restore heartbeat; unset probe tools; re-enable plugins).
+
+
+## 6. Fourth-batch probe: updater / agent / skill detail / marketplaces / bindings (2026-10-30)
+
+Re-scanned gateway handler tables (`gateway/channel_manager/web/app_web_handlers.py`, `tui/tui_connect.py`) and probed `ws://127.0.0.1:19000/ws` (Gateway 0.2.5b1).
+
+| Method | Result on /ws |
+|---|---|
+| `updater.get_status` / `updater.check` / `updater.get_conf` | ok (check contacts the release source; read-only) |
+| `agents.get` | ok with `{name}`; unknown name → `Agent 不存在: <name>` |
+| `skills.get` / `skills.versions.list` | ok with `{name}` (versions list needs `name`) |
+| `skills.marketplace.list` / `team.bindings.list` / `team.templates.list` | ok |
+| `session.get`, `session.color_set`, `session.preview` | FAIL — unknown method on /ws (TUI-only handlers) |
+| `agent_templates.show` | needs `asset_id`; not exposed |
+
+Deliberately not exposed (non-trivially reversible or side-effectful): `updater.download/upgrade`, `skills.install/uninstall`, `skills.marketplace.add/remove`, `agents.create/delete`, `team.delete`, `session.rewind*`, `assets.publish.*`.
+UX: `/jiuwen help` groups subcommands; errors are `Jiuwen: <msg>` plus a hint for unknown methods, timeouts and connection failures. Live probe cleaned up the leftover empty `probe-1793340702422` session.

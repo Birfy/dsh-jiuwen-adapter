@@ -113,6 +113,12 @@ When the host provides `ctx.commands` (`@deepseek-ai/dsh-commands`; web UI, ACP 
 | `/jiuwen interrupt` | `chat.interrupt {intent:'cancel'}` |
 | `/jiuwen sessions` / `skills` [`installed`] / `agents` / `mcp` | `session.list` / `skills.list` (or `skills.installed`) / `agents.list` / `mcp.list` |
 | `/jiuwen mcp-reset` | disconnect + delete the dsh MCP registration (passthrough recovery) |
+| `/jiuwen updater [check\|conf]` | `updater.get_status` / `updater.check` (read-only, 60s timeout) / `updater.get_conf`; never downloads or upgrades |
+| `/jiuwen agent <name>` | `agents.get` (description, model, tools) |
+| `/jiuwen skill-info <name>` | `skills.get` + `skills.versions.list` |
+| `/jiuwen marketplaces` | `skills.marketplace.list` (read-only) |
+| `/jiuwen bindings` | `team.bindings.list` |
+| `/jiuwen help` | grouped help (Session / Turn control / Models & mode / Skills & agents / Config & policy / System); also printed for unknown subcommands |
 
 Per-session overrides (`modelName`, `chatMode`, `skills`, `agentTemplateName`) live in the session map file; request `providerOptions.jiuwen` and catalog model fields still win over the mapping.
 
