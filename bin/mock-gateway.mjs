@@ -25,6 +25,11 @@ const CANCELLED = new Set()
 const INTERRUPTS = []
 const ANSWERS = []
 const RENAMES = []
+const EXTLOG = []
+const SWARM_WAIT = new Map() // P1/P2 extended-method calls
+const CRON = new Map()
+const HB = new Map([['hb-job-1', { id: 'hb-job-1', name: 'mock-hb', enabled: true }]])
+const RULES = [{ id: 'shell_allow_ls', tools: ['bash'], pattern: 'ls', action: 'allow' }]
 
 wss.on('connection', (ws, req) => {
   // Echo whether access_token / user_id arrived (query) for auth smoke
@@ -76,6 +81,17 @@ wss.on('connection', (ws, req) => {
 
       if (!answered && /need permission/i.test(query)) {
         ev('chat.ask_user_question', { event_type: 'chat.ask_user_question', request_id: 'perm-1', source: 'permission_interrupt', questions: [{ question: 'Allow bash rm?', tool_name: 'bash', card_id: 'card-1', options: [{ value: 'allow_once', label: '本次允许' }, { value: 'reject', label: '拒绝' }] }] })
+        return
+      }
+      if (!answered && /swarm-human/i.test(query)) {
+        ev('swarmflow.run_started', { event_type: 'swarmflow.run_started', run_id: 'run-42' })
+        ev('chat.ask_user_question', { event_type: 'chat.ask_user_question', request_id: 'swarmflow:run-42:p1:review:1', source: 'swarmflow_human', questions: [{ question: 'Approve the outline?', header: 'Lead · review', options: [], multi_select: false }], swarmflow_meta: { run_id: 'run-42', correlation_id: 'p1:review:1', agent_id: 'lead', agent_name: 'Lead' } })
+        SWARM_WAIT.set(sessionId, () => { ev('chat.final', { content: 'swarm resumed' }); ev('chat.final', { content: '' }); ev('chat.processing_status', { event_type: 'chat.processing_status', is_processing: false, is_complete: true }) })
+        return
+      }
+      if (!answered && /swarm-run/i.test(query)) {
+        ev('swarmflow.run_started', { event_type: 'swarmflow.run_started', run_id: 'run-77', workflow_run_id: 'run-77' })
+        // never finishes on its own → host abort path
         return
       }
       if (!answered && /ask me/i.test(query) && params.supports_user_interaction) {
@@ -212,6 +228,7 @@ wss.on('connection', (ws, req) => {
       return ok({ type: 'list', workflows: [], session_id: params.session_id, total: 0 })
     }
     if (method === 'swarmflow.pause' || method === 'swarmflow.resume' || method === 'swarmflow.stop') {
+      if (method === 'swarmflow.stop') EXTLOG.push({ method, params })
       return ok({ ok: true, method })
     }
     if (method === 'session.rename') {
@@ -333,6 +350,78 @@ wss.on('connection', (ws, req) => {
       return ok({ status: 'ok', recap: `mock recap for ${params.session_id || 'session'}` })
     }
 
+
+    // ── extended methods (0.2.7 /ws shapes) ──
+    {
+      const reply = (payload) => ws.send(JSON.stringify({ type: 'res', id: frame.id, ok: true, payload }))
+      const fail = (message) => ws.send(JSON.stringify({ type: 'res', id: frame.id, ok: false, error: message }))
+      const log = () => EXTLOG.push({ method, params })
+      const sid = String(params.session_id || '')
+      switch (method) {
+        case 'debug.ext': return reply({ log: EXTLOG.slice(), cron: [...CRON.values()], hb: [...HB.values()], rules: RULES.slice() })
+        case 'schedule.list': case 'schedule.status': case 'schedule.logs': case 'schedule.check_config':
+        case 'schedule.create': case 'schedule.run': case 'schedule.cancel':
+          return fail(`unknown method: ${method}`)
+        case 'config.get': return reply({ model_provider: 'OpenAI', model: 'mock-model', api_base: 'http://x', api_key: 'sk-secret-123', nested: { access_token: 'tok', ok: 1 }, video_api_key: '' })
+        case 'mcp.show': return params.id === 'mcp-1' ? reply({ type: 'detail', item: { id: 'mcp-1', name: 'mock-mcp', description: 'Mock MCP', connection_state: 'connected', tools: [{ name: 't1' }] } }) : fail('SkillHub asset not found: ' + params.id)
+        case 'skills.retrieval.search': return reply({ success: true, mode: 'auto', query: params.query, result: `- [skill] mock-skill desc: about ${params.query}` })
+        case 'skills.online_search.search': return reply({ success: true, items: [{ source: 'hub', name: 'online-skill', display_name: 'Online' }] })
+        case 'memory.forbidden.get': return reply({ enabled: true, patterns: ['height', 'weight'] })
+        case 'personal_context.runtime.status': return reply({ state: 'CREATED', configured: false })
+        case 'personal_context.runtime.get_config': return reply({ configured: false, model_id: 'openai:mock' })
+        case 'personal_context.fetch.list_services': return reply({ services: [] })
+        case 'cron.job.meta': return reply({ modes: ['agent'], default_mode: 'agent', default_timeout_seconds: 3600 })
+        case 'cron.job.get': return CRON.has(params.id) ? reply({ job: CRON.get(params.id) }) : fail('job not found')
+        case 'cron.job.preview': return CRON.has(params.id) ? reply({ next_runs: ['2026-11-01T09:00:00+08:00'] }) : fail('job not found')
+        case 'cron.job.create': {
+          log()
+          for (const k of ['name', 'cron_expr', 'timezone', 'description', 'targets']) if (!params[k]) return fail(`${k} is required`)
+          const job = { id: `cron-${CRON.size + 1}`, name: params.name, cron_expr: params.cron_expr, timezone: params.timezone, description: params.description, targets: params.targets, enabled: Boolean(params.enabled) }
+          CRON.set(job.id, job); return reply({ job })
+        }
+        case 'cron.job.toggle': log(); if (!CRON.has(params.id)) return fail('job not found'); CRON.get(params.id).enabled = Boolean(params.enabled); return reply({ job: CRON.get(params.id) })
+        case 'cron.job.run_now': log(); return CRON.has(params.id) ? reply({ accepted: true, run_id: 'cr-1' }) : fail('job not found')
+        case 'cron.job.delete': log(); return CRON.delete(params.id) ? reply({ ok: true }) : fail('job not found')
+        case 'heartbeat.job.meta': return reply({ limits: { min_interval_seconds: 60 }, schedule_types: ['interval'] })
+        case 'heartbeat.job.get': return HB.has(params.id) ? reply({ job: HB.get(params.id) }) : fail('job not found')
+        case 'heartbeat.job.preview': return HB.has(params.id) ? reply({ next_runs: [] }) : fail('job not found')
+        case 'heartbeat.job.toggle': log(); if (!HB.has(params.id)) return fail('job not found'); HB.get(params.id).enabled = Boolean(params.enabled); return reply({ job: HB.get(params.id) })
+        case 'heartbeat.job.run_now': case 'heartbeat.job.cancel': log(); return HB.has(params.id) ? reply({ accepted: true }) : fail('job not found')
+        case 'heartbeat.job.delete': log(); return HB.delete(params.id) ? reply({ ok: true }) : fail('job not found')
+        case 'team.history.get': return sid ? reply({ records: [{ summary: 'lead assigned task' }], total: 1 }) : fail('session_id is required')
+        case 'team.snapshot': return reply({ members: [{ name: 'lead' }], tasks: [], team_id: 't1' })
+        case 'agent_templates.show': return params.id === 't1' ? reply({ template: { id: 't1', displayName: { zh: '工程质量顾问' }, displayDescription: { zh: 'desc' }, installed: true } }) : fail('asset_id is required')
+        case 'agent_groups.list': return reply({ agentGroups: [{ id: 'designer', installed: true }] })
+        case 'agent_groups.show': return params.id ? reply({ group: { id: params.id, displayName: { zh: '设计' }, members: [{ id: 'lead' }] } }) : fail('asset_id is required')
+        case 'project.git.status': return reply({ branch: 'main', is_dirty: false, repo_root: '/r' })
+        case 'project.git.diff_status': return reply({ files: [{ status: 'M', path: 'a.js' }] })
+        case 'models.validate': return reply({ ok: true, message: 'reachable' })
+        case 'permissions.approval_overrides.get': return reply({ approval_overrides: [] })
+        case 'permissions.owner_scopes.get': return reply({ owner_scopes: null, deny_guidance_message: '' })
+        case 'document.formats': return reply({ forbidden_formats: ['.exe'] })
+        case 'permissions.rules.create': {
+          log(); const r = params.rule; if (!r || typeof r !== 'object') return fail('rule must be object')
+          if (!r.tools || !r.pattern) return fail('tools and pattern are required')
+          const rule = { id: r.id || `ui_rule_${RULES.length}`, ...r }; RULES.push(rule); return reply({ rule })
+        }
+        case 'permissions.rules.update': {
+          log(); const r = RULES.find(x => x.id === params.id); if (!r) return fail('rule not found'); Object.assign(r, params.patch || {}); return reply({ rule: r })
+        }
+        case 'permissions.rules.delete': {
+          log(); const i = RULES.findIndex(x => x.id === params.id); if (i < 0) return fail('rule not found'); RULES.splice(i, 1); return reply({ ok: true })
+        }
+        case 'session.message.continue_queued': log(); return reply({ continued: 0, session_id: sid })
+        case 'chat.swarmflow_reply': {
+          log(); ANSWERS.push({ via: 'chat.swarmflow_reply', ...params })
+          reply({ ok: true })
+          const k = SWARM_WAIT.get(sid); if (k) { SWARM_WAIT.delete(sid); k() }
+          return
+        }
+        case 'document.persist': log(); return reply({ media_items: (params.documents || []).map(d => ({ type: 'document', path: `/uploads/${d.filename || d.name}`, filename: d.filename || d.name })) })
+        case 'media.discard': log(); return params.path ? reply({ ok: true, path: params.path }) : fail('path is required')
+        default: break
+      }
+    }
     ws.send(JSON.stringify({
       type: 'res', id: frame.id, ok: false,
       error: { code: 'NOT_IMPLEMENTED', message: `mock has no handler for ${method}` },

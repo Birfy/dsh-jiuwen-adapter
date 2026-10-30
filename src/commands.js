@@ -4,6 +4,7 @@
  */
 
 import { isUnknownMethod } from './features.js'
+import { findExt, extHelp, tokenize } from './commands-ext.js'
 
 export const SUBCOMMANDS =
   'status | models | model <name|default> | model-info <id|name> | mode [name|default] | pause | resume | rename <title> | pin [on|off] | fork | switch | archive | unarchive | unmap | delete | goal [get|set <text>|pause|resume|clear] | workflows [list|get <id>] | history | btw <question> | recap | skill-toggle <name> <on|off> | plan-status | supplement <text> | teams | compact | interrupt | sessions | skills [installed] | agents | tools | hooks | permissions [set <tool> <allow|ask|deny>|unset <tool>] | plugins [enable|disable <name>] | projects [info|sessions [id]] | archived | assets | version | heartbeat [set <every> [target]|jobs] | path | locale | commands | templates | cron | updater [check|conf] | agent <name> | skill-info <name> | marketplaces | bindings | mcp | mcp-reset | help'
@@ -19,7 +20,7 @@ export const HELP_GROUPS = [
   ['Config & policy', 'hooks, permissions [set <tool> <allow|ask|deny>|unset <tool>], plugins [enable|disable <name>], heartbeat [set <every> [target]|jobs], cron, path, locale, commands, projects [info|sessions [id]]'],
   ['System', 'version, updater [check|conf], mcp, mcp-reset, help'],
 ]
-export const helpText = (name = 'jiuwen') => `Usage: /${name} <subcommand>\n${HELP_GROUPS.map(([k, v]) => `${k}: ${v}`).join('\n')}`
+export const helpText = (name = 'jiuwen', isUnsupported) => `Usage: /${name} <subcommand>\n${[...HELP_GROUPS.map(([k, v]) => `${k}: ${v}`), ...extHelp(isUnsupported)].join('\n')}`
 
 export function createJiuwenCommand(deps) {
   const names = (list, key = 'name') => (Array.isArray(list) ? list : []).map(x => (typeof x === 'string' ? x : x?.[key] || x?.name || x?.id)).filter(Boolean)
@@ -37,6 +38,11 @@ export function createJiuwenCommand(deps) {
     const dshId = String(sessionId)
     const mapping = deps.sessions.ensure(dshId)
     const sid = mapping.jiuwenSessionId
+    const ext = findExt(sub, rest)
+    if (ext) {
+      const out = await ext.run({ g, sid, dshId, rest, tokens: tokenize(String(rawInput || '').trim()).slice(1), deps, mapping })
+      if (out != null) return out
+    }
     switch (sub) {
       case 'status': {
         const [models, meta] = await Promise.allSettled([g.modelsList(), g.sessionMetadata(sid)])
@@ -517,21 +523,26 @@ ${jobs.slice(0, 15).map(j => `- ${j.id || j.job_id || j.name || JSON.stringify(j
         const t = r?.teams || r?.bindings || []
         return `Jiuwen team bindings: ${names(t, 'team_name').join(', ') || 'none'}`
       }
-      case 'help': return helpText(deps.config()?.commandName)
-      default: return `Unknown subcommand "${sub}".\n${helpText(deps.config()?.commandName)}`
+      case 'help': return helpText(deps.config()?.commandName, m => Boolean(deps.features?.isUnsupported(deps.config()?.gatewayURL, m)))
+      default: return `Unknown subcommand "${sub}".\n${helpText(deps.config()?.commandName, m => Boolean(deps.features?.isUnsupported(deps.config()?.gatewayURL, m)))}`
     }
   }
   return {
     run,
     definition: {
       name: 'jiuwen',
-      description: 'JiuwenSwarm: status, models/model/model-info, mode, pause/resume, rename, pin, fork, switch, archive/unarchive, unmap/delete, goal, workflows, history, btw, recap, skill-toggle, plan-status, supplement, teams, compact, interrupt, sessions, skills, agents, tools, hooks, permissions, plugins, projects, archived, assets, version, heartbeat, path, locale, commands, templates, cron, updater, agent, skill-info, marketplaces, bindings, mcp, help',
+      description: 'JiuwenSwarm: status, models/model/model-info, mode, pause/resume, rename, pin, fork, switch, archive/unarchive, unmap/delete, goal, workflows, history, btw, recap, skill-toggle, plan-status, supplement, teams, compact, interrupt, sessions, skills, agents, tools, hooks, permissions, plugins, projects, archived, assets, version, heartbeat, path, locale, commands, templates, cron, updater, agent, skill-info, marketplaces, bindings, mcp, config, memory, team, template, group, git, schedule, help',
       input: { hint: SUBCOMMANDS },
       async handler(invocation) {
         try {
           return { kind: 'success', text: await run(invocation.agent?.id, invocation.rawInput) }
         } catch (error) {
           const msg = String(error?.message || error)
+          if (error?.code === 'UNSUPPORTED' || isUnknownMethod(error)) {
+            // Soft-fail: a Gateway build without this method is not an error of the host.
+            const m = error?.method || (msg.match(/unknown method:?\s*([\w.]+)/i) || [])[1] || 'this method'
+            return { kind: 'success', text: `Jiuwen: not available on this Gateway — ${m} is not routed on /ws (feature-detected; hidden from help).` }
+          }
           const hint = /unknown method/i.test(msg) ? ' (this Gateway build does not route it on /ws)' : (/timed? ?out|ETIMEDOUT/i.test(msg) ? ' (Gateway did not answer in time)' : (/ECONNREFUSED|connect|WebSocket/i.test(msg) ? ` (is the Gateway running at ${deps.config()?.gatewayURL || 'the configured URL'}?)` : ''))
           return { kind: 'error', text: `Jiuwen: ${msg.slice(0, 500)}${hint}` }
         }
