@@ -101,6 +101,8 @@ export const FILES = Object.freeze({
 export const MEDIA = Object.freeze({
   PERSIST: 'media.persist',
   DISCARD: 'media.discard',
+  DOCUMENT_PERSIST: 'document.persist',
+  DOCUMENT_FORMATS: 'document.formats',
 })
 
 export const SWARM = Object.freeze({

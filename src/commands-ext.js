@@ -160,8 +160,8 @@ export const EXT = {
     async run({ g, rest }) {
       if (!rest[1]) return 'Usage: /jiuwen cron preview <id>'
       const r = await g.rpc('cron.job.preview', { id: rest[1] })
-      const runs = r?.next_runs || r?.runs || r?.items
-      return `Jiuwen cron preview ${rest[1]}: ${Array.isArray(runs) ? runs.slice(0, 10).map(x => (typeof x === 'object' ? x.at || x.time || j(x, 60) : x)).join(', ') : j(r, 600)}`
+      const runs = r?.next || r?.next_runs || r?.runs || r?.items
+      return `Jiuwen cron preview ${rest[1]}: ${Array.isArray(runs) ? runs.slice(0, 10).map(x => (typeof x === 'object' ? x.wake_at || x.at || x.time || j(x, 60) : x)).join(', ') : j(r, 600)}`
     },
   },
   'cron meta': {
@@ -195,12 +195,15 @@ export const EXT = {
     },
   },
   'schedule': {
-    usage: 'schedule [list|status|logs|check]', group: 'Schedules', methods: ['schedule.list'],
-    async run({ g, rest, sid }) {
+    usage: 'schedule [list|status|logs|check|create|run|cancel]', group: 'Schedules', methods: ['schedule.list'],
+    async run({ g, rest, sid, tokens }) {
       const a = (rest[0] || 'list').toLowerCase()
-      const method = { list: 'schedule.list', status: 'schedule.status', logs: 'schedule.logs', check: 'schedule.check_config' }[a]
-      if (!method) return 'Usage: /jiuwen schedule [list|status|logs|check]'
-      return `Jiuwen schedule ${a}: ${j(await g.rpc(method, { session_id: sid }), 900)}`
+      const method = { list: 'schedule.list', status: 'schedule.status', logs: 'schedule.logs', check: 'schedule.check_config', create: 'schedule.create', run: 'schedule.run', cancel: 'schedule.cancel' }[a]
+      if (!method) return 'Usage: /jiuwen schedule [list|status|logs|check|create key=value…|run <id>|cancel <id>]'
+      const params = { session_id: sid }
+      if (a === 'create') Object.assign(params, kv(tokens.slice(1)))
+      if (a === 'run' || a === 'cancel') { if (!rest[1]) return `Usage: /jiuwen schedule ${a} <id>`; params.id = rest[1] }
+      return `Jiuwen schedule ${a}: ${j(await g.rpc(method, params), 900)}`
     },
   },
   'team': {
@@ -305,6 +308,152 @@ export const EXT = {
       if ((rest[0] || 'formats') !== 'formats') return null
       const r = await g.rpc('document.formats', {})
       return `Jiuwen forbidden document formats (${(r?.forbidden_formats || []).length}): ${(r?.forbidden_formats || []).join(' ')}`
+    },
+  },
+
+  // ── P2 safe writes (reversible; deletes need `confirm`) ──
+  'cron create': {
+    usage: 'cron create name=<n> expr="<m h dom mon dow>" [desc=..] [tz=..] [target=web] [mode=agent] [enabled=off]', group: 'Schedules', methods: ['cron.job.create'],
+    async run({ g, tokens, sid }) {
+      const p = kv(tokens.slice(1))
+      const expr = p.expr || p.cron_expr
+      if (!p.name || !expr) return 'Usage: /jiuwen cron create name=<name> expr="*/30 * * * *" [desc=<text>] [tz=Asia/Shanghai] [target=web] [mode=agent] [enabled=off]'
+      const enabled = onOff(p.enabled) ?? false // created disabled unless asked: nothing runs by surprise
+      const params = {
+        name: p.name, cron_expr: expr, description: p.desc || p.description || p.name,
+        timezone: p.tz || p.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+        targets: p.target || p.targets || 'web', enabled, session_id: sid, ...(p.mode ? { mode: p.mode } : {}),
+      }
+      const r = await g.rpc('cron.job.create', params)
+      const job = r?.job || r || {}
+      return `Created Jiuwen cron job ${job.id || '?'} "${job.name || p.name}" (${job.cron_expr || expr}, ${job.timezone || params.timezone}) ${job.enabled ?? enabled ? 'enabled' : 'disabled'}. Remove with /jiuwen cron delete ${job.id || '<id>'} confirm`
+    },
+  },
+  'cron toggle': {
+    usage: 'cron toggle <id> <on|off>', group: 'Schedules', methods: ['cron.job.toggle'],
+    async run({ g, rest }) {
+      const enabled = onOff(rest[2])
+      if (!rest[1] || enabled === undefined) return 'Usage: /jiuwen cron toggle <id> <on|off>'
+      const r = await g.rpc('cron.job.toggle', { id: rest[1], enabled })
+      return `Jiuwen cron job ${rest[1]} ${(r?.job?.enabled ?? r?.enabled ?? enabled) ? 'enabled' : 'disabled'}.`
+    },
+  },
+  'cron run': {
+    usage: 'cron run <id>', group: 'Schedules', methods: ['cron.job.run_now'],
+    async run({ g, rest }) {
+      if (!rest[1]) return 'Usage: /jiuwen cron run <id>'
+      const r = await g.rpc('cron.job.run_now', { id: rest[1] })
+      return `Triggered Jiuwen cron job ${rest[1]} now${r?.run_id ? ` (run ${r.run_id})` : ''}.`
+    },
+  },
+  'cron delete': {
+    usage: 'cron delete <id> confirm', group: 'Schedules', methods: ['cron.job.delete'],
+    async run({ g, rest, tokens }) {
+      if (!rest[1] || rest[1] === 'confirm') return 'Usage: /jiuwen cron delete <id> confirm'
+      const no = needConfirm(tokens.slice(2), `delete cron job ${rest[1]}`)
+      if (no) return no
+      await g.rpc('cron.job.delete', { id: rest[1] })
+      return `Deleted Jiuwen cron job ${rest[1]}.`
+    },
+  },
+  'heartbeat toggle': {
+    usage: 'heartbeat toggle <id> <on|off>', group: 'Schedules', methods: ['heartbeat.job.toggle'],
+    async run({ g, rest }) {
+      const enabled = onOff(rest[2])
+      if (!rest[1] || enabled === undefined) return 'Usage: /jiuwen heartbeat toggle <id> <on|off>'
+      const r = await g.rpc('heartbeat.job.toggle', { id: rest[1], enabled })
+      return `Jiuwen heartbeat job ${rest[1]} ${(r?.job?.enabled ?? enabled) ? 'enabled' : 'disabled'}.`
+    },
+  },
+  'heartbeat run': {
+    usage: 'heartbeat run <id>', group: 'Schedules', methods: ['heartbeat.job.run_now'],
+    async run({ g, rest }) { if (!rest[1]) return 'Usage: /jiuwen heartbeat run <id>'; await g.rpc('heartbeat.job.run_now', { id: rest[1] }); return `Triggered Jiuwen heartbeat job ${rest[1]} now.` },
+  },
+  'heartbeat cancel': {
+    usage: 'heartbeat cancel <id>', group: 'Schedules', methods: ['heartbeat.job.cancel'],
+    async run({ g, rest }) { if (!rest[1]) return 'Usage: /jiuwen heartbeat cancel <id>'; await g.rpc('heartbeat.job.cancel', { id: rest[1] }); return `Cancelled the running Jiuwen heartbeat job ${rest[1]}.` },
+  },
+  'heartbeat delete': {
+    usage: 'heartbeat delete <id> confirm', group: 'Schedules', methods: ['heartbeat.job.delete'],
+    async run({ g, rest, tokens }) {
+      if (!rest[1] || rest[1] === 'confirm') return 'Usage: /jiuwen heartbeat delete <id> confirm'
+      const no = needConfirm(tokens.slice(2), `delete heartbeat job ${rest[1]}`)
+      if (no) return no
+      await g.rpc('heartbeat.job.delete', { id: rest[1] })
+      return `Deleted Jiuwen heartbeat job ${rest[1]}.`
+    },
+  },
+  'permissions rule': {
+    usage: 'permissions rule add tools=a,b pattern=<p> action=<allow|ask|deny> [severity=..] [desc=..] | rule update <id> key=value… | rule delete <id> confirm', group: 'Config & policy', methods: ['permissions.rules.create'],
+    async run({ g, rest, tokens }) {
+      const a = (rest[1] || '').toLowerCase()
+      const fields = (p) => {
+        const o = {}
+        if (p.tools) o.tools = String(p.tools).split(',').map(x => x.trim()).filter(Boolean)
+        for (const k of ['pattern', 'action', 'severity', 'match_type']) if (p[k] !== undefined) o[k] = p[k]
+        if (p.desc ?? p.description) o.description = p.desc ?? p.description
+        return o
+      }
+      if (a === 'add' || a === 'create') {
+        const rule = fields(kv(tokens.slice(2)))
+        if (!rule.tools?.length || !rule.pattern) return 'Usage: /jiuwen permissions rule add tools=<a,b> pattern=<pattern> action=<allow|ask|deny> [severity=LOW|MEDIUM|HIGH|CRITICAL] [desc=<text>]'
+        const r = await g.rpc('permissions.rules.create', { rule })
+        return `Created Jiuwen permission rule ${r?.rule?.id || '?'} (${(r?.rule?.tools || rule.tools).join(',')} ~ ${r?.rule?.pattern || rule.pattern} → ${r?.rule?.action || rule.action || 'default'}). Remove with /jiuwen permissions rule delete ${r?.rule?.id || '<id>'} confirm`
+      }
+      if (a === 'update') {
+        const id = rest[2]
+        const patch = fields(kv(tokens.slice(3)))
+        if (!id || !Object.keys(patch).length) return 'Usage: /jiuwen permissions rule update <id> [tools=..] [pattern=..] [action=..] [severity=..] [desc=..]'
+        const r = await g.rpc('permissions.rules.update', { id, patch })
+        return `Updated Jiuwen permission rule ${id}: ${j(r?.rule || patch, 300)}`
+      }
+      if (a === 'delete') {
+        const id = rest[2]
+        if (!id || id === 'confirm') return 'Usage: /jiuwen permissions rule delete <id> confirm'
+        const no = needConfirm(tokens.slice(3), `delete permission rule ${id}`)
+        if (no) return no
+        await g.rpc('permissions.rules.delete', { id })
+        return `Deleted Jiuwen permission rule ${id}.`
+      }
+      return 'Usage: /jiuwen permissions rule [add|update|delete] …'
+    },
+  },
+  'continue-queued': {
+    usage: 'continue-queued', group: 'Turn control', methods: ['session.message.continue_queued'],
+    async run({ g, sid }) {
+      const r = await g.rpc('session.message.continue_queued', { session_id: sid })
+      return `Asked Jiuwen to continue queued messages for ${sid}: ${j(r, 200)}`
+    },
+  },
+  'swarm-stop': {
+    usage: 'swarm-stop [run_id]', group: 'Turn control', methods: ['swarmflow.stop'],
+    async run({ g, rest, sid, mapping }) {
+      const runId = rest[0] || mapping?.swarmRunId
+      if (!runId) return 'Usage: /jiuwen swarm-stop <run_id> (no SwarmFlow run seen for this session yet)'
+      const r = await g.rpc('swarmflow.stop', { session_id: sid, run_id: runId })
+      return `Sent swarmflow.stop for run ${runId}${r?.ok === false ? ` — ${short(r.reason || r.error, 120)}` : ''}.`
+    },
+  },
+  'doc': {
+    usage: 'doc persist <host-path>', group: 'System', methods: ['document.persist'],
+    async run({ g, rest, sid }) {
+      if ((rest[0] || '').toLowerCase() !== 'persist' || !rest[1]) return 'Usage: /jiuwen doc persist <absolute host path>'
+      const path = rest.slice(1).join(' ')
+      const filename = path.split(/[\\/]/).pop()
+      const r = await g.rpc('document.persist', { session_id: sid, documents: [{ type: 'document', path, filename, name: filename }] })
+      const items = r?.media_items || []
+      const errs = r?.document_errors || []
+      return `Jiuwen document.persist: ${items.map(x => x.path || x.filename).join(', ') || 'nothing stored'}${errs.length ? `; errors: ${errs.map(e => `${e.filename}: ${short(e.error, 80)}`).join('; ')}` : ''}`
+    },
+  },
+  'media': {
+    usage: 'media discard <uploads-path> confirm', group: 'System', methods: ['media.discard'],
+    async run({ g, rest, tokens, sid }) {
+      if ((rest[0] || '').toLowerCase() !== 'discard' || !rest[1] || rest[1] === 'confirm') return 'Usage: /jiuwen media discard <session uploads path> confirm'
+      const no = needConfirm(tokens.slice(2), `discard ${rest[1]}`)
+      if (no) return no
+      await g.rpc('media.discard', { session_id: sid, path: rest[1] })
+      return `Discarded unsent Jiuwen upload ${rest[1]}.`
     },
   },
 }

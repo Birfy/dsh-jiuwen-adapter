@@ -164,6 +164,12 @@ export function resolveConfig(raw = {}, opts = {}) {
     noUiAnswer: String(raw.noUiAnswer || 'No interactive user is available. Proceed with your best judgment and state your assumptions.'),
     /** Cancel in-flight Jiuwen turn (chat.interrupt intent=cancel) when the host aborts. */
     interruptOnAbort: raw.interruptOnAbort !== false,
+    /** On host abort also send swarmflow.stop for the last SwarmFlow run seen in that Jiuwen session. */
+    swarmflowStopOnAbort: raw.swarmflowStopOnAbort !== false && env.JIUWEN_SWARMFLOW_STOP_ON_ABORT !== '0',
+    /** Answer SwarmFlow human turns (source swarmflow_human) through ctx.approval + chat.swarmflow_reply. */
+    swarmflowReply: raw.swarmflowReply !== false,
+    /** Opt-in: pre-persist document attachments with document.persist before chat.send (jiuwen sessions only). */
+    documentPersist: raw.documentPersist === true || env.JIUWEN_DOCUMENT_PERSIST === '1',
     /** Idle grace after chat.final before ending the turn (waits for usage / processing_status). */
     finalGraceMs: Number(raw.finalGraceMs ?? env.JIUWEN_FINAL_GRACE_MS ?? 1500),
     terminalFinalGraceMs: Number(raw.terminalFinalGraceMs ?? env.JIUWEN_TERMINAL_FINAL_GRACE_MS ?? 100),

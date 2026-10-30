@@ -154,6 +154,7 @@ export class SessionStore {
           ...(Array.isArray(entry.skills) ? { skills: entry.skills.map(String) } : {}),
           ...(entry.agentTemplateName ? { agentTemplateName: String(entry.agentTemplateName) } : {}),
           ...(entry.title ? { title: String(entry.title) } : {}),
+          ...(entry.swarmRunId ? { swarmRunId: String(entry.swarmRunId) } : {}),
           updatedAt: String(entry.updatedAt || new Date().toISOString()),
         })
       }

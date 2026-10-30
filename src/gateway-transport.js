@@ -44,6 +44,12 @@ export class GatewayTransport {
     this.showProcessingStatus = opts.showProcessingStatus === true
     this.emitUsage = opts.emitUsage !== false
     this.interruptOnAbort = opts.interruptOnAbort !== false
+    /** On host abort, also send swarmflow.stop for the session's last seen SwarmFlow run. */
+    this.swarmflowStopOnAbort = opts.swarmflowStopOnAbort !== false
+    /** Answer swarmflow_human questions with chat.swarmflow_reply. */
+    this.swarmflowReply = opts.swarmflowReply !== false
+    /** Opt-in: document.persist document attachments before chat.send. */
+    this.documentPersist = opts.documentPersist === true
     this.finalGraceMs = Number.isFinite(opts.finalGraceMs) ? opts.finalGraceMs : 1500
     /** Idle grace after the terminal (empty, request-scoped) chat.final. Negative disables the early end. */
     this.terminalFinalGraceMs = Number.isFinite(opts.terminalFinalGraceMs) && opts.terminalFinalGraceMs >= 0 ? opts.terminalFinalGraceMs : (opts.terminalFinalGraceMs < 0 ? this.finalGraceMs : 100)
@@ -125,6 +131,7 @@ export class GatewayTransport {
         params.content = params.query
       }
 
+      if (this.documentPersist) params = await this._persistDocuments(ws, params)
       ws.send(JSON.stringify({
         type: 'req',
         id: requestId,
@@ -159,6 +166,21 @@ export class GatewayTransport {
       const t = setTimeout(resolve, wait)
       signal?.addEventListener?.('abort', () => { clearTimeout(t); resolve() }, { once: true })
     })
+  }
+
+  /** document.persist the chat's document items on the open socket; fail soft (keep originals). */
+  async _persistDocuments(ws, params) {
+    const items = Array.isArray(params.media_items) ? params.media_items : []
+    const docs = items.filter(x => x?.type === 'document')
+    if (!docs.length) return params
+    try {
+      const r = await this._unary(ws, MEDIA.DOCUMENT_PERSIST, { session_id: params.session_id, documents: docs }, 30_000)
+      const stored = (Array.isArray(r?.media_items) ? r.media_items : []).filter(x => x?.type === 'document' && x.path)
+      if (!stored.length) return params
+      return { ...params, media_items: [...items.filter(x => x?.type !== 'document'), ...stored], ...(r?.files ? { files: { ...(params.files || {}), ...r.files } } : {}) }
+    } catch {
+      return params
+    }
   }
 
   /** Unary E2A RPC helper (opens a short-lived connection). */
@@ -495,6 +517,12 @@ export class GatewayTransport {
               }))
               this.noteCancel(ctx.mapping?.jiuwenSessionId, ctx.mapping)
               emitEvent({ type: 'interrupt', intent: 'cancel' })
+              const runId = ctx.mapping?.swarmRunId
+              if (this.swarmflowStopOnAbort && runId) {
+                // chat.interrupt stops the turn; a SwarmFlow run keeps going without an explicit stop.
+                ws.send(JSON.stringify({ type: 'req', id: `swarm-stop-${randomUUID()}`, method: SWARM.STOP, params: { session_id: ctx.mapping?.jiuwenSessionId, run_id: runId } }))
+                emitEvent({ type: 'raw', event: 'swarmflow.stop', runId })
+              }
               await new Promise(r => setTimeout(r, 150))
             } catch { /* ignore */ }
           }
@@ -516,6 +544,11 @@ export class GatewayTransport {
 
         const payload = frame.payload && typeof frame.payload === 'object' ? frame.payload : {}
         const eventType = normalizeEventName(frame.event || payload.event_type)
+        {
+          // Remember the SwarmFlow run of this Jiuwen session (swarmflow.stop on abort, /jiuwen swarm-stop).
+          const run = payload.run_id || payload.workflow_run_id || payload.swarmflow_meta?.run_id
+          if (run && ctx.mapping && /swarm|workflow/i.test(`${eventType} ${payload.source || ''}`)) ctx.mapping.swarmRunId = String(run)
+        }
         if (ctx.mark) {
           mark1('first-frame')
           if (eventType === EVENTS.REASONING) mark1('first-reasoning')
@@ -617,7 +650,15 @@ export class GatewayTransport {
                 const source = payload.source
                 if (rid) answeredIds.add(rid)
                 emitEvent({ type: 'interaction_answered', eventType, source, kind: reply.kind, outcome: reply.outcome, requestIdOfQuestion: rid, answers: reply.answers, raw: payload })
-                if (INTERRUPT_RESUME_SOURCES.has(source) && rid) {
+                const meta = payload.swarmflow_meta
+                if (source === 'swarmflow_human' && meta?.correlation_id && this.swarmflowReply !== false) {
+                  // SwarmFlow human turn: deliver the person's reply with chat.swarmflow_reply (not chat.user_answer).
+                  const a0 = reply.answers[0] || {}
+                  const answer = reply.answerText ?? (a0.custom_input || (a0.selected_options || []).join(', '))
+                  ws.send(JSON.stringify({ type: 'req', id: `dsh-swarm-reply-${randomUUID()}`, method: CHAT.SWARMFLOW_REPLY, params: {
+                    session_id: ctx.mapping?.jiuwenSessionId, run_id: meta.run_id, correlation_id: meta.correlation_id, answer,
+                  } }))
+                } else if (INTERRUPT_RESUME_SOURCES.has(source) && rid) {
                   const id = `dsh-resume-${randomUUID()}`
                   turnIds.add(id)
                   ws.send(JSON.stringify({ type: 'req', id, method: CHAT.SEND, is_stream: true, params: {

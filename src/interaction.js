@@ -23,6 +23,27 @@ export function createInteractor(deps) {
     let agent
     try { agent = agents?.get?.(dshSessionId) } catch { agent = undefined }
 
+    if (payload?.source === 'swarmflow_human' && payload?.swarmflow_meta?.correlation_id) {
+      // SwarmFlow human turn → dsh approval (allowed-once = "approved"); the transport replies with
+      // chat.swarmflow_reply. Never fails open: no UI / no agent / timeout → rejected.
+      const q = questions[0] || {}
+      const meta = payload.swarmflow_meta
+      const reason = String(q.question || 'SwarmFlow is waiting for your input').slice(0, 2000)
+      let outcome = 'unavailable'
+      if (approval?.request && agent) {
+        outcome = await withTimeout(
+          Promise.resolve(approval.request({ agent, toolName: `swarmflow:${meta.agent_name || meta.agent_id || 'human'}`, reason, signal })).catch(() => 'unavailable'),
+          cfg.approvalTimeoutMs, 'timeout', signal)
+      } else if (!approval?.request) outcome = 'no-ui'
+      const allow = outcome === 'allowed-once'
+      const answerText = allow ? 'approved' : `rejected (${outcome})`
+      return {
+        kind: 'swarmflow', outcome, answerText,
+        answers: [{ selected_options: [], custom_input: answerText }],
+        note: `• swarmflow ${meta.agent_name || meta.agent_id || 'human'}: ${answerText}`,
+      }
+    }
+
     if (eventType === 'plan.approval_required' || APPROVAL_SOURCES.has(payload?.source)) {
       const q = questions[0] || payload || {}
       const toolName = String(q.tool_name || payload?.tool_name || (eventType === 'plan.approval_required' || payload?.source === 'confirm_interrupt' ? 'exit_plan_mode' : 'jiuwen-tool'))

@@ -68,7 +68,7 @@ export function createJiuwenAdapter(LlmAdapterBase, deps) {
     _gatewayTransport() {
       const cfg = this._cfg()
       const key = JSON.stringify([cfg.gatewayURL, cfg.authToken, cfg.userId, cfg.eventDisplay, cfg.forwardReasoning,
-        cfg.showProcessingStatus, cfg.emitUsage, cfg.interruptOnAbort, cfg.finalGraceMs, cfg.terminalFinalGraceMs, cfg.postCancelSettleMs, cfg.chatMode, cfg.workMode, cfg.projectDir])
+        cfg.showProcessingStatus, cfg.emitUsage, cfg.interruptOnAbort, cfg.swarmflowStopOnAbort, cfg.swarmflowReply, cfg.documentPersist, cfg.finalGraceMs, cfg.terminalFinalGraceMs, cfg.postCancelSettleMs, cfg.chatMode, cfg.workMode, cfg.projectDir])
       if (!this._gateway || this._gatewayKey !== key) {
         this._gateway = new GatewayTransport({
           gatewayURL: cfg.gatewayURL,
@@ -88,6 +88,9 @@ export function createJiuwenAdapter(LlmAdapterBase, deps) {
           showProcessingStatus: cfg.showProcessingStatus,
           emitUsage: cfg.emitUsage,
           interruptOnAbort: cfg.interruptOnAbort,
+          swarmflowStopOnAbort: cfg.swarmflowStopOnAbort,
+          swarmflowReply: cfg.swarmflowReply,
+          documentPersist: cfg.documentPersist,
           finalGraceMs: cfg.finalGraceMs,
           postCancelSettleMs: cfg.postCancelSettleMs,
           terminalFinalGraceMs: cfg.terminalFinalGraceMs,
