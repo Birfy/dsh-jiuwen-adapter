@@ -205,6 +205,16 @@ wss.on('connection', (ws, req) => {
     if (method === 'skills.installed') {
       return ok({ skills: [{ name: 'installed-skill', description: 'mock installed' }] })
     }
+    if (method === 'agents.tools_list') return ok({ tools: [{ name: 'Read', internal_name: 'read_file' }, { name: 'Bash', internal_name: 'bash' }] })
+    if (method === 'hooks.list') return ok({ events: [{ name: 'PreToolUse', total_hooks: 2, matchers: [] }, { name: 'Stop', total_hooks: 0, matchers: [] }] })
+    if (method === 'permissions.tools.get') return ok({ tools: { bash: 'allow', acp_chat: 'ask', rm_rf: 'deny' } })
+    if (method === 'permissions.rules.get') return ok({ rules: [{ id: 'shell_allow_ls' }] })
+    if (method === 'plugins.list') return ok({ plugins: [{ plugin_name: 'skill-creator', enabled: true }, { plugin_name: 'old-plugin', enabled: false }] })
+    if (method === 'project.list') return ok({ projects: [{ project_id: 'default', name: 'Default', is_default: true, project_dir: '' }] })
+    if (method === 'session.archived.list') return ok({ sessions: [{ session_id: 's-old', title: 'Old chat' }], total: 1 })
+    if (method === 'session.assets.list') return ok({ assets: [{ name: `asset-${params.session_id}` }] })
+    if (method === 'updater.get_status') return ok({ current_version: '9.9.9', install_mode: 'pip', platform: 'linux', latest_version: '10.0.0', has_update: true })
+    if (method === 'heartbeat.get_conf') return ok({ every: 3600, target: 'web', active_hours: { start: '08:00', end: '22:00' } })
     if (method === 'team.list') {
       return ok({ teams: [{ name: 'mock-team', id: 'team-1' }] })
     }

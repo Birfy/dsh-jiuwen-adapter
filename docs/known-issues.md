@@ -45,3 +45,19 @@ Non-destructive unary probe against the local Jiuwen Gateway (AgentServer :18092
 
 Adapter still exposes `/jiuwen recap` → `command.recap`; expect an error text until the Gateway build registers the method.
 
+
+## 4. Second-batch probe: TUI-only methods (2026-10-30)
+
+Probed for the `/jiuwen tools|hooks|permissions|plugins|projects|archived|assets|version|heartbeat` batch. All ten backing RPCs returned ok on `ws://127.0.0.1:19000/ws` (Gateway 0.2.5b1).
+
+These exist in `ReqMethod` and AgentServer but the Gateway **web** channel does not route them (`unknown method: …`); they are registered only for the `/tui` channel (`gateway/channel_manager/tui/tui_connect.py`). They are therefore **not** exposed as subcommands:
+
+| Method | Result on /ws |
+|---|---|
+| `memory.list`, `memory.status` | FAIL — unknown method |
+| `schedule.list`, `schedule.status` (and create/run/delete) | FAIL — unknown method |
+| `command.context`, `command.status` | FAIL — unknown method |
+| `session.preview`, `diagnosis.list` | FAIL — unknown method |
+| `models.get` (no `model_id`) | FAIL — `unknown model_id ''` (needs an id; `/jiuwen models` already covers listing) |
+
+Note: `project.list` returns two projects both named 默认项目 (`default` work mode and `default_code` code mode); `/jiuwen projects` prints `project_id` and `work_mode` to disambiguate (and dedupes exact `project_id` repeats). The `memoryList/memoryStatus` gateway helpers remain for builds that route them.

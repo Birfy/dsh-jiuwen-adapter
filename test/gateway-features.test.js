@@ -458,3 +458,29 @@ test('/jiuwen btw recap skill-toggle plan-status supplement teams skills install
   assert.ok((await api.gateway.skillsInstalled()).skills.length)
   assert.ok((await api.gateway.teamList()).teams.length)
 })
+
+
+test('/jiuwen tools hooks permissions plugins projects archived assets version heartbeat', async () => {
+  const registered = []
+  const ctx = {
+    llm: { registerAdapter() { return () => {} } },
+    logger: { info() {}, warn() {}, error() {}, debug() {} }, provide(n, v) { this[n] = v }, on() {},
+    inject(deps, cb) { cb({ commands: { register(d) { registered.push(d); return () => {} } }, on() {} }) },
+  }
+  plugin.apply(ctx, { gatewayURL: URL_, mappingPath: join(dir, `cmds3-${Math.random()}.json`), finalGraceMs: 300 })
+  const def = registered.find(d => d.name === 'jiuwen')
+  const run = async (raw) => { const r = await def.handler({ agent: { id: 'n3' }, rawInput: raw }); assert.equal(r.kind, 'success', r.text); return r.text }
+  assert.match(await run('tools'), /tools \(2\): Read, Bash/)
+  assert.match(await run('hooks'), /2 across 2 events \(PreToolUse=2\)/)
+  const perms = await run('permissions')
+  assert.match(perms, /allow=1/); assert.match(perms, /ask: acp_chat/); assert.match(perms, /deny: rm_rf/); assert.match(perms, /rules: 1/)
+  assert.match(await run('plugins'), /skill-creator, old-plugin \(disabled\)/)
+  assert.match(await run('projects'), /Default \(default\) \[default\]/)
+  assert.match(await run('archived'), /\(1\): Old chat/)
+  assert.match(await run('assets'), /asset-/)
+  assert.match(await run('version'), /9\.9\.9 \(pip, linux\), latest 10\.0\.0 \(update available\)/)
+  assert.match(await run('heartbeat'), /every 3600s → web, active 08:00-22:00/)
+  assert.match(def.input.hint, /heartbeat/)
+  const g = ctx.jiuwenAdapter.gateway
+  for (const fn of ['agentsToolsList', 'hooksList', 'permissionsToolsGet', 'permissionsRulesGet', 'pluginsList', 'projectList', 'sessionArchivedList', 'sessionAssetsList', 'updaterStatus', 'heartbeatConf']) assert.equal(typeof g[fn], 'function', fn)
+})

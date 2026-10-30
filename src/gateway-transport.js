@@ -9,7 +9,7 @@ import { resolveAuthMaterials, buildGatewayWsUrl } from './auth.js'
 import { extractMediaFromOptions, attachMediaToChatParams } from './multimodal.js'
 import {
   CHAT, HISTORY, MEMORY, MODELS, MCP, FILES, MEDIA, SESSION, SWARM,
-  SKILLS, AGENTS, TEAM, COMMANDS, EVENTS, normalizeEventName,
+  SKILLS, AGENTS, TEAM, COMMANDS, SYSTEM, EVENTS, normalizeEventName,
 } from './e2a-methods.js'
 
 /** Jiuwen interaction sources that must be answered by a resuming chat.send (see jiuwenswarm runtime/interaction.py). */
@@ -262,6 +262,17 @@ export class GatewayTransport {
   workflows(sessionId, action = 'list', extra = {}) {
     return this.rpc(SWARM.WORKFLOWS, { session_id: sessionId, action, ...extra })
   }
+
+  agentsToolsList(extra = {}) { return this.rpc(AGENTS.TOOLS_LIST, { ...extra }) }
+  hooksList(extra = {}) { return this.rpc(SYSTEM.HOOKS_LIST, { ...extra }) }
+  permissionsToolsGet(extra = {}) { return this.rpc(SYSTEM.PERMISSIONS_TOOLS_GET, { ...extra }) }
+  permissionsRulesGet(extra = {}) { return this.rpc(SYSTEM.PERMISSIONS_RULES_GET, { ...extra }) }
+  pluginsList(extra = {}) { return this.rpc(SYSTEM.PLUGINS_LIST, { ...extra }) }
+  projectList(extra = {}) { return this.rpc(SYSTEM.PROJECT_LIST, { ...extra }) }
+  sessionArchivedList(extra = {}) { return this.rpc(SYSTEM.SESSION_ARCHIVED_LIST, { ...extra }) }
+  sessionAssetsList(sessionId, extra = {}) { return this.rpc(SYSTEM.SESSION_ASSETS_LIST, { session_id: sessionId, ...extra }) }
+  updaterStatus(extra = {}) { return this.rpc(SYSTEM.UPDATER_STATUS, { ...extra }) }
+  heartbeatConf(extra = {}) { return this.rpc(SYSTEM.HEARTBEAT_GET_CONF, { ...extra }) }
 
   _connect(url, signal) {
     return new Promise((resolve, reject) => {
@@ -646,4 +657,4 @@ function summarize(payload) {
   return JSON.stringify(rest).slice(0, 300)
 }
 
-export { CHAT, HISTORY, MEMORY, MODELS, MCP, FILES, MEDIA, SESSION, SWARM, SKILLS, AGENTS, TEAM, COMMANDS, EVENTS }
+export { CHAT, HISTORY, MEMORY, MODELS, MCP, FILES, MEDIA, SESSION, SWARM, SKILLS, AGENTS, TEAM, COMMANDS, SYSTEM, EVENTS }

@@ -4,7 +4,7 @@
  */
 
 export const SUBCOMMANDS =
-  'status | models | model <name|default> | mode [name|default] | pause | resume | rename <title> | pin [on|off] | fork | unmap | delete | goal [get|set <text>|pause|resume|clear] | workflows [list|get <id>] | history | btw <question> | recap | skill-toggle <name> <on|off> | plan-status | supplement <text> | teams | compact | interrupt | sessions | skills [installed] | agents | mcp | mcp-reset'
+  'status | models | model <name|default> | mode [name|default] | pause | resume | rename <title> | pin [on|off] | fork | unmap | delete | goal [get|set <text>|pause|resume|clear] | workflows [list|get <id>] | history | btw <question> | recap | skill-toggle <name> <on|off> | plan-status | supplement <text> | teams | compact | interrupt | sessions | skills [installed] | agents | tools | hooks | permissions | plugins | projects | archived | assets | version | heartbeat | mcp | mcp-reset'
 
 /**
  * @param {{ sessions: import('./session-store.js').SessionStore, gateway: () => import('./gateway-transport.js').GatewayTransport, config: () => any, mcpBridge?: any }} deps
@@ -230,6 +230,66 @@ export function createJiuwenCommand(deps) {
         return `Jiuwen skills: ${names(r?.skills || r?.items).join(', ') || 'none'}`
       }
       case 'agents': { const r = await g.agentsList(); return `Jiuwen agents: ${names(r?.agents || r?.items).join(', ') || 'none'}` }
+      case 'tools': {
+        const r = await g.agentsToolsList()
+        const tools = Array.isArray(r?.tools) ? r.tools : []
+        return `Jiuwen tools (${tools.length}): ${names(tools).join(', ') || 'none'}`
+      }
+      case 'hooks': {
+        const r = await g.hooksList()
+        const ev = Array.isArray(r?.events) ? r.events : []
+        const total = ev.reduce((n, e) => n + (Number(e?.total_hooks) || 0), 0)
+        const active = ev.filter(e => Number(e?.total_hooks) > 0).map(e => `${e.name}=${e.total_hooks}`)
+        return `Jiuwen hooks: ${total} across ${ev.length} events${active.length ? ` (${active.join(', ')})` : ''}`
+      }
+      case 'permissions': {
+        const [tools, rules] = await Promise.allSettled([g.permissionsToolsGet(), g.permissionsRulesGet()])
+        const lines = []
+        if (tools.status === 'fulfilled') {
+          const map = tools.value?.tools && typeof tools.value.tools === 'object' ? tools.value.tools : {}
+          const by = {}
+          for (const [k, v] of Object.entries(map)) (by[String(v)] ||= []).push(k)
+          const ask = by.ask || []
+          const deny = by.deny || []
+          lines.push(`tools: ${Object.entries(by).map(([k, v]) => `${k}=${v.length}`).join(', ') || 'none'}`)
+          if (ask.length) lines.push(`ask: ${ask.join(', ')}`)
+          if (deny.length) lines.push(`deny: ${deny.join(', ')}`)
+        } else lines.push(`tools: unavailable (${short(tools.reason?.message || tools.reason, 80)})`)
+        if (rules.status === 'fulfilled') lines.push(`rules: ${(rules.value?.rules || []).length}`)
+        else lines.push(`rules: unavailable (${short(rules.reason?.message || rules.reason, 80)})`)
+        return `Jiuwen permissions:\n${lines.join('\n')}`
+      }
+      case 'plugins': {
+        const r = await g.pluginsList()
+        const list = (r?.plugins || []).map(p => `${p.plugin_name || p.name}${p.enabled === false ? ' (disabled)' : ''}`)
+        return `Jiuwen plugins: ${list.join(', ') || 'none'}`
+      }
+      case 'projects': {
+        const r = await g.projectList()
+        const seen = new Set()
+        const list = (r?.projects || []).filter(p => { const k = p.project_id || p.name; if (seen.has(k)) return false; seen.add(k); return true }).map(p => `${p.name || p.project_id}${p.name && p.project_id ? ` (${p.project_id}${p.work_mode ? `, ${p.work_mode}` : ''})` : ''}${p.is_default ? ' [default]' : ''}${p.project_dir ? ` → ${p.project_dir}` : ''}`)
+        return `Jiuwen projects: ${list.join('; ') || 'none'}`
+      }
+      case 'archived': {
+        const r = await g.sessionArchivedList()
+        const list = (r?.sessions || []).map(x => short(x.title || x.session_id || x.id, 60))
+        return `Jiuwen archived sessions (${r?.total ?? list.length}): ${list.join(', ') || 'none'}`
+      }
+      case 'assets': {
+        const r = await g.sessionAssetsList(sid)
+        const list = (r?.assets || []).map(x => x.name || x.path || x.asset_id || x.id).filter(Boolean)
+        return `Jiuwen session assets (${sid}): ${list.join(', ') || 'none'}`
+      }
+      case 'version': {
+        const r = await g.updaterStatus()
+        const latest = r?.latest_version ? `, latest ${r.latest_version}${r.has_update ? ' (update available)' : ''}` : ''
+        return `JiuwenSwarm ${r?.current_version || 'unknown'} (${r?.install_mode || '?'}, ${r?.platform || '?'})${latest}`
+      }
+      case 'heartbeat': {
+        const r = await g.heartbeatConf()
+        const h = r?.active_hours ? `, active ${r.active_hours.start}-${r.active_hours.end}` : ''
+        return `Jiuwen heartbeat: every ${r?.every ?? '?'}s → ${r?.target || '?'}${h}`
+      }
       case 'mcp': { const r = await g.mcpList(); return `Jiuwen MCP servers: ${(r?.items || []).map(x => `${x.name}${x.connection_state ? ` (${x.connection_state})` : ''}`).join(', ') || 'none'}` }
       case 'mcp-reset': {
         if (!deps.mcpBridge?.unregister) return 'dsh tool passthrough is not available'
@@ -244,7 +304,7 @@ export function createJiuwenCommand(deps) {
     run,
     definition: {
       name: 'jiuwen',
-      description: 'JiuwenSwarm: status, models/model, mode, pause/resume, rename, pin, fork, unmap/delete, goal, workflows, history, btw, recap, skill-toggle, plan-status, supplement, teams, compact, interrupt, sessions, skills, agents, mcp',
+      description: 'JiuwenSwarm: status, models/model, mode, pause/resume, rename, pin, fork, unmap/delete, goal, workflows, history, btw, recap, skill-toggle, plan-status, supplement, teams, compact, interrupt, sessions, skills, agents, tools, hooks, permissions, plugins, projects, archived, assets, version, heartbeat, mcp',
       input: { hint: SUBCOMMANDS },
       async handler(invocation) {
         try {

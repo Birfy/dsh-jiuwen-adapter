@@ -28,7 +28,19 @@ export const SESSION = Object.freeze({
 })
 
 export const SKILLS = Object.freeze({ LIST: 'skills.list', INSTALLED: 'skills.installed', GET: 'skills.get', TOGGLE: 'skills.toggle' })
-export const AGENTS = Object.freeze({ LIST: 'agents.list' })
+export const AGENTS = Object.freeze({ LIST: 'agents.list', TOOLS_LIST: 'agents.tools_list' })
+/** Read-only workspace / runtime introspection (Gateway web channel). */
+export const SYSTEM = Object.freeze({
+  HOOKS_LIST: 'hooks.list',
+  PERMISSIONS_TOOLS_GET: 'permissions.tools.get',
+  PERMISSIONS_RULES_GET: 'permissions.rules.get',
+  PLUGINS_LIST: 'plugins.list',
+  PROJECT_LIST: 'project.list',
+  SESSION_ARCHIVED_LIST: 'session.archived.list',
+  SESSION_ASSETS_LIST: 'session.assets.list',
+  UPDATER_STATUS: 'updater.get_status',
+  HEARTBEAT_GET_CONF: 'heartbeat.get_conf',
+})
 export const TEAM = Object.freeze({ TEMPLATES_LIST: 'team.templates.list', LIST: 'team.list', HISTORY_GET: 'team.history.get' })
 export const COMMANDS = Object.freeze({ LIST: 'commands.list', COMPACT: 'command.compact', GOAL: 'command.goal', BTW: 'command.btw', RECAP: 'command.recap' })
 

@@ -60,9 +60,11 @@
 - **文件/媒体**：`file.upload_chunk`、`media.persist/discard`、`document.persist/formats`
 - **项目/Git、cron、heartbeat、channel.*、permissions、memory.compute、hooks.list、updater.*、path.*** 等
 
-适配器 `ctx.jiuwenAdapter.gateway` 封装：`sessionList/sessionCreate/sessionDelete/sessionFork/sessionRename/sessionPin/sessionMetadata/planStatus`、`historyGet/historyListTurns`、`skillsList/skillsInstalled/skillsToggle/agentsList/teamTemplatesList/teamList/commandsList/modelsList/mcpList`、`memoryList/memoryStatus/filesList`、`interrupt(sid, intent)/chatCancel/chatResume/userAnswer`、`compact`、`goal`、`btw`、`recap`、`workflows`，以及通用 `rpc(method, params)`。会话参数可传宿主 sessionId（自动映射）或 Jiuwen session_id。会话级 `chatMode` / `skills` / `agentTemplateName` 覆盖见 [dsh-integration.md](./dsh-integration.md#5-jiuwen-slash-command-dsh-command-registry)。
+适配器 `ctx.jiuwenAdapter.gateway` 封装：`sessionList/sessionCreate/sessionDelete/sessionFork/sessionRename/sessionPin/sessionMetadata/planStatus`、`historyGet/historyListTurns`、`skillsList/skillsInstalled/skillsToggle/agentsList/teamTemplatesList/teamList/commandsList/modelsList/mcpList`、`memoryList/memoryStatus/filesList`、`interrupt(sid, intent)/chatCancel/chatResume/userAnswer`、`compact`、`goal`、`btw`、`recap`、`workflows`、只读自省 `agentsToolsList/hooksList/permissionsToolsGet/permissionsRulesGet/pluginsList/projectList/sessionArchivedList/sessionAssetsList/updaterStatus/heartbeatConf`，以及通用 `rpc(method, params)`。会话参数可传宿主 sessionId（自动映射）或 Jiuwen session_id。会话级 `chatMode` / `skills` / `agentTemplateName` 覆盖见 [dsh-integration.md](./dsh-integration.md#5-jiuwen-slash-command-dsh-command-registry)。
 
 实测（live :19000）：`session.list`、`skills.list`、`team.templates.list`、`models.list`、`commands.list`、`agents.list`、`session.create`、`chat.interrupt` 均 ok；`memory.list` 返回 ok=false（该版本未开放）。
+
+实测（live :19000，2026-10-30 第二批）：`agents.tools_list`、`hooks.list`、`permissions.tools.get`、`permissions.rules.get`、`plugins.list`、`project.list`、`session.archived.list`、`session.assets.list`、`updater.get_status`、`heartbeat.get_conf` 均 ok；`memory.list/status`、`schedule.list/status`、`command.context`、`command.status`、`session.preview`、`diagnosis.list` 在 web 通道返回 `unknown method`（仅 TUI 通道注册），故未接入。详见 [known-issues.md](./known-issues.md)。
 
 ## 5. 多模态
 
