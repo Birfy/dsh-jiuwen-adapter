@@ -4,6 +4,7 @@ import { appendFileSync } from 'node:fs'
  */
 import { createRequire } from 'node:module'
 import { resolveConfig } from './config.js'
+import { validateConfig } from './config-validate.js'
 import { Config } from './schema.js'
 import { SessionStore } from './session-store.js'
 import { createJiuwenAdapter } from './adapter.js'
@@ -47,6 +48,8 @@ export function apply(ctx, config = {}) {
   }
 
   const logger = ctx.logger ?? console
+  // Warn (never throw) about unknown/misspelled/deprecated keys so a typo cannot silently disable a feature.
+  for (const w of validateConfig(config)) { try { logger.warn?.(`[jiuwen] ${w}`) } catch { /* ignore */ } }
   const LlmAdapter = loadLlmAdapter(logger, resolved)
 
   const listeners = new Set()

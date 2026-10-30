@@ -69,7 +69,7 @@ export function createJiuwenAdapter(LlmAdapterBase, deps) {
     _gatewayTransport() {
       const cfg = this._cfg()
       const key = JSON.stringify([cfg.gatewayURL, cfg.authToken, cfg.userId, cfg.eventDisplay, cfg.forwardReasoning,
-        cfg.showProcessingStatus, cfg.emitUsage, cfg.interruptOnAbort, cfg.swarmflowStopOnAbort, cfg.swarmflowReply, cfg.documentPersist, cfg.finalGraceMs, cfg.terminalFinalGraceMs, cfg.postCancelSettleMs, cfg.chatMode, cfg.workMode, cfg.projectDir])
+        cfg.showProcessingStatus, cfg.emitUsage, cfg.interruptOnAbort, cfg.swarmflowStopOnAbort, cfg.swarmflowReply, cfg.documentPersist, cfg.finalGraceMs, cfg.terminalFinalGraceMs, cfg.recoverOnDrop, cfg.recoverWindowMs, cfg.postCancelSettleMs, cfg.chatMode, cfg.workMode, cfg.projectDir])
       if (!this._gateway || this._gatewayKey !== key) {
         this._gateway = new GatewayTransport({
           gatewayURL: cfg.gatewayURL,
@@ -95,6 +95,8 @@ export function createJiuwenAdapter(LlmAdapterBase, deps) {
           finalGraceMs: cfg.finalGraceMs,
           postCancelSettleMs: cfg.postCancelSettleMs,
           terminalFinalGraceMs: cfg.terminalFinalGraceMs,
+          recoverOnDrop: cfg.recoverOnDrop,
+          recoverWindowMs: cfg.recoverWindowMs,
           WebSocketImpl: deps.WebSocketImpl,
         })
         this._gatewayKey = key

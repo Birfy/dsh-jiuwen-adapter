@@ -184,6 +184,10 @@ export function resolveConfig(raw = {}, opts = {}) {
     /** Idle grace after chat.final before ending the turn (waits for usage / processing_status). */
     finalGraceMs: Number(raw.finalGraceMs ?? env.JIUWEN_FINAL_GRACE_MS ?? 1500),
     terminalFinalGraceMs: Number(raw.terminalFinalGraceMs ?? env.JIUWEN_TERMINAL_FINAL_GRACE_MS ?? 100),
+    /** After a mid-turn Gateway drop, look for the turn's answer in Jiuwen history (history.get) and emit it, marked as recovered. */
+    recoverOnDrop: (raw.recoverOnDrop ?? env.JIUWEN_RECOVER_ON_DROP ?? 'true') !== false && String(raw.recoverOnDrop ?? env.JIUWEN_RECOVER_ON_DROP ?? 'true') !== 'false',
+    /** How long to keep polling history for the dropped turn's final answer. */
+    recoverWindowMs: Number(raw.recoverWindowMs ?? env.JIUWEN_RECOVER_WINDOW_MS ?? 15_000),
     postCancelSettleMs: Number(raw.postCancelSettleMs ?? env.JIUWEN_POST_CANCEL_SETTLE_MS ?? 1000),
     /** Host auxiliary calls (GenerateOptions.purpose): session-title → 'local' (instant heuristic) | 'jiuwen'. */
     titleMode: pickEnum(env.JIUWEN_TITLE_MODE || raw.titleMode, ['local', 'jiuwen'], 'local'),

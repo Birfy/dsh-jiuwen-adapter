@@ -13,7 +13,7 @@
  */
 import { pathToFileURL } from 'node:url'
 import { join } from 'node:path'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { createHash } from 'node:crypto'
 
@@ -49,18 +49,25 @@ ctx.on('internal/dispatch', (_type, name, args) => {
 })
 const home = mkdtempSync(join(tmpdir(), 'jw-rt-'))
 const failed = []
+const SANDBOX = join(home, 'sandbox')
+mkdirSync(SANDBOX, { recursive: true })
 const load = async (n, cfg = {}) => { try { const m = await imp(n); Promise.resolve(ctx.plugin(m.default || m, cfg)).catch(e => failed.push(`${n}: ${String(e?.message || e).slice(0, 100)}`)) } catch (e) { failed.push(`${n}: import ${String(e?.message || e).slice(0, 100)}`) } }
 const ROWS = [
   ['cordis-plugin-timer'], ['dsh-llm'], ['dsh-session'], ['dsh-session-projection'],
   ['dsh-session-persistence-jsonl', { root: join(home, 'sessions'), compression: 'none' }],
   ['dsh-system-prompt', { includeHarnessIdentity: false, includeRuntimeContext: false, personaPrefix: 'You are a test agent.' }],
   ['dsh-tools'], ['dsh-agent'], ['dsh-llm-retry'], ['dsh-agent-loop', { agents: [] }],
-  ['dsh-token-meter'], ['dsh-compaction-basic'], ['dsh-session-title', { fallbackMaxWords: 5, fallbackMaxBytes: 40, maxTitleBytes: 80 }],
+  ['dsh-token-meter'], ['dsh-compaction-basic', { modelPolicies: [{ provider: 'fake', model: 'fake-small', thresholdRatio: 0.5, headroomTokens: 0, retainTokens: 200, maxTokens: 256 }] }], ['dsh-session-title', { fallbackMaxWords: 5, fallbackMaxBytes: 40, maxTitleBytes: 80 }],
   ['dsh-commands'], ['dsh-command-compact'], ['dsh-goal'], ['dsh-goal-round-driver'], ['dsh-command-goal'], ['dsh-tool-goal'],
   ['dsh-plan-mode', { section: 'You are in plan mode.' }],
   ['dsh-user-approval', { policy: 'ask' }], ['dsh-user-questions'], ['dsh-tool-todo', { allowParallelInProgress: true }], ['dsh-tool-ask-user'],
   ['dsh-attachment'],
   ['dsh-mcp-client', { transport: 'stdio', serverName: 'echo', command: process.execPath, args: [join(ROOT, 'scripts/fixtures/mcp-echo.mjs')] }],
+  // Bash inside a temp sandbox dir, and in-process subagents (rows from the shipped base bundle).
+  ['dsh-subprocess-local'], ['dsh-sandbox-local'], ['dsh-fs-local'],
+  ['dsh-sandbox-policy', { mode: 'danger-full-access', workspaceRoot: SANDBOX }],
+  ['dsh-working-directory'], ['dsh-shell-env'], ['dsh-bash-local'], ['dsh-tool-bash'],
+  ['dsh-subagent'], ['dsh-subagent-spawn-in-process', { providerName: 'spawn' }], ['dsh-tool-subagent', { provider: 'spawn', toolName: 'subagent' }],
 ]
 let deepseek = 'skipped'
 async function loadDeepseek() {
@@ -78,17 +85,24 @@ const { defineTool } = await imp('dsh-tools')
 let flaky = 0
 const textOf = m => (m?.content || []).filter(b => b.type === 'text').map(b => b.text).join('')
 class Scripted extends LlmAdapter {
-  listModels() { return Promise.resolve([{ provider: 'fake', id: 'fake-1', name: 'Fake', contextWindow: 100000 }]) }
-  resolveModel(p, m) { return Promise.resolve({ provider: p, id: m, name: m, contextWindow: 100000 }) }
+  listModels() { return Promise.resolve([{ provider: 'fake', id: 'fake-1', name: 'Fake', contextWindow: 100000 }, { provider: 'fake', id: 'fake-small', name: 'Fake small window', contextWindow: 1500, maxTokens: 200 }]) }
+  resolveModel(p, m) { return Promise.resolve({ provider: p, id: m, name: m, context: { contextWindow: m === 'fake-small' ? 1500 : 100000 }, defaultMaxTokens: m === 'fake-small' ? 200 : 4096 }) }
   providerRetryPolicy() { try { return resolveRetryPolicy?.({ mode: 'normal', maxRetries: 2, backoff: { initialDelayMs: 1, maxDelayMs: 2 } }) } catch { return undefined } }
   async *stream(o) {
     const msgs = o.messages || []
     if (process.env.COMPAT_MSGS) process.stderr.write('[msgs] ' + JSON.stringify(msgs.map(m => [m.role, m.source?.kind, m.type, textOf(m).slice(0, 50)])) + '\n')
     const last = msgs[msgs.length - 1]
+    // Realistic usage (~4 chars/token over the whole request) so token pressure is real for the small-window model.
+    const inTok = Math.ceil(JSON.stringify(msgs.map(x => x.content)).length / 4)
     const text = textOf(last)
-    const isUser = last?.source?.kind === 'user' || last?.role === 'user'
+    const isUser = last?.source?.kind === 'user' || (last?.role === 'user' && last?.source?.kind !== 'goal')
     if (isUser && text === 'FLAKY' && flaky++ === 0) throw new LlmError('scripted transient failure', 'SERVER')
-    const m = isUser && /^CALL (\S+) (.*)$/s.exec(text)
+    let m = isUser && /^CALL (\S+) (.*)$/s.exec(text)
+    if (process.env.COMPAT_MSGS) process.stderr.write('[last] ' + JSON.stringify([last?.role, last?.source?.kind, text.slice(0, 120)]) + '\n')
+    // get_goal answers {"goal":{"id","revision",...}}: complete it (a deterministic one-round goal).
+    const goalHit = last?.role === 'tool' && /^\{"goal":\{"id":"([^"]+)","revision":(\d+)/.exec(text)
+    if (!m && goalHit) m = [null, 'update_goal', JSON.stringify({ goal_id: goalHit[1], revision: Number(goalHit[2]), action: 'complete' })]
+    if (!m && last?.source?.kind === 'goal' && /<goal_round>/.test(text)) m = [null, 'get_goal', '{}']
     let out
     if (m) {
       const id = `call-${msgs.length}`
@@ -96,14 +110,14 @@ class Scripted extends LlmAdapter {
       yield { type: 'block-start', index: 0, blockType: 'tool-call' }
       yield { type: 'tool-call-delta', index: 0, id, name: m[1], argumentsDelta: m[2] }
       yield { type: 'block-end', index: 0, block: { type: 'tool-call', id, name: m[1], arguments: m[2] } }
-      yield { type: 'usage', usage: { inputTokens: 10 + msgs.length, outputTokens: 5 } }
+      yield { type: 'usage', usage: { inputTokens: inTok, outputTokens: 5 } }
       yield { type: 'finish', reason: { kind: 'tool-calls' } }; return
     }
     out = `reply#${msgs.length}:${(isUser ? text : JSON.stringify(last?.content ?? '')).slice(0, 60)}`
     yield { type: 'block-start', index: 0, blockType: 'text' }
     yield { type: 'text-delta', index: 0, text: out }
     yield { type: 'block-end', index: 0, block: { type: 'text', text: out } }
-    yield { type: 'usage', usage: { inputTokens: 10 + msgs.length, outputTokens: 5 } }
+    yield { type: 'usage', usage: { inputTokens: inTok, outputTokens: 5 } }
     yield { type: 'finish', reason: { kind: 'stop' } }
   }
 }
@@ -113,7 +127,7 @@ async function loadHarnessPlugins() {
   ctx.plugin({ name: 'compat-guarded-tool', inject: ['tools'], apply(c) {
     c.tools.register(defineTool({ name: 'guarded', description: 'A tool that needs approval.', parameters: { decision: { type: 'string', required: true } }, output: { schema: { type: 'string' }, render: (_a, v) => [{ type: 'text', text: v }] }, async execute(args) { return `guarded-ran:${args.decision}` } }))
     c.on('tools/pre-execute', (exec, next) => exec.name === 'guarded' ? { kind: 'ask', reason: 'guarded needs approval' } : next())
-    c.on('user-questions/request', (req) => { questions.push(req.questions.map(q => q.id).join()); return { answers: req.questions.map(q => ({ id: q.id, selected: [q.options?.[0]?.label ?? 'yes'] })) } })
+    c.on('user-questions/request', (req) => { questions.push(req.questions.map(q => `${q.id}${q.intent ? `:${q.intent.kind}` : ''}`).join()); return { answers: req.questions.map(q => ({ id: q.id, selected: [q.intent?.approve ?? q.options?.[0]?.label ?? 'yes'] })) } })
   } })
   await tick(300)
 }
@@ -134,7 +148,7 @@ function normalizer() {
   const ids = new Map()
   const tok = s => { if (!ids.has(s)) ids.set(s, `<id${ids.size}>`); return ids.get(s) }
   const walk = v => {
-    if (typeof v === 'string') return v.replace(UUID, tok).replace(new RegExp(home.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '<home>')
+    if (typeof v === 'string') return v.replace(UUID, tok).replace(/\b[0-9a-f]{8}-[0-9a-f]{1,4}(-[0-9a-f]{0,12})*/gi, '<uuid-prefix>').replace(new RegExp(home.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '<home>')
     if (Array.isArray(v)) return v.map(walk)
     if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).filter(([k]) => !DROP.has(k) && !/At$/.test(k)).map(([k, x]) => [k, (/(^id$|Id$)/.test(k) && typeof x === 'string') ? tok(x) : walk(x)]))
     if (typeof v === 'number' && v > 1.6e12 && v < 2.2e12) return '<epoch>'
@@ -162,9 +176,20 @@ const SCRIPT = [
   ['say', 'after compact'],
   ['cmd', '/goal clear'],
   ['cmd', '/nosuchcommand'],
+  ['say', `CALL bash ${JSON.stringify({ description: 'Write and read a file', command: 'echo sandboxed > a.txt && cat a.txt && ls', workdir: SANDBOX })}`],
+  ['say', 'CALL subagent {"description":"child task","prompt":"child: say hi"}'],
+  ['wait-subagent', 'settled'],
+  ['cmd', '/plan'],
+  ['say', 'CALL exit_plan_mode {"plan":"# Compat plan\\n- step one\\n- step two"}'],
+  ['say', 'after plan approval'],
+  ['cmd', '/goal Finish the scripted goal'],
+  ['say', 'start working on the goal'],
+  ['wait-goal', 'complete'],
 ]
-async function runScenario(sid) {
-  const h = await ctx.agents.create({ sessionId: sid, agentOptions: { provider: 'fake', model: 'fake-1' }, setup: (agentCtx) => {
+/** A second agent on a 1.5k-token window: long turns must trigger automatic compaction. */
+const SMALL = Array.from({ length: 6 }, (_, i) => ['say', `long turn ${i}: ${'lorem ipsum dolor sit amet '.repeat(40)}`])
+async function runScenario(sid, script = SCRIPT, model = 'fake-1') {
+  const h = await ctx.agents.create({ sessionId: sid, agentOptions: { provider: 'fake', model }, setup: (agentCtx) => {
     // Terminal approval answerer, agent-scoped as dsh-user-approval requires. Decision comes from the call's args.
     agentCtx.on('approval/request', (req) => {
       const call = [...lastCalls].reverse().find(c => c.name === req.toolName || c.name === req.tool) ?? {}
@@ -174,7 +199,24 @@ async function runScenario(sid) {
   } })
   const a = h.agent
   const results = []
-  for (const [kind, text] of SCRIPT) {
+  for (const [kind, text] of script) {
+    if (kind === 'wait-subagent') {
+      // The background child reports back as a 'subagent-settled' message; wait for it so ordering is fixed.
+      const until = Date.now() + 15_000
+      const done = () => a.session.snapshotEvents().some(e => e.type === 'user/message' && e.data?.source?.kind === 'subagent-settled')
+      while (!done() && Date.now() < until) { await tick(50); await a.whenIdle() }
+      await a.whenIdle()
+      results.push(`wait-subagent:${done() ? 'settled' : 'timeout'}`)
+      continue
+    }
+    if (kind === 'wait-goal') {
+      // Goal rounds start only at whole-agent idle: wait for the scripted round to complete the goal.
+      const until = Date.now() + 15_000
+      const done = () => a.session.snapshotEvents().some(e => e.type === 'goal/change' && /complete/.test(JSON.stringify(e.data)))
+      while (!done() && Date.now() < until) { await tick(100); await a.whenIdle() }
+      results.push(`wait-goal:${done() ? 'complete' : 'timeout'}`)
+      continue
+    }
     if (kind === 'say') { a.followup({ content: [{ type: 'text', text }], source: { kind: 'user' } }); await a.whenIdle(); results.push(`say:${text.slice(0, 20)}`) } else {
       try { const r = await ctx.commands.execute(a, text, [], new AbortController().signal); results.push(r ? `${text} => ${r.result.kind}: ${String(r.result.text ?? '').slice(0, 120)}` : `${text} => (unresolved)`) } catch (e) { results.push(`${text} => THROW ${e.message}`) }
       await a.whenIdle()
@@ -196,6 +238,7 @@ await tick(1500)
 await loadHarnessPlugins()
 if (WITH && ORDER === 'after') await loadJiuwen()
 trace('loaded; failed:', failed)
+if (process.env.COMPAT_SCHEMAS) { for (const t of ctx.tools.schemas()) if (/exit_plan|update_goal|subagent|bash|create_goal/.test(t.name)) console.error('[schema]', t.name, JSON.stringify(t.parameters).slice(0, 700)); console.error('[services]', ['shell', 'shellEnv', 'workingDirectory', 'subagents', 'sandbox', 'subprocess'].map(n => `${n}:${ctx.get(n) !== undefined}`).join(' ')) }
 
 const api = ctx.get('jiuwenAdapter')
 let jwSide
@@ -222,6 +265,8 @@ if (WITH && MIXED && api) {
   })()
 }
 const rep = await scenario
+const small = await runScenario('nonjw-small', SMALL, 'fake-small')
+rep.events = [...rep.events, ...small.events]; rep.types = [...rep.types, ...small.types]; rep.results = [...rep.results, ...small.results.map(r => `small:${r}`)]
 const jwOut = await jwSide
 const scenarioEvents = emitted.slice(base)
 const norm = normalizer()
@@ -233,6 +278,15 @@ const out = {
   with: WITH, order: ORDER, two: TWO, mixed: MIXED, gateway: GW, deepseek, failed,
   eventsHash: createHash('sha1').update(JSON.stringify(ev)).digest('hex').slice(0, 16),
   eventCount: rep.events.length, types: [...new Set(rep.types)].sort(),
+  scenarios: {
+    planExit: ev.filter(e => e.type === 'tool/result' && /Plan approved/.test(JSON.stringify(e.data))).length,
+    goalOps: ev.filter(e => e.type === 'goal/change').map(e => e.data.operation),
+    goalRounds: ev.filter(e => e.type === 'user/message' && e.data?.source?.kind === 'goal').length,
+    autoCompactions: ev.filter(e => e.type === 'compaction/start' && !e.data.sourceCommandId).length,
+    manualCompactions: ev.filter(e => e.type === 'compaction/start' && e.data.sourceCommandId).length,
+    subagent: ev.filter(e => e.type === 'user/message' && e.data?.source?.kind === 'subagent-settled').length,
+    bash: ev.filter(e => e.type === 'tool/result' && /sandboxed\\na\.txt/.test(JSON.stringify(e.data))).length,
+  },
   results: rep.results, tools: rep.tools, cmds: rep.cmds, title: rep.title, tokens: norm(rep.tokens),
   approvals, questions,
   hostEvents: [...new Set(scenarioEvents.filter(n => !n.startsWith('jiuwen/')))].sort(),

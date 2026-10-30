@@ -114,6 +114,18 @@ wss.on('connection', (ws, req) => {
       ev('chat.tool_result', { event_type: 'chat.tool_result', tool_name: 'bash', tool_call_id: 'call_1', success: true, rendered_result: 'ok', result: 'success=True' })
       ev('chat.subtask_update', { event_type: 'chat.subtask_update', content: 'swarm-step-1' })
 
+      if (/drop-mid/i.test(query)) {
+        // Stream part of the answer, then drop the socket; history already holds the full reply.
+        ev('chat.delta', { content: reply.slice(0, 12) })
+        setTimeout(() => ws.socket?.destroy ? ws.socket.destroy() : ws.close(), 30)
+        return
+      }
+      if (/drop-lost/i.test(query)) {
+        // Drop before any answer exists in history.
+        turns.pop(); HISTORY.set(sessionId, turns)
+        setTimeout(() => ws.socket?.destroy ? ws.socket.destroy() : ws.close(), 30)
+        return
+      }
       const pieces = chunkText(reply, 20)
       const slow = /slow/i.test(query)
       let i = 0

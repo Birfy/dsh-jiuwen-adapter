@@ -57,6 +57,9 @@ export function formatGatewayError(err, depth = 0) {
 /** Jiuwen interaction sources that must be answered by a resuming chat.send (see jiuwenswarm runtime/interaction.py). */
 export const INTERRUPT_RESUME_SOURCES = new Set(['confirm_interrupt', 'permission_interrupt', 'ask_user_interrupt', 'evolution_interrupt'])
 
+/** Marker on text recovered from Jiuwen history after a mid-turn Gateway drop. */
+export const RECOVERED_MARK = '[Recovered from Jiuwen history after the Gateway connection dropped]'
+
 export class GatewayTransport {
   /**
    * @param {{
@@ -94,6 +97,8 @@ export class GatewayTransport {
     this.documentPersist = opts.documentPersist === true
     this.finalGraceMs = Number.isFinite(opts.finalGraceMs) ? opts.finalGraceMs : 1500
     /** Idle grace after the terminal (empty, request-scoped) chat.final. Negative disables the early end. */
+    this.recoverOnDrop = opts.recoverOnDrop !== false
+    this.recoverWindowMs = Number.isFinite(opts.recoverWindowMs) && opts.recoverWindowMs >= 0 ? opts.recoverWindowMs : 15_000
     this.terminalFinalGraceMs = Number.isFinite(opts.terminalFinalGraceMs) && opts.terminalFinalGraceMs >= 0 ? opts.terminalFinalGraceMs : (opts.terminalFinalGraceMs < 0 ? this.finalGraceMs : 100)
     /**
      * JiuwenSwarm accepts a chat.send issued within a few hundred ms of a chat.interrupt on the same
@@ -182,7 +187,7 @@ export class GatewayTransport {
       }))
 
       mark('chat-send'); turn.traceParams?.(params)
-      yield *this._consume(ws, requestId, signal, { mapping, onEvent: turn.onEvent, onTurnEnd: turn.onTurnEnd, mark, interact: turn.interact, resumeParams: { session_id: params.session_id, mode, user_id: params.user_id, ...(projectDir ? { project_dir: projectDir, cwd: projectDir } : {}) } })
+      yield *this._consume(ws, requestId, signal, { recover: { sessionId: params.session_id, query }, mapping, onEvent: turn.onEvent, onTurnEnd: turn.onTurnEnd, mark, interact: turn.interact, resumeParams: { session_id: params.session_id, mode, user_id: params.user_id, ...(projectDir ? { project_dir: projectDir, cwd: projectDir } : {}) } })
     } catch (error) {
       yield failureFromError(error, signal)
     } finally {
@@ -523,6 +528,39 @@ export class GatewayTransport {
    * Consume one chat.send turn. Ends on chat.processing_status{is_complete},
    * stream.end, chat.error, interrupt_result, or `finalGraceMs` idle after chat.final.
    */
+  /**
+   * Poll Jiuwen history for the answer to `query` after a mid-turn drop. Returns
+   * `{ text, continued }` (continued: the history answer extends what was already streamed, and
+   * `text` is only the missing suffix) or `undefined` when nothing usable appears in the window.
+   */
+  async _recoverFromHistory(sessionId, query, streamed = '', signal) {
+    const until = Date.now() + this.recoverWindowMs
+    const q = String(query || '').trim()
+    const contentOf = m => String(typeof m?.content === 'string' ? m.content : Array.isArray(m?.content) ? m.content.map(b => b?.text ?? '').join('') : (m?.content ?? '')).trim()
+    for (let attempt = 0; Date.now() < until && !signal?.aborted; attempt++) {
+      if (attempt) await new Promise(r => setTimeout(r, Math.min(2000, Math.max(50, until - Date.now()))))
+      let page
+      try { page = await this.historyMessages(sessionId, { timeoutMs: Math.max(500, Math.min(5000, until - Date.now())) }) } catch { continue }
+      const msgs = page?.messages || []
+      let u = -1
+      for (let i = msgs.length - 1; i >= 0; i--) if (msgs[i]?.role === 'user' && (!q || contentOf(msgs[i]) === q || contentOf(msgs[i]).includes(q) || q.includes(contentOf(msgs[i])))) { u = i; break }
+      if (u < 0) continue
+      const answers = msgs.slice(u + 1).filter(m => m?.role === 'assistant' && contentOf(m))
+      const final = answers.filter(m => !m.event_type || m.event_type === 'chat.final').at(-1) || answers.at(-1)
+      if (!final) continue
+      const full = contentOf(final)
+      const body = String(streamed || '')
+      if (body && full.startsWith(body.trim())) {
+        let rest = full.slice(body.trim().length)
+        // The streamed body keeps its trailing whitespace; don't repeat it at the seam.
+        if (/\s$/.test(body)) rest = rest.replace(/^\s+/, '')
+        return { text: rest, continued: true }
+      }
+      return { text: full, continued: false }
+    }
+    return undefined
+  }
+
   async *_consume(ws, requestId, signal, ctx = {}) {
     const text = { index: 0, started: false, body: '' }
     const reasoning = { index: 1, started: false, body: '' }
@@ -549,8 +587,8 @@ export class GatewayTransport {
       try { push({ ok: true, frame: JSON.parse(String(event.data)) }) }
       catch (error) { push({ ok: false, error }) }
     }
-    const onClose = () => push({ ok: false, error: Object.assign(new Error('Gateway WebSocket closed mid-turn — in-flight answer lost; send your next message to reconnect'), { code: 'TRANSPORT' }) })
-    const onError = () => push({ ok: false, error: Object.assign(new Error('Gateway WebSocket error mid-turn — in-flight answer lost; send your next message to reconnect'), { code: 'TRANSPORT' }) })
+    const onClose = () => push({ ok: false, drop: true, error: Object.assign(new Error('Gateway WebSocket closed mid-turn — in-flight answer lost; send your next message to reconnect'), { code: 'TRANSPORT' }) })
+    const onError = () => push({ ok: false, drop: true, error: Object.assign(new Error('Gateway WebSocket error mid-turn — in-flight answer lost; send your next message to reconnect'), { code: 'TRANSPORT' }) })
     const onAbort = () => push({ ok: false, abort: true })
 
     ws.addEventListener('message', onMessage)
@@ -634,6 +672,20 @@ export class GatewayTransport {
         }
         if (!item.ok) {
           if (finalSeen) { yield *finish({ kind: 'stop' }); return }
+          if (item.drop && this.recoverOnDrop && ctx.recover?.sessionId && !signal?.aborted) {
+            // The socket dropped mid-turn. Jiuwen may still finish (or have finished) the turn server-side:
+            // look for its answer in history and emit it, clearly marked. Otherwise keep the clear error.
+            emitEvent({ type: 'drop', recovering: true })
+            const rec = await this._recoverFromHistory(ctx.recover.sessionId, ctx.recover.query, text.body, signal)
+            if (rec) {
+              emitEvent({ type: 'drop_recovered', chars: rec.text.length, continued: rec.continued })
+              yield *textDelta(rec.continued ? rec.text : `${text.body ? '\n\n' : ''}${RECOVERED_MARK}\n\n${rec.text}`)
+              if (rec.continued) yield *textDelta(`\n\n${RECOVERED_MARK}`)
+              yield *finish({ kind: 'stop' })
+              return
+            }
+            emitEvent({ type: 'drop', recovered: false })
+          }
           throw item.error
         }
         const frame = item.frame

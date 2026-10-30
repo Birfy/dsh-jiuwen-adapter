@@ -53,11 +53,19 @@ describe('full agent runtime A/B matrix', { skip: !hasRuntime && 'dsh agent runt
     assert.match(String(m.extra['mock/mixed'].jwOut), /agent:gateway-mock: Reply with exactly: mixed-ok/, 'jiuwen agent in the real loop sends the user text')
     assert.equal(m.ok, true)
   })
-  it('baseline scenario covers approval, tools, compaction, commands, retry, title, plan, goal', () => {
+  it('baseline scenario covers approval, tools, compaction (manual + automatic), commands, retry, title, plan exit, goal rounds, subagent, bash', () => {
     const r = JSON.parse(execFileSync(process.execPath, [`${ROOT}scripts/compat-runtime.mjs`], { encoding: 'utf8', timeout: 120_000, stdio: ['ignore', 'pipe', 'ignore'] }))
     for (const t of ['approval/asked', 'approval/decided', 'tool/result', 'todo/write', 'compaction/summary', 'command/done', 'llm/retry', 'session/title', 'plan/mode', 'goal/change']) assert.ok(r.types.includes(t), t)
     assert.deepEqual(r.approvals, ['guarded:allowed-once', 'guarded:rejected'])
-    assert.deepEqual(r.questions, ['q1'])
+    assert.deepEqual(r.questions, ['q1', 'plan-review:plan-review'], 'exit_plan_mode approval goes through user-questions')
+    for (const w of ['wait-subagent:settled', 'wait-goal:complete']) assert.ok(r.results.includes(w), w)
+    assert.ok(r.types.includes('subagent/catalog'), 'subagent ran')
+    const sc = r.scenarios
+    assert.equal(sc.planExit, 1); assert.equal(sc.goalRounds, 1); assert.equal(sc.subagent, 1); assert.equal(sc.bash, 1); assert.equal(sc.manualCompactions, 1)
+    assert.ok(sc.goalOps.includes('complete'), 'goal completed by a round')
+    assert.ok(sc.autoCompactions >= 1, 'token pressure triggered automatic compaction')
+    assert.ok(r.results.some(x => x.startsWith('say:CALL bash')), 'bash ran')
+    assert.ok(r.results.filter(x => x.startsWith('small:')).length === 6, 'small-window agent ran')
     assert.ok(r.results.some(x => x.startsWith('/compact => success')))
     assert.ok(r.tools.includes('mcp__echo__echo'))
     assert.deepEqual(r.failed, [])
