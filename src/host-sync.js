@@ -5,6 +5,8 @@
 import { sessionUsesProvider } from './bridges.js'
 
 const PLAN_CHAT = 'agent.plan'
+/** Jiuwen tools a permission preset touches (never permissions.tools.set). */
+const PERMISSION_TOOLS = Object.freeze(['bash', 'write_file', 'edit_file'])
 const AGENT_CHAT = 'agent'
 
 /** Safe permission preset → Jiuwen tools.level map (never uses permissions.tools.set). */
@@ -12,6 +14,7 @@ const PRESET_LEVELS = Object.freeze({
   'read-only': 'deny',
   'workspace-write': 'ask',
   'full-access': 'allow',
+  'danger-full-access': 'allow',
   ask: 'ask',
   allow: 'allow',
   deny: 'deny',
@@ -76,6 +79,15 @@ async function rpcOk(gateway, method, params, logger, label) {
 export function installHostSync(deps) {
   const { ctx, config, sessions, gateway, logger, services, mcpBridge } = deps
   const offs = []
+  // goal/change (session log) and goal/changed (agent event) both fire for one change: dedupe.
+  const goalSent = new Map()
+  const sendGoal = (params, label) => {
+    const key = JSON.stringify(params)
+    const now = Date.now()
+    if (goalSent.get(params.session_id)?.key === key && now - goalSent.get(params.session_id).at < 2000) return
+    goalSent.set(params.session_id, { key, at: now })
+    return rpcOk(gateway, 'command.goal', params, logger, label)
+  }
   const on = (name, fn) => {
     try {
       const off = ctx.on?.(name, (...args) => {
@@ -107,13 +119,11 @@ export function installHostSync(deps) {
     let hostSkills = []
     try { hostSkills = await skills.list(session ? { cwd: session.header?.cwd } : {}) } catch { return }
     const enabled = []
-    const bodies = []
     for (const s of hostSkills || []) {
       const name = s?.name
       if (!name) continue
       const onModel = s.invocation?.modelInvocable !== false
       if (onModel) enabled.push(String(name))
-      if (s.content && typeof s.content === 'string') bodies.push({ name: String(name), content: s.content })
     }
     // Apply to all mapped jiuwen sessions (skills are host-global; session filter when provided).
     const targets = session
@@ -137,27 +147,40 @@ export function installHostSync(deps) {
       }
     } catch { /* optional */ }
 
+    // chat.send `skills` is Jiuwen's per-turn "skills_to_use" hint: only names Jiuwen knows.
+    const known = enabled.filter(n => jwNames.has(n))
+    // dsh skills.list() returns summaries without bodies: load bodies of unknown skills via skills.get().
+    let unknown = []
+    if (f.syncSkillInstall) {
+      for (const name of enabled.filter(n => !jwNames.has(n)).slice(0, 20)) {
+        try {
+          const full = typeof skills.get === 'function' ? await skills.get(name, session ? { cwd: session.header?.cwd } : {}) : undefined
+          const content = full?.content
+          if (typeof content === 'string' && content.trim()) unknown.push({ name, content: content.slice(0, 4000) })
+        } catch (e) { soft(logger, 'skills.get', e) }
+      }
+    }
     for (const t of targets) {
-      const patch = { skills: enabled }
-      // Bodies for skills Jiuwen does not know: soft path — store for injectSystem-adjacent host instructions.
-      const unknown = bodies.filter(b => !jwNames.has(b.name))
-      if (unknown.length && f.syncSkillInstall) {
-        patch.skillBodies = unknown.map(b => ({ name: b.name, content: String(b.content).slice(0, 4000) }))
-      } else if (!unknown.length) {
+      // Snapshot what we synced last time BEFORE updating (update mutates the mapping in place).
+      const prevKnown = Array.isArray(t.mapping?.skills) ? [...t.mapping.skills] : []
+      const prevBodies = JSON.stringify(t.mapping?.skillBodies || [])
+      const patch = { skills: known.length ? known : undefined }
+      if (unknown.length) {
+        patch.skillBodies = unknown
+        if (JSON.stringify(unknown) !== prevBodies) patch.skillBodiesInjected = undefined
+      } else {
         patch.skillBodies = undefined
+        patch.skillBodiesInjected = undefined
       }
       try { sessions.update(t.id, patch) } catch (e) { soft(logger, 'skills.map', e) }
-      for (const name of enabled) {
-        if (!jwNames.has(name)) continue
+      for (const name of known) {
+        if (prevKnown.includes(name)) continue
         await rpcOk(gateway, 'skills.toggle', { name, enabled: true }, logger, 'skills.toggle')
       }
-      // Disable Jiuwen skills that host no longer enables (intersection only).
-      for (const name of jwNames) {
-        if (enabled.includes(name)) continue
-        // Only toggle off when we previously synced it onto this mapping.
-        if (Array.isArray(t.mapping?.skills) && t.mapping.skills.includes(name)) {
-          await rpcOk(gateway, 'skills.toggle', { name, enabled: false }, logger, 'skills.toggle.off')
-        }
+      // Disable Jiuwen skills the host no longer enables — only those we synced onto this mapping.
+      for (const name of prevKnown) {
+        if (known.includes(name) || !jwNames.has(name)) continue
+        await rpcOk(gateway, 'skills.toggle', { name, enabled: false }, logger, 'skills.toggle.off')
       }
     }
   }
@@ -193,7 +216,7 @@ export function installHostSync(deps) {
       try { sessions.update(j.id, { chatMode: active ? PLAN_CHAT : (chatMode || undefined) }) } catch (e) { soft(logger, 'plan→mode', e) }
     }
 
-    if (f.syncModel && type === 'request/header') {
+    if (f.syncModel && (type === 'request/header' || type === 'model/selection')) {
       const cfg = data?.config || data?.header?.config || data
       const provider = cfg?.provider
       const model = cfg?.model
@@ -206,7 +229,12 @@ export function installHostSync(deps) {
         const catalog = (j.cfg.models || []).find(m => m.id === modelName)
         const forward = catalog?.modelName || (!catalog && bare && bare !== 'jiuwen-default' && bare !== 'jiuwen-swarm' ? bare : undefined)
         if (forward) {
-          try { sessions.update(j.id, { modelName: String(forward) }) } catch (e) { soft(logger, 'model', e) }
+          if (forward !== j.mapping.modelName) {
+            try { sessions.update(j.id, { modelName: String(forward), modelNameSynced: true }) } catch (e) { soft(logger, 'model', e) }
+          }
+        } else if (j.mapping.modelNameSynced && j.mapping.modelName) {
+          // Picker went back to a catalog/default entry: drop the model we synced (not a /jiuwen model pin).
+          try { sessions.update(j.id, { modelName: undefined, modelNameSynced: undefined }) } catch (e) { soft(logger, 'model', e) }
         }
       }
     }
@@ -214,9 +242,22 @@ export function installHostSync(deps) {
     if (f.syncPermissions && type === 'permission/preset') {
       const preset = String(data?.preset || '')
       const level = PRESET_LEVELS[preset]
-      if (level) {
+      // The first preset of a session is the host default (dsh-permission-presets seeds it on every
+      // new session): record it as the baseline and only forward later, explicit changes.
+      let baseline = j.mapping.permissionPreset
+      if (baseline === undefined) {
+        // The mapping may be newer than the seed (a brand-new session is not known as jiuwen at
+        // session/created): take the baseline from earlier permission/preset events in the log.
+        try {
+          const prior = (session?.snapshotEvents?.() || []).filter(e => e?.type === 'permission/preset' && e !== event
+            && (event?.seq === undefined || e.seq < event.seq))
+          if (prior.length) baseline = String(prior.at(-1).data?.preset || '') || undefined
+        } catch { /* ignore */ }
+      }
+      if (preset && preset !== baseline) { try { sessions.update(j.id, { permissionPreset: preset }) } catch { /* ignore */ } }
+      if (level && baseline !== undefined && preset !== baseline) {
         // Safe subset only — update a few high-traffic tools, never set-all.
-        for (const tool of ['bash', 'write_file', 'edit_file', 'Browser']) {
+        for (const tool of PERMISSION_TOOLS) {
           rpcOk(gateway, 'permissions.tools.update', { tool, level }, logger, 'permissions').catch?.(() => {})
         }
       }
@@ -231,11 +272,11 @@ export function installHostSync(deps) {
         : phase === 'active' && objective ? 'set'
         : null
       if (action === 'set') {
-        rpcOk(gateway, 'command.goal', { session_id: j.mapping.jiuwenSessionId, action: 'set', objective: String(objective) }, logger, 'goal.set')
+        sendGoal({ session_id: j.mapping.jiuwenSessionId, action: 'set', objective: String(objective) }, 'goal.set')
       } else if (action === 'pause') {
-        rpcOk(gateway, 'command.goal', { session_id: j.mapping.jiuwenSessionId, action: 'pause' }, logger, 'goal.pause')
+        sendGoal({ session_id: j.mapping.jiuwenSessionId, action: 'pause' }, 'goal.pause')
       } else if (action === 'clear') {
-        rpcOk(gateway, 'command.goal', { session_id: j.mapping.jiuwenSessionId, action: 'clear' }, logger, 'goal.clear')
+        sendGoal({ session_id: j.mapping.jiuwenSessionId, action: 'clear' }, 'goal.clear')
       }
     }
   })
@@ -261,7 +302,7 @@ export function installHostSync(deps) {
     if (!action) return
     const params = { session_id: j.mapping.jiuwenSessionId, action }
     if (action === 'set') params.objective = String(objective)
-    rpcOk(gateway, 'command.goal', params, logger, 'goal/changed')
+    sendGoal(params, 'goal/changed')
   })
 
   // ── pause/resume from host ──
@@ -321,7 +362,7 @@ export function installHostSync(deps) {
       if (cwd) { try { sessions.update(j.id, { projectDir: String(cwd) }) } catch { /* ignore */ } }
     }
     if (f.syncFork) {
-      const parent = session?.header?.parentSession
+      const parent = session?.header?.origin === 'subagent' ? undefined : session?.header?.parentSession
       if (parent) {
         const parentId = String(parent)
         const parentMap = sessions.get(parentId)
@@ -339,7 +380,13 @@ export function installHostSync(deps) {
                 try {
                   sessions.remove(j.id)
                   sessions.ensure(j.id, { preferredJiuwenId: String(newId) })
-                  if (parentMap.skills) sessions.update(j.id, { skills: parentMap.skills, chatMode: parentMap.chatMode, modelName: parentMap.modelName, projectDir: parentMap.projectDir })
+                  // The fork already holds the parent's history: keep turns (incremental sends, and
+                  // api-session/removed deletes it) and the per-session options.
+                  sessions.update(j.id, {
+                    turns: parentMap.turns || 1, forkedFrom: parentMap.jiuwenSessionId,
+                    skills: parentMap.skills, chatMode: parentMap.chatMode, modelName: parentMap.modelName,
+                    projectDir: parentMap.projectDir || session?.header?.cwd, systemHash: parentMap.systemHash,
+                  })
                 } catch (e) { soft(logger, 'fork.remap', e) }
               }
             })
@@ -365,27 +412,62 @@ export function installHostSync(deps) {
   // Also: skills/change and injectSystem hash already cover persona text changes on next turn.
 
   // ── schedules → heartbeat / cron when Gateway routes them ──
+  // dsh-schedule emits a payload-less `schedule/changed`; the record is in the session log
+  // event `schedule/change` ({ operation: 'create', schedule: { kind: 'every', everySeconds } }).
+  const mirrorSchedule = async (rec) => {
+    const every = Number(rec?.everySeconds || rec?.interval_seconds || rec?.every)
+    if (!Number.isFinite(every) || every <= 0) return
+    // Merge onto the current conf so target/active_hours are kept.
+    let cur = {}
+    try { cur = (await gateway().heartbeatConf?.()) || {} } catch { /* unrouted */ }
+    if (Number(cur.every) === every) return
+    const { every: _e, type: _t, ...rest } = cur || {}
+    await rpcOk(gateway, 'heartbeat.set_conf', { ...rest, target: rest.target || 'web', every }, logger, 'heartbeat.set_conf')
+  }
+  on('session/event', (session, event) => {
+    if (event?.type !== 'schedule/change') return
+    const j = jiuwenSession(session)
+    if (!j) return
+    const f = resolveHostSyncFlags(j.cfg)
+    if (!f.syncSchedule) return
+    const data = event?.data || {}
+    if (data.operation !== 'create' || data.schedule?.kind !== 'every') return
+    mirrorSchedule(data.schedule).catch(e => soft(logger, 'schedule', e))
+  })
   on('schedule/changed', (payload) => {
     const f = resolveHostSyncFlags(config())
     if (!f.syncSchedule) return
-    // Best-effort: mirror interval schedules onto heartbeat conf; feature-detect.
     const rec = payload?.record || payload?.schedule || payload
-    const every = Number(rec?.everySeconds || rec?.interval_seconds || rec?.every)
-    if (!Number.isFinite(every) || every <= 0) return
-    rpcOk(gateway, 'heartbeat.set_conf', { every, target: 'web' }, logger, 'heartbeat.set_conf')
+    if (rec?.everySeconds || rec?.interval_seconds || rec?.every) mirrorSchedule(rec).catch(e => soft(logger, 'schedule', e))
   })
 
-  // ── memory bridge: probe once, document gap via mapping flag ──
-  let memoryProbed = false
+  // ── memory bridge: probe once per mapping, document gap via mapping flag ──
+  // A brand-new dsh session has no request header at session/created (provider unknown), so the
+  // probe (and the MCP name sync) also run on the session's first jiuwen request/header.
+  const probing = new Set()
+  const probeMemory = (j) => {
+    const f = resolveHostSyncFlags(j.cfg)
+    if (!f.syncMemory || j.mapping.memoryBridge || probing.has(j.id)) return
+    probing.add(j.id)
+    Promise.resolve()
+      .then(() => gateway().memoryStatus?.(j.mapping.jiuwenSessionId) ?? gateway().rpc?.('memory.status', { session_id: j.mapping.jiuwenSessionId }))
+      .then(() => 'rpc', () => 'gap')
+      .then((v) => { try { if (sessions.get(j.id)) sessions.update(j.id, { memoryBridge: v }) } catch { /* ignore */ } })
+      .finally(() => probing.delete(j.id))
+  }
   on('session/created', (session) => {
-    const f = resolveHostSyncFlags(config())
-    if (!f.syncMemory || memoryProbed) return
+    const j = jiuwenSession(session)
+    if (j) probeMemory(j)
+  })
+  on('session/event', (session, event) => {
+    if (event?.type !== 'request/header') return
     const j = jiuwenSession(session)
     if (!j) return
-    memoryProbed = true
-    Promise.resolve(gateway().rpc?.('memory.status', { session_id: j.mapping.jiuwenSessionId }))
-      .then(() => { try { sessions.update(j.id, { memoryBridge: 'rpc' }) } catch { /* ignore */ } })
-      .catch(() => { try { sessions.update(j.id, { memoryBridge: 'gap' }) } catch { /* ignore */ } })
+    probeMemory(j)
+    if (j.mapping.mcpNames === undefined && !j.mapping.mcpSynced && resolveHostSyncFlags(j.cfg).syncMcp) {
+      try { sessions.update(j.id, { mcpSynced: true }) } catch { /* ignore */ }
+      syncMcpForSession(j).catch(e => soft(logger, 'mcp.onHeader', e))
+    }
   })
 
   // ── plugins/capabilities soft sync ──
@@ -402,8 +484,12 @@ export function installHostSync(deps) {
     // List Jiuwen MCP; stash names on mapping for chat.send overrides.
     try {
       const listed = await gateway().mcpList?.('all') ?? await gateway().rpc?.('mcp.list', { filter: 'all' })
-      const names = (listed?.items || listed?.servers || []).map(x => x?.name).filter(Boolean)
-      if (names.length) sessions.update(j.id, { mcpNames: names.map(String) })
+      // mcp.list returns the whole hub catalog (installed:false, disconnected): only forward
+      // servers that are actually usable, never the catalog.
+      const names = (listed?.items || listed?.servers || [])
+        .filter(x => x && (x.installed === true || x.enabled === true || x.state === 'connected' || x.connection_state === 'connected'))
+        .map(x => x.name).filter(Boolean)
+      sessions.update(j.id, { mcpNames: names.length ? names.map(String) : undefined })
     } catch (e) { soft(logger, 'mcp.list', e) }
   }
 
@@ -434,4 +520,4 @@ export function applySkillBodyInjection(query, mapping) {
   } catch { return query }
 }
 
-export { PLAN_CHAT, AGENT_CHAT, PRESET_LEVELS }
+export { PLAN_CHAT, AGENT_CHAT, PRESET_LEVELS, PERMISSION_TOOLS }

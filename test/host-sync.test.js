@@ -159,7 +159,8 @@ test('skills/change updates mapping.skills for jiuwen sessions', async () => {
   await new Promise(r => setTimeout(r, 500))
   const m = h.api.sessions.get('sk1')
   assert.ok(m)
-  assert.deepEqual(m.skills, ['alpha'])
+  // alpha is not a Jiuwen skill: no skills_to_use hint; beta is not model-invocable.
+  assert.equal(m.skills, undefined)
 })
 
 test('hostSync off installs no session/event listener', () => {

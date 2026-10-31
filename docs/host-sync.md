@@ -8,20 +8,22 @@ Master switch: `hostSync` (default **on**). `hostSync: false` or `JIUWEN_HOST_SY
 
 | Host change | Jiuwen | Flag |
 |---|---|---|
-| Skills enable/disable (`skills/change`) | `skills.toggle` + `chat.send` `skills` | `syncSkills` |
-| Skill body only (not in Jiuwen) | Soft-inject as host instructions (not installed) | `syncSkillInstall` |
-| MCP / connectors | `mcp.list` + session `mcp` names; `toolPassthrough: mcp` (allowlist `*`, approval `dsh`) | `syncMcp` |
-| Model picker (`request/header`) | `model_name` via session map | `syncModel` |
+| Skills enable/disable (`skills/change`) | `skills.toggle` (only names Jiuwen has; off only for names we synced) + `chat.send` `skills` (= Jiuwen `skills_to_use`, Jiuwen-known names only) | `syncSkills` |
+| Skill body only (not in Jiuwen) | Body loaded with `skills.get()` and soft-injected once as host instructions (re-injected when it changes) | `syncSkillInstall` |
+| MCP / connectors | Installed/connected `mcp.list` servers only (never the hub catalog) + `toolPassthrough: mcp` (allowlist `*`, approval `dsh`) | `syncMcp` |
+| Model picker (`model/selection`, `request/header`) | `model_name` via session map; picking the catalog default clears a synced model (not a `/jiuwen model` pin) | `syncModel` |
 | Plan mode (`plan/mode`) | `chatMode: agent.plan` ↔ Jiuwen `planBridge` | `syncPlanMode` / `planBridge` |
 | Working directory | `project_dir` / `cwd` on next `chat.send` | `syncWorkDir` |
 | Manual title (`session/title`) | `session.rename` | `syncTitle` |
 | Session delete (`api-session/removed`) | `session.delete` when the mapping had turns, then unmap | `syncDelete` |
 | Goal create/pause/clear | `command.goal` | `syncGoal` |
 | Host pause (`workspace/session-stop`) | `chat.interrupt` cancel | `syncPause` |
-| Permission preset (safe map) | `permissions.tools.update` on a small tool set — never `set-all` | `syncPermissions` |
-| Session fork (`header.parentSession`) | `session.fork` + remap child | `syncFork` |
+| Permission preset (safe map) | `permissions.tools.update` on `bash`/`write_file`/`edit_file` — never `set-all`. The session's first (seeded default) preset is a baseline and is not forwarded; only later changes are | `syncPermissions` |
+| Session fork (`header.parentSession`) | `session.fork` + remap child (turns/options copied; subagent children are not forked) | `syncFork` |
 | Group member change | Clears `systemHash` so persona reinjects on next turn | `syncGroup` |
-| Schedule change | `heartbeat.set_conf` when routed | `syncSchedule` |
+| Schedule change (session `schedule/change`, `every`) | `heartbeat.set_conf` merged onto the current conf (global; Jiuwen has no per-session interval) | `syncSchedule` |
+
+Provider detection uses the real dsh `Session.requestHeader()` fold, so a brand-new session becomes a jiuwen session on its first request header; the memory probe and MCP name sync run then.
 
 Also default on with `hostSync`: `sessionSync` (mapping upkeep), `planBridge` (Jiuwen → dsh plan mirror).
 

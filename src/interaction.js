@@ -155,7 +155,10 @@ export function questionAnswers(questions, items, answers) {
       const o = opts.find(x => (typeof x === 'string' ? x : x.label) === label)
       return String(o && typeof o === 'object' ? (o.value ?? o.label) : label)
     })
-    return { selected_options: selected, custom_input: a.custom || selected.join(', '), ...(q.card_id ? { card_id: q.card_id } : {}) }
+    // Jiuwen joins selected_options + custom_input into one answer: only send typed text as custom_input
+    // (echoing the selected labels gave "Blue, Blue"); free-text questions keep the selection as text.
+    const custom = typeof a.custom === 'string' && a.custom ? a.custom : (typeof a.text === 'string' && a.text && !selected.length ? a.text : '')
+    return { selected_options: selected, custom_input: custom || (opts.length ? '' : selected.join(', ')), ...(q.card_id ? { card_id: q.card_id } : {}) }
   })
 }
 

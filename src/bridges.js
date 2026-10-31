@@ -26,7 +26,10 @@ export function typedEventFor(e) {
 export function sessionUsesProvider(session, provider, sessions) {
   try {
     const id = session?.id != null ? String(session.id) : undefined
-    const p = session?.header?.config?.provider ?? session?.requestHeader?.config?.provider ?? session?.config?.provider ?? session?.provider
+    // Real dsh Session: requestHeader() is a method returning the folded EpochHeader ({ config }).
+    let rh = session?.requestHeader
+    if (typeof rh === 'function') { try { rh = rh.call(session) } catch { rh = undefined } }
+    const p = session?.header?.config?.provider ?? rh?.config?.provider ?? session?.config?.provider ?? session?.provider
     if (p !== undefined) return p === provider
     return Boolean(id && sessions?.get?.(id))
   } catch { return false }
