@@ -151,3 +151,37 @@ test('ask_user answers: a picked option is not echoed into custom_input (Jiuwen 
   const other = questionAnswers(qs.slice(0, 1), items, [{ id: 'q1', selected: [], custom: 'Green' }])
   assert.deepEqual(other[0], { selected_options: [], custom_input: 'Green' })
 })
+
+test('title: a fork child title waits for the fork remap; a title before the first turn is deferred (no orphan Jiuwen session)', async () => {
+  const r = rig()
+  r.sessions.ensure('tp'); r.sessions.update('tp', { turns: 2 })
+  const kid = jw('tk', { parentSession: 'tp' })
+  r.fire('session/created', kid)
+  r.fire('session/event', kid, { type: 'session/title', data: { title: 'Branch (1)' } })
+  await tick(80)
+  const renames = r.calls.filter(c => c[0] === 'session.rename').map(c => c[1])
+  assert.deepEqual(renames, [{ session_id: 'fork_' + r.sessions.get('tp').jiuwenSessionId, title: 'Branch (1)' }])
+  // fresh session: no rename until a turn exists
+  const s = jw('fresh')
+  r.fire('session/event', s, { type: 'session/title', data: { title: 'Early' } }); await tick(30)
+  assert.equal(r.calls.filter(c => c[0] === 'session.rename').length, 1)
+  assert.equal(r.sessions.get('fresh').pendingTitle, 'Early')
+  r.sessions.recordTurn('fresh')
+  r.fire('session/event', s, { type: 'turn/end', data: { turn: 1 } }); await tick(30)
+  assert.equal(r.calls.filter(c => c[0] === 'session.rename').at(-1)[1].title, 'Early')
+  assert.equal(r.sessions.get('fresh').pendingTitle, undefined)
+})
+
+test('title: deferred fallback title released at turn/end does not overwrite a newer user title', async () => {
+  let release
+  const r = rig({ rpcImpl: (m) => m === 'session.rename' && !release ? new Promise(res => { release = res }) : {} })
+  const s = jw('race')
+  r.fire('session/event', s, { type: 'session/title', data: { title: 'fallback words' } }); await tick()
+  r.sessions.recordTurn('race')
+  r.fire('session/event', s, { type: 'turn/end', data: { turn: 1 } })
+  r.fire('session/event', s, { type: 'session/title', data: { title: 'User Title' } })
+  await tick(30); release?.({}); await tick(50)
+  const renames = r.calls.filter(c => c[0] === 'session.rename').map(c => c[1].title)
+  assert.equal(renames.at(-1), 'User Title')
+  assert.equal(r.sessions.get('race').title, 'User Title')
+})

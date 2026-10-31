@@ -97,6 +97,28 @@ export function installHostSync(deps) {
     } catch { /* host has no such event */ }
   }
 
+  // Fork remaps are async; a title (or other rename) for the child must target the forked session.
+  const forkPending = new Map()
+  // Renames are serialized per session and latest-wins (a deferred fallback title must not land
+  // after a newer user title).
+  const renameQueue = new Map()
+  const wantedTitle = new Map()
+  const renameSoon = (id, wanted) => {
+    wantedTitle.set(id, wanted)
+    const prev = renameQueue.get(id) || Promise.resolve()
+    const next = prev.then(() => forkPending.get(id)).then(async () => {
+      const title = wantedTitle.get(id)
+      const m = sessions.get(id)
+      if (!m || !title || title === m.title) return
+      // Renaming a session Jiuwen has not created yet would create an empty orphan session.
+      if (!((m.turns || 0) > 0)) { sessions.update(id, { pendingTitle: title }); return }
+      await (gateway().sessionRename?.(m.jiuwenSessionId, title)
+        ?? gateway().rpc?.('session.rename', { session_id: m.jiuwenSessionId, title }))
+      sessions.update(id, { title, pendingTitle: undefined })
+    }).catch(e => soft(logger, 'session.rename', e))
+    renameQueue.set(id, next)
+    next.finally(() => { if (renameQueue.get(id) === next) { renameQueue.delete(id); wantedTitle.delete(id) } })
+  }
   const jiuwenSession = (session) => {
     const cfg = config()
     const id = sidOf(session)
@@ -195,12 +217,12 @@ export function installHostSync(deps) {
 
     if (f.syncTitle && type === 'session/title') {
       const title = String(data?.title || '').trim()
-      if (title && title !== j.mapping.title) {
-        Promise.resolve(gateway().sessionRename?.(j.mapping.jiuwenSessionId, title)
-          ?? gateway().rpc?.('session.rename', { session_id: j.mapping.jiuwenSessionId, title }))
-          .then(() => { try { sessions.update(j.id, { title }) } catch { /* ignore */ } })
-          .catch(e => soft(logger, 'session.rename', e))
-      }
+      if (title) renameSoon(j.id, title)
+    }
+    // A title set before the first turn waits for the Jiuwen session to exist (Jiuwen creates it lazily).
+    if (f.syncTitle && type === 'turn/end') {
+      const m = sessions.get(j.id)
+      if (m?.pendingTitle && (m.turns || 0) > 0) renameSoon(j.id, m.pendingTitle)
     }
 
     if (f.syncWorkDir && type === 'working-directory/change') {
@@ -367,7 +389,7 @@ export function installHostSync(deps) {
         const parentId = String(parent)
         const parentMap = sessions.get(parentId)
         if (parentMap?.jiuwenSessionId) {
-          Promise.resolve()
+          const pending = Promise.resolve()
             .then(() => gateway().sessionFork?.(parentMap.jiuwenSessionId)
               ?? gateway().rpc?.('session.fork', {
                 session_id: parentMap.jiuwenSessionId,
@@ -391,6 +413,8 @@ export function installHostSync(deps) {
               }
             })
             .catch(e => soft(logger, 'session.fork', e))
+            .finally(() => { if (forkPending.get(j.id) === pending) forkPending.delete(j.id) })
+          forkPending.set(j.id, pending)
         }
       }
     }
