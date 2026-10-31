@@ -14,7 +14,7 @@ import { createToolBridge } from './tool-bridge.js'
 import { prepareBrainRequest, callKind } from './agent-brain.js'
 import { appendFileSync } from 'node:fs'
 import { failureFromError, emitTextReply } from './stream-emit.js'
-import { applySystemInjection } from './system-inject.js'
+import { applySystemInjection, applyFsRouteInjection } from './system-inject.js'
 import { applySkillBodyInjection } from './host-sync.js'
 import { toGatewayQuery, contentToText, withInferredRoles } from './messages.js'
 import { fileBlocksFromHandles } from './multimodal.js'
@@ -226,14 +226,21 @@ export function createJiuwenAdapter(LlmAdapterBase, deps) {
             const inj = applySystemInjection(query, options, turnMapping, cfg.injectSystem, deps.personaFor?.(dshSessionId))
             query = inj.query; systemHash = inj.hash
           }
-          if (!aux && cfg.syncSkillInstall !== false && turnMapping.skillBodies?.length) {
-            query = applySkillBodyInjection(query, turnMapping)
-          }
           const trace = makeTrace(cfg.traceFile)
+          let mcpName = cfg.mcpServerName
           if (!aux && cfg.toolPassthrough === 'mcp' && deps.mcpBridge && options.tools?.length) {
             const r = await deps.mcpBridge.prepare(options.tools, dshSessionId)
-            trace({ at: 'mcp-passthrough', exposed: deps.mcpBridge.exposed(), error: r?.error })
-            if (r && !r.error) overrides.mcp = [...(overrides.mcp || []), cfg.mcpServerName]
+            mcpName = r?.mcpServerName || cfg.mcpServerName
+            trace({ at: 'mcp-passthrough', exposed: deps.mcpBridge.exposed?.(dshSessionId) ?? deps.mcpBridge.exposed(), mcpServerName: mcpName, error: r?.error })
+            if (r && !r.error) overrides.mcp = [...(overrides.mcp || []), mcpName]
+          }
+          if (!aux && cfg.mapJiuwenFsToDsh && !turnMapping.pendingQuestion) {
+            const fs = applyFsRouteInjection(query, turnMapping, true, mcpName)
+            query = fs.query
+            if (fs.hash) turnMapping.fsRouteHash = fs.hash
+          }
+          if (!aux && cfg.syncSkillInstall !== false && turnMapping.skillBodies?.length) {
+            query = applySkillBodyInjection(query, turnMapping)
           }
           trace({ at: 'turn-start', dshSessionId, jiuwen: turnMapping.jiuwenSessionId, purpose: options.purpose, query: query.slice(0, 500), messages: (options.messages || []).length,
             blocks: JSON.stringify((options.messages || []).flatMap(m => Array.isArray(m.content) ? m.content.filter(b => b?.type !== 'text') : [])).slice(0, 1500) })
