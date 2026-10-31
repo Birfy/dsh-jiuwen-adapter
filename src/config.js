@@ -84,6 +84,11 @@ export function resolveConfig(raw = {}, opts = {}) {
   const hostSync = raw.hostSync !== false && env.JIUWEN_HOST_SYNC !== '0'
   const syncBit = (k, e) => hostSync && raw[k] !== false && env[e] !== '0'
 
+  const toolPassthrough = pickEnum(env.JIUWEN_TOOL_PASSTHROUGH || raw.toolPassthrough, ['off', 'mcp'],
+    (raw.hostSync === false || env.JIUWEN_HOST_SYNC === '0') ? 'off' : 'mcp')
+  const mapJiuwenFsToDsh = raw.mapJiuwenFsToDsh !== undefined || env.JIUWEN_MAP_JIUWEN_FS_TO_DSH
+    ? (raw.mapJiuwenFsToDsh !== false && env.JIUWEN_MAP_JIUWEN_FS_TO_DSH !== '0')
+    : toolPassthrough === 'mcp'
   return {
     provider: String(raw.provider || 'jiuwen'),
     displayName: String(raw.displayName || 'JiuwenSwarm'),
@@ -149,18 +154,15 @@ export function resolveConfig(raw = {}, opts = {}) {
     /** Max wait for a dsh approval decision before denying (ms). */
     approvalTimeoutMs: Number(raw.approvalTimeoutMs ?? env.JIUWEN_APPROVAL_TIMEOUT_MS ?? 300_000),
     /** dsh tools → Jiuwen: 'mcp' (default when hostSync on; allowlisted dsh tools as MCP) | 'off'. */
-    toolPassthrough: pickEnum(env.JIUWEN_TOOL_PASSTHROUGH || raw.toolPassthrough, ['off', 'mcp'],
-      (raw.hostSync === false || env.JIUWEN_HOST_SYNC === '0') ? 'off' : 'mcp'),
+    toolPassthrough,
     /** Tool names (exact, prefix*, or '*') exposed when toolPassthrough=mcp. Empty = none. */
     toolAllowlist: Array.isArray(raw.toolAllowlist) ? raw.toolAllowlist.map(String)
       : (env.JIUWEN_TOOL_ALLOWLIST ? env.JIUWEN_TOOL_ALLOWLIST.split(',').map(x => x.trim()).filter(Boolean)
         : ((raw.hostSync === false || env.JIUWEN_HOST_SYNC === '0' || String(env.JIUWEN_TOOL_PASSTHROUGH || raw.toolPassthrough || '').toLowerCase() === 'off') ? [] : ['*'])),
     /** 'dsh' (default): every passthrough call needs ctx.approval allowed-once (deny when unavailable) | 'none'. */
     toolApproval: pickEnum(env.JIUWEN_TOOL_APPROVAL || raw.toolApproval, ['dsh', 'none'], 'dsh'),
-    /** Passthrough tools that skip the per-call approval gate: read-only dsh memory/session-query tools (dsh itself never asks for them). */
-    toolApprovalExempt: Array.isArray(raw.toolApprovalExempt) ? raw.toolApprovalExempt.map(String)
-      : env.JIUWEN_TOOL_APPROVAL_EXEMPT !== undefined ? String(env.JIUWEN_TOOL_APPROVAL_EXEMPT).split(',').map(x => x.trim()).filter(Boolean)
-        : ['session_search', 'session_event_search', 'session_event_read', 'session_trace', 'session_event_trace'],
+    mapJiuwenFsToDsh,
+
     toolCallTimeoutMs: Number(raw.toolCallTimeoutMs ?? env.JIUWEN_TOOL_CALL_TIMEOUT_MS ?? 120_000),
     mcpServerName: String(raw.mcpServerName || env.JIUWEN_MCP_SERVER_NAME || 'dsh-tools'),
     /** Shared dir for the stable MCP proxy (schemas.json + ep-<pid>.json). Default ~/.cache/dsh-jiuwen/mcp/<mcpServerName>. */

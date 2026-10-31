@@ -14,7 +14,7 @@ import { createToolBridge } from './tool-bridge.js'
 import { prepareBrainRequest, callKind } from './agent-brain.js'
 import { appendFileSync } from 'node:fs'
 import { failureFromError, emitTextReply } from './stream-emit.js'
-import { applySystemInjection } from './system-inject.js'
+import { applySystemInjection, applyFsRouteInjection } from './system-inject.js'
 import { applySkillBodyInjection } from './host-sync.js'
 import { toGatewayQuery, contentToText, withInferredRoles } from './messages.js'
 import { fileBlocksFromHandles } from './multimodal.js'
@@ -225,6 +225,11 @@ export function createJiuwenAdapter(LlmAdapterBase, deps) {
       if (!aux && cfg.injectSystem !== 'off' && !turnMapping.pendingQuestion) {
             const inj = applySystemInjection(query, options, turnMapping, cfg.injectSystem, deps.personaFor?.(dshSessionId))
             query = inj.query; systemHash = inj.hash
+          }
+                    if (!aux && cfg.mapJiuwenFsToDsh && !turnMapping.pendingQuestion) {
+            const fs = applyFsRouteInjection(query, turnMapping, true, cfg.mcpServerName)
+            query = fs.query
+            if (fs.hash) turnMapping.fsRouteHash = fs.hash
           }
           if (!aux && cfg.syncSkillInstall !== false && turnMapping.skillBodies?.length) {
             query = applySkillBodyInjection(query, turnMapping)

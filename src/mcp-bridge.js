@@ -56,6 +56,14 @@ export function matchesAllowlist(name, list) {
   })
 }
 
+
+  const FS_HINT = new Set(['bash', 'write', 'edit', 'read', 'glob', 'grep'])
+  const describeTool = (s) => {
+    let d = String(s.description || s.name)
+    if (FS_HINT.has(s.name)) d = `[PREFERRED sandboxed dsh path — use instead of Jiuwen built-in] ${d}`
+    return d.slice(0, 4000)
+  }
+
 export function createMcpBridge({ config, services, rpc, logger }) {
   let server, url, token, ready
   /** Set by unregister(): the live proxy endpoint stays, but Jiuwen's registration must be re-created. */
@@ -129,7 +137,7 @@ export function createMcpBridge({ config, services, rpc, logger }) {
     if (method === 'ping') return ok({})
     if (method === 'tools/list') {
       const list = [...schemas.values()].filter(s => matchesAllowlist(s.name, cfg().toolAllowlist))
-        .map(s => ({ name: s.name, description: String(s.description || s.name).slice(0, 4000), inputSchema: s.parameters || s.inputSchema || { type: 'object', properties: {} } }))
+        .map(s => ({ name: s.name, description: describeTool(s), inputSchema: s.parameters || s.inputSchema || { type: 'object', properties: {} } }))
       return ok({ tools: list })
     }
     if (method === 'tools/call') {
@@ -159,7 +167,7 @@ export function createMcpBridge({ config, services, rpc, logger }) {
     let added = false
     for (const sch of schemas.values()) {
       if (!before.has(sch.name)) added = true
-      byName.set(sch.name, { name: sch.name, description: String(sch.description || sch.name).slice(0, 4000), inputSchema: sch.parameters || sch.inputSchema || { type: 'object', properties: {} } })
+      byName.set(sch.name, { name: sch.name, description: describeTool(sch), inputSchema: sch.parameters || sch.inputSchema || { type: 'object', properties: {} } })
     }
     writeAtomic(f, JSON.stringify([...byName.values()]), 0o644)
     return added

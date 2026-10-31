@@ -13,6 +13,7 @@ import { createToolBridge } from './tool-bridge.js'
 import { GatewayTransport } from './gateway-transport.js'
 import { createInteractor } from './interaction.js'
 import { createMcpBridge } from './mcp-bridge.js'
+import { denyJiuwenSideEffectTools } from './fs-route.js'
 import { createJiuwenCommand } from './commands.js'
 import { createFeatureCache } from './features.js'
 
@@ -79,6 +80,20 @@ export function apply(ctx, config = {}) {
     services: () => ({ tools: service('tools'), approval: service('approval'), agents: service('agents') }),
     rpc: (method, params, opts) => gatewayFor().rpc(method, params, opts),
   })
+  // Once: deny Jiuwen side-effecting builtins so bash/write/edit go through dsh MCP (sandbox/approval/jobs).
+  let fsRouteDenied = false
+  const originalPrepare = mcpBridge.prepare.bind(mcpBridge)
+  mcpBridge.prepare = async (...args) => {
+    const r = await originalPrepare(...args)
+    if (!fsRouteDenied && readConfig().mapJiuwenFsToDsh) {
+      fsRouteDenied = true
+      try {
+        await denyJiuwenSideEffectTools((method, params, opts) => gatewayFor().rpc(method, params, opts), logger)
+        logger?.info?.('[dsh-jiuwen] mapJiuwenFsToDsh: denied Jiuwen bash/write_file/edit_file (use mcp_dsh-tools_*)')
+      } catch (e) { logger?.warn?.(`[dsh-jiuwen] mapJiuwenFsToDsh deny failed: ${e?.message || e}`) }
+    }
+    return r
+  }
   // Generic persona source (plain dsh personas); observe-only, off with hostSync:false or injectSystem!=persona.
   let hostSync
   const personaCfg = readConfig()

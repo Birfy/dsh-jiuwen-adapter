@@ -5,6 +5,7 @@
  */
 import { createHash } from 'node:crypto'
 import { contentToText } from './messages.js'
+import { fsRouteHint } from './fs-route.js'
 
 export const SYSTEM_OPEN = '[System instructions from host]'
 export const SYSTEM_CLOSE = '[/System]'
@@ -96,6 +97,19 @@ export function applySystemInjection(query, options, mapping, mode, fallbackPers
     const hash = systemHash(`${mapping?.jiuwenSessionId || ''}\n${mode}\n${capped}`)
     if (mapping?.systemHash === hash) return { query }
     return { query: `${SYSTEM_OPEN}\n${capped}\n${SYSTEM_CLOSE}\n\n${query}`, hash }
+  } catch {
+    return { query }
+  }
+}
+
+/** Append the FS-routing hint once per mapped session when mapJiuwenFsToDsh is on. */
+export function applyFsRouteInjection(query, mapping, enabled, serverName) {
+  try {
+    if (!enabled) return { query }
+    const hint = fsRouteHint(serverName)
+    const hash = systemHash(`fs-route:${mapping?.jiuwenSessionId || ''}\n${hint}`)
+    if (mapping?.fsRouteHash === hash) return { query }
+    return { query: `${hint}\n\n${query}`, hash }
   } catch {
     return { query }
   }
