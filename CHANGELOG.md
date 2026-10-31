@@ -17,6 +17,8 @@ All notable changes to this project are documented here. The format follows
 - **Default change:** `injectSystem` now defaults to `persona` (was `off`) and `trajectoryDetail` to `full` (was `summary`). Set `injectSystem: off` / `trajectoryDetail: summary` (or `JIUWEN_INJECT_SYSTEM=off` / `JIUWEN_TRAJECTORY_DETAIL=summary`) to restore the old behavior. Injection remains Jiuwen-session-only and fail-soft.
 
 ### Fixed
+- `/jiuwen rename` also sets the dsh title (public `sessionTitle.rename`) so the sidebar updates; no duplicate Jiuwen rename.
+- `/jiuwen fork` says plainly that only Jiuwen was forked and points to the dsh Fork action (which forks and maps both).
 - Gateway drop mid-RPC / before `connection.ack` now fails at once (was: waited the full RPC timeout); WebSocket connect has a timeout (half-open Gateway no longer hangs a turn); a dropped RPC is not cached by feature detection.
 - Rapid skill / permission-preset toggles are serialized (latest wins); concurrent RPCs could land out of order.
 - Session delete during an active turn interrupts the turn, waits for it, then deletes the Jiuwen session (the first turn's session was orphaned).

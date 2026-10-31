@@ -137,7 +137,14 @@ export function createJiuwenCommand(deps) {
         if (!arg) return 'Usage: /jiuwen rename <title>'
         const r = await g.sessionRename(sid, arg)
         const title = r?.title ?? arg
-        return `Renamed Jiuwen session ${sid} → "${title}".`
+        // Mirror onto the dsh title (sidebar) via the public sessionTitle service when present.
+        // The mapping title is set first so host-sync does not rename Jiuwen a second time.
+        try { deps.sessions.update(dshId, { title, pendingTitle: undefined }) } catch { /* ignore */ }
+        let local = ''
+        if (typeof deps.localRename === 'function') {
+          try { local = (await deps.localRename(dshId, title)) ? ' (dsh title updated)' : '' } catch (e) { local = ` (dsh title unchanged: ${short(e?.message || e, 80)})` }
+        }
+        return `Renamed Jiuwen session ${sid} → "${title}"${local}.`
       }
       case 'pin': {
         const pinned = pinValue(rest[0])
@@ -150,7 +157,7 @@ export function createJiuwenCommand(deps) {
         const newId = r?.session_id || r?.new_session_id || r?.forked_session_id
         if (newId && newId !== sid) {
           // Report clearly; do not overwrite the current dsh→jiuwen mapping.
-          return `Forked Jiuwen session ${sid} → new session_id=${newId} (local mapping unchanged; use a new dsh session or sessions.ensure to map it).`
+          return `Forked Jiuwen session ${sid} → ${newId} (Jiuwen only: no dsh session was created and this chat stays on ${sid}). To get a dsh chat for a fork, use the dsh Fork action instead — it forks both sides and maps them.`
         }
         return `Forked Jiuwen session ${sid}: ${JSON.stringify(r).slice(0, 300)}`
       }

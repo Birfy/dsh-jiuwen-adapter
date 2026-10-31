@@ -210,7 +210,15 @@ export function apply(ctx, config = {}) {
   exposeService(ctx, cfg.serviceName, api, logger)
 
   // `/jiuwen <sub>` slash command when the host has a command registry (dsh-commands).
-  const command = createJiuwenCommand({ sessions, gateway: gatewayFor, config: readConfig, mcpBridge, features })
+  // Local (dsh) title for `/jiuwen rename`: public sessionTitle.rename(session, title) only; no-op on hosts without it.
+  const localRename = (dshId, title) => {
+    const titles = service('sessionTitle')
+    const live = service('sessions')?.get?.(dshId)
+    if (typeof titles?.rename !== 'function' || !live) return false
+    titles.rename(live, title)
+    return true
+  }
+  const command = createJiuwenCommand({ sessions, gateway: gatewayFor, config: readConfig, mcpBridge, features, localRename })
   api.command = command.run
   if (cfg.registerCommands !== false && typeof ctx.inject === 'function') {
     try {

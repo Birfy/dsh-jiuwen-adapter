@@ -357,3 +357,9 @@ Gateway drop: a TCP proxy cut the live 0.2.7 Gateway 2.5 s into a turn and again
 dsh 0.2.2-alpha.* is outside the declared range: SemVer prereleases of 0.2.2 do not match `<0.3.0` with a `0.2.1-rc` floor unless they are included explicitly. It is untested because the box's disk ran out of inodes during installation.
 
 CI note: GitHub runners showed a `session/flush` count difference of ±1, in a different variant on each run (`down/two` once, `down/before` once), and never locally across 16 parallel runs. dsh-session also fires this durability checkpoint on goal-round-driver idle timers, so the count depends on scheduling, not on which plugins are loaded. The strict host-event-count row now leaves it out, and a separate row checks that flush checkpoints still fire.
+
+## FlyBot-side UI notes (2026-10-31)
+
+- A failed turn shows dsh's red "This turn failed" plus FlyBot's grey "Could not run" line. The adapter emits one error finish; the second line is FlyBot's silent-turn footer.
+- The "Pick a model" card is FlyBot's `ModelChoiceDock`: shown when the bot has no model or its ref is missing from the catalog. The adapter always lists `jiuwen/jiuwen-default`.
+- "New chat" reopening the bot's session is FlyBot design (one session per bot).

@@ -176,3 +176,15 @@ test('resume: dsh goal resume → Jiuwen command.goal resume after our pause; se
   r2.fire('session/event', s2, { type: 'goal/change', data: { operation: 'resume', goal: { objective: 'o', phase: 'active' } } }); await tick(5)
   assert.deepEqual(r2.calls.map(c => [c[0], c[1].action]), [['command.goal', 'set']])
 })
+
+test('/jiuwen rename mirrors the dsh title via sessionTitle.rename (no double Jiuwen rename); fork message is explicit', async () => {
+  const live = { id: 'ext-s' }
+  const renamed = []
+  const h = makeHost(mock, {}, { services: { sessions: { get: id => (id === 'ext-s' ? live : undefined) }, sessionTitle: { rename: (s, t) => { renamed.push([s.id, t]) } } } })
+  const out = await h.cmd('rename 标题 🚀')
+  assert.match(out.text, /Renamed Jiuwen session .*"标题 🚀" \(dsh title updated\)/)
+  assert.deepEqual(renamed, [['ext-s', '标题 🚀']])
+  assert.equal(h.api.sessions.get('ext-s').title, '标题 🚀')
+  const h2 = makeHost(mock)
+  assert.doesNotMatch((await h2.cmd('rename plain')).text, /dsh title/, 'hosts without sessionTitle: Jiuwen rename only')
+})
