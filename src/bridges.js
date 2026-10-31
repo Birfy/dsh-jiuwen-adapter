@@ -40,7 +40,7 @@ export function sessionUsesProvider(session, provider, sessions) {
  * Gateway call; Jiuwen creates the session on first chat.send); disposed → clear per-session
  * runtime state (pending question, SwarmFlow run) but keep the mapping so the conversation resumes.
  */
-export function installSessionSync({ ctx, config, sessions, logger }) {
+export function installSessionSync({ ctx, config, sessions, logger, mcpBridge }) {
   const offs = []
   const on = (name, fn) => {
     try {
@@ -59,6 +59,7 @@ export function installSessionSync({ ctx, config, sessions, logger }) {
     const m = sessions.get?.(String(session.id))
     if (!m) return
     sessions.update?.(String(session.id), { pendingQuestion: undefined, swarmRunId: undefined })
+    try { mcpBridge?.releaseSession?.(String(session.id)) } catch (error) { logger?.debug?.(`[dsh-jiuwen] releaseSession failed: ${error?.message || error}`) }
   })
   return () => { for (const off of offs) { try { off() } catch { /* ignore */ } } }
 }

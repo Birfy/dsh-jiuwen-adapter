@@ -278,7 +278,7 @@ export function apply(ctx, config = {}) {
         gateway: () => gatewayFor(), sessions, logger,
       })
     }
-    if (cfg.sessionSync) disposers.push(installSessionSync({ ctx, config: readConfig, sessions, logger }))
+    if (cfg.sessionSync) disposers.push(installSessionSync({ ctx, config: readConfig, sessions, logger, mcpBridge }))
     if (cfg.modelDiscovery && typeof ctx.llm?.registerModelDiscovery === 'function') {
       const off = ctx.llm.registerModelDiscovery(cfg.discoveryNamespace, async (request) => {
         if (request?.provider && request.provider !== readConfig().provider) return []
