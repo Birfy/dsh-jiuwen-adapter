@@ -21,7 +21,7 @@ test('market index matches package.json', () => {
 
 test('market index passes the official parser', { skip: !existsSync(parserPath) && 'dsh-plugin-market-index not installed' }, async () => {
   const { parseMarketIndex } = await import(pathToFileURL(parserPath).href)
-  const parsed = parseMarketIndex(index, 'https://raw.githubusercontent.com/Birfy/dsh-jiuwen-adapter/main/market/index.json')
+  const parsed = parseMarketIndex(index, 'https://raw.githubusercontent.com/hsliuustc0106/dsh-jiuwen-adapter/main/market/index.json')
   assert.equal(parsed.plugins[0].name, pkg.name)
   assert.ok(parsed.plugins[0].icon.endsWith('/market/icon.svg'))
 })

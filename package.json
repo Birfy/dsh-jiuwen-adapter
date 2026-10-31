@@ -17,13 +17,13 @@
   ],
   "author": "Birfy",
   "license": "Apache-2.0",
-  "homepage": "https://github.com/Birfy/dsh-jiuwen-adapter#readme",
+  "homepage": "https://github.com/hsliuustc0106/dsh-jiuwen-adapter#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Birfy/dsh-jiuwen-adapter.git"
+    "url": "git+https://github.com/hsliuustc0106/dsh-jiuwen-adapter.git"
   },
   "bugs": {
-    "url": "https://github.com/Birfy/dsh-jiuwen-adapter/issues"
+    "url": "https://github.com/hsliuustc0106/dsh-jiuwen-adapter/issues"
   },
   "icon": "assets/icon.svg",
   "type": "module",

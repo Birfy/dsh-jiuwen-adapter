@@ -62,7 +62,7 @@ dsh --version
 ## 3. Add this adapter
 
 ```bash
-git clone https://github.com/Birfy/dsh-jiuwen-adapter.git && cd dsh-jiuwen-adapter
+git clone https://github.com/hsliuustc0106/dsh-jiuwen-adapter.git && cd dsh-jiuwen-adapter
 dsh plugin --profile web add "$PWD"
 dsh plugin --profile headless add "$PWD"
 # Pin the default model to jiuwen for both profiles:

@@ -37,9 +37,9 @@
       },
       "icon": "icon.svg",
       "author": "Birfy",
-      "homepage": "https://github.com/Birfy/dsh-jiuwen-adapter#readme",
+      "homepage": "https://github.com/hsliuustc0106/dsh-jiuwen-adapter#readme",
       "repository": {
-        "url": "https://github.com/Birfy/dsh-jiuwen-adapter"
+        "url": "https://github.com/hsliuustc0106/dsh-jiuwen-adapter"
       },
       "metadata": {
         "category": "agents",
@@ -60,7 +60,7 @@
           "publishTimestamp": 1793367816,
           "source": {
             "type": "git",
-            "url": "https://github.com/Birfy/dsh-jiuwen-adapter",
+            "url": "https://github.com/hsliuustc0106/dsh-jiuwen-adapter",
             "commit": "10a502b0e760c24aa217ba9cb09d971af1a605dc"
           },
           "engines": {

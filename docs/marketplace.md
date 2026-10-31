@@ -9,7 +9,7 @@ There are three ways for users to find this plugin. They do not depend on each o
 ## A. Direct install (works today, no market needed)
 
 ```bash
-dsh plugin --profile web add "git+https://github.com/Birfy/dsh-jiuwen-adapter.git#1fe6a0e7bff9a6bb965271e95c707c49c279eff5"
+dsh plugin --profile web add "git+https://github.com/hsliuustc0106/dsh-jiuwen-adapter.git#1fe6a0e7bff9a6bb965271e95c707c49c279eff5"
 ```
 
 On 2026-10-30 (UTC+8) this was checked with dsh 0.2.1-rc.5 in a throwaway `DSH_HOME`. It installed one package and no dependencies, and dsh added `@dsh-jiuwen/adapter` to the profile's `bundles`.
@@ -21,7 +21,7 @@ On 2026-10-30 (UTC+8) this was checked with dsh 0.2.1-rc.5 in a throwaway `DSH_H
 Because this repo is public, the index can be used straight from GitHub. dsh does not follow redirects, so use this exact URL:
 
 ```
-https://raw.githubusercontent.com/Birfy/dsh-jiuwen-adapter/main/market/index.json
+https://raw.githubusercontent.com/hsliuustc0106/dsh-jiuwen-adapter/main/market/index.json
 ```
 
 You can also set it in a profile's `cordis.patch.yml`:
@@ -31,7 +31,7 @@ You can also set it in a profile's `cordis.patch.yml`:
   name: '@deepseek-ai/dsh-plugin-market'
   config:
     indexes:
-      - https://raw.githubusercontent.com/Birfy/dsh-jiuwen-adapter/main/market/index.json
+      - https://raw.githubusercontent.com/hsliuustc0106/dsh-jiuwen-adapter/main/market/index.json
 ```
 
 For a release: bump the version, commit, run `npm run market:index` (this pins HEAD), then commit `market/`.
