@@ -31,7 +31,7 @@ export function createFeatureCache() {
           return r
         } catch (e) {
           if (isUnknownMethod(e)) api.mark(url, method, false)
-          else if (e?.code === 'TRANSPORT' && !/timed out|WebSocket failed/i.test(String(e?.message))) api.mark(url, method, true)
+          else if (e?.code === 'TRANSPORT' && !e.dropped && !/timed out|WebSocket failed|closed/i.test(String(e?.message))) api.mark(url, method, true)
           throw e
         }
       }

@@ -235,6 +235,23 @@ export function createMcpBridge({ config, services, rpc, logger }) {
       return r
     },
     exposed: () => [...schemas.keys()],
+    /**
+     * Verify the passthrough registration on the Gateway. JiuwenSwarm 0.2.7 `mcp.list` returns only
+     * the hub catalog (custom servers are absent), but `mcp.show {name}` resolves custom servers
+     * with their live connection state and tool list. Never throws.
+     */
+    async verify() {
+      const name = cfg().mcpServerName
+      try {
+        const r = await rpc('mcp.show', { name }, { timeoutMs: cfg().mcpRpcTimeoutMs ?? 30_000 })
+        const it = r?.item || r || {}
+        const tools = (Array.isArray(it.tools) ? it.tools : []).map(t => t?.name || t).filter(Boolean).map(String)
+        return { name, registered: true, state: it.connection_state || it.state || 'unknown', category: it.category, tools, exposed: [...schemas.keys()] }
+      } catch (e) {
+        const msg = String(e?.message || e)
+        return { name, registered: /not found/i.test(msg) ? false : undefined, error: msg.slice(0, 200), tools: [], exposed: [...schemas.keys()] }
+      }
+    },
     /** Leave Jiuwen's registration in place (the proxy is owned by Jiuwen); drop only our endpoint. */
     async dispose() {
       removeEp()

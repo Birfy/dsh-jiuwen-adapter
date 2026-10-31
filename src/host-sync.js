@@ -79,6 +79,31 @@ async function rpcOk(gateway, method, params, logger, label) {
 export function installHostSync(deps) {
   const { ctx, config, sessions, gateway, logger, services, mcpBridge } = deps
   const offs = []
+  let disposed = false
+  // Skills/permission syncs are serialized (one socket per RPC would otherwise race: a rapid
+  // on→off could land off→on). Global skill syncs coalesce: one queued run picks up the latest state.
+  let skillsTail = Promise.resolve()
+  let skillsQueued = null
+  const queueSkills = (session) => {
+    if (!session && skillsQueued) return skillsQueued
+    const run = skillsTail.then(() => { if (!session) skillsQueued = null; return disposed ? undefined : syncSkillsNow(session) })
+    skillsTail = run.catch(e => soft(logger, 'skills', e))
+    if (!session) skillsQueued = run
+    return run
+  }
+  let permTail = Promise.resolve()
+  let permWanted = null
+  const queuePermissions = (level) => {
+    const first = permWanted === null
+    permWanted = level
+    if (!first) return permTail // a queued run applies the latest level
+    permTail = permTail.then(async () => {
+      const lvl = permWanted; permWanted = null
+      if (disposed || !lvl) return
+      for (const tool of PERMISSION_TOOLS) await rpcOk(gateway, 'permissions.tools.update', { tool, level: lvl }, logger, 'permissions')
+    }).catch(e => soft(logger, 'permissions', e))
+    return permTail
+  }
   // goal/change (session log) and goal/changed (agent event) both fire for one change: dedupe.
   const goalSent = new Map()
   const sendGoal = (params, label) => {
@@ -107,6 +132,7 @@ export function installHostSync(deps) {
     wantedTitle.set(id, wanted)
     const prev = renameQueue.get(id) || Promise.resolve()
     const next = prev.then(() => forkPending.get(id)).then(async () => {
+      if (disposed) return
       const title = wantedTitle.get(id)
       const m = sessions.get(id)
       if (!m || !title || title === m.title) return
@@ -130,7 +156,7 @@ export function installHostSync(deps) {
   on('skills/change', () => {
     const f = resolveHostSyncFlags(config())
     if (!f.syncSkills) return
-    syncSkillsNow().catch(e => soft(logger, 'skills', e))
+    queueSkills().catch(() => {})
   })
 
   async function syncSkillsNow(session) {
@@ -152,6 +178,7 @@ export function installHostSync(deps) {
       ? (() => { const j = jiuwenSession(session); return j ? [j] : [] })()
       : sessions.list().map(m => ({ id: m.dshSessionId, mapping: m, cfg: config() }))
         .filter(t => sessionUsesProvider({ id: t.id }, t.cfg.provider, sessions))
+    if (!targets.length) return // no jiuwen session: never touch the Gateway
 
     let jwNames = new Set()
     try {
@@ -279,9 +306,7 @@ export function installHostSync(deps) {
       if (preset && preset !== baseline) { try { sessions.update(j.id, { permissionPreset: preset }) } catch { /* ignore */ } }
       if (level && baseline !== undefined && preset !== baseline) {
         // Safe subset only — update a few high-traffic tools, never set-all.
-        for (const tool of PERMISSION_TOOLS) {
-          rpcOk(gateway, 'permissions.tools.update', { tool, level }, logger, 'permissions').catch?.(() => {})
-        }
+        queuePermissions(level)
       }
     }
 
@@ -362,6 +387,13 @@ export function installHostSync(deps) {
     if (!m) return
     // Confirm rule: only delete when mapping had at least one turn (Jiuwen session exists remotely).
     const run = async () => {
+      // Deleted while a turn is in flight: interrupt it and wait for it to settle, so the Jiuwen
+      // session the turn creates is deleted too (not orphaned) and the mapping is not re-recorded.
+      if (sessions.isActive?.(id)) {
+        try { await (gateway().chatInterrupt?.(m.jiuwenSessionId, 'cancel') ?? gateway().rpc?.('chat.interrupt', { session_id: m.jiuwenSessionId, intent: 'cancel' })) } catch (e) { soft(logger, 'delete.interrupt', e) }
+        await sessions.idle(id, 15_000)
+        m.turns = Math.max(m.turns || 0, sessions.get(id)?.turns || 0, 1) // the turn reached Jiuwen
+      }
       try {
         if ((m.turns || 0) > 0) {
           await gateway().sessionDelete?.(m.jiuwenSessionId)
@@ -418,7 +450,7 @@ export function installHostSync(deps) {
         }
       }
     }
-    if (f.syncSkills) syncSkillsNow(session).catch(e => soft(logger, 'skills.onCreate', e))
+    if (f.syncSkills) queueSkills(session).catch(() => {})
     if (f.syncMcp) syncMcpForSession(j).catch(e => soft(logger, 'mcp.onCreate', e))
   })
 
@@ -529,7 +561,15 @@ export function installHostSync(deps) {
     } catch { /* ignore */ }
   })
 
-  return () => { for (const off of offs) { try { off() } catch { /* ignore */ } } }
+  const dispose = () => {
+    disposed = true
+    for (const off of offs) { try { off() } catch { /* ignore */ } }
+    offs.length = 0
+    goalSent.clear(); wantedTitle.clear(); forkPending.clear(); renameQueue.clear(); probing.clear()
+  }
+  /** Test/diagnostic hook: settle queued skills/permission syncs. */
+  dispose.idle = () => Promise.all([skillsTail, permTail]).then(() => {})
+  return dispose
 }
 
 /** Soft-inject unknown skill bodies into a chat query (install gap path). */

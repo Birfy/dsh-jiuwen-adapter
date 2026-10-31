@@ -237,6 +237,7 @@ export function createJiuwenAdapter(LlmAdapterBase, deps) {
           trace({ at: 'turn-start', dshSessionId, jiuwen: turnMapping.jiuwenSessionId, purpose: options.purpose, query: query.slice(0, 500), messages: (options.messages || []).length,
             blocks: JSON.stringify((options.messages || []).flatMap(m => Array.isArray(m.content) ? m.content.filter(b => b?.type !== 'text') : [])).slice(0, 1500) })
           let recorded = false
+          const endTurn = aux ? () => {} : (deps.sessions.beginTurn?.(dshSessionId) || (() => {}))
           try {
           request = { ...request, messages: options.messages }
           yield *this._gatewayTransport().stream(request, turnMapping, {
@@ -267,6 +268,7 @@ export function createJiuwenAdapter(LlmAdapterBase, deps) {
               trace({ at: 'turn-end', reason: { kind: 'aborted' } })
               deps.sessions.recordTurn?.(dshSessionId, {})
             }
+            endTurn()
           }
           return
         }

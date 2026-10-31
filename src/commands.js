@@ -505,7 +505,15 @@ ${jobs.slice(0, 15).map(j => `- ${j.id || j.job_id || j.name || JSON.stringify(j
         return `Jiuwen cron jobs (${jobs.length}):
 ${jobs.slice(0, 15).map(j => `- ${j.id || j.job_id || j.name || JSON.stringify(j).slice(0, 80)}`).join('\n')}`
       }
-      case 'mcp': { const r = await g.mcpList(); return `Jiuwen MCP servers: ${(r?.items || []).map(x => `${x.name}${x.connection_state ? ` (${x.connection_state})` : ''}`).join(', ') || 'none'}` }
+      case 'mcp': {
+        const r = await g.mcpList()
+        const list = `Jiuwen MCP servers: ${(r?.items || []).map(x => `${x.name}${x.connection_state ? ` (${x.connection_state})` : ''}`).join(', ') || 'none'}`
+        // 0.2.7 mcp.list omits custom servers: report the dsh tool passthrough via mcp.show.
+        if (!deps.mcpBridge?.verify || (r?.items || []).some(x => x?.name === deps.config().mcpServerName)) return list
+        const v = await deps.mcpBridge.verify()
+        const line = v.registered ? `${v.name} (custom, ${v.state}, ${v.tools.length} tools)` : v.registered === false ? `${v.name}: not registered (registers on the first passthrough turn)` : `${v.name}: unknown (${v.error})`
+        return `${list}\ndsh tool passthrough: ${line}`
+      }
       case 'mcp-reset': {
         if (!deps.mcpBridge?.unregister) return 'dsh tool passthrough is not available'
         if (!hasConfirm(rest)) return `Refusing to remove Jiuwen MCP registration "${deps.config().mcpServerName}" without confirmation: re-run /${cmdName()} mcp-reset confirm (the next passthrough turn re-registers it).`

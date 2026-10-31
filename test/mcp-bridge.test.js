@@ -150,3 +150,21 @@ test('compat: prepare/dispose cycles leave no process exit listener behind', asy
   }
   assert.equal(process.listenerCount('exit'), n0)
 })
+
+test('verify: mcp.show resolves the custom passthrough server even when mcp.list omits it', async () => {
+  const { createMcpBridge } = await import('../src/mcp-bridge.js')
+  const calls = []
+  const b = createMcpBridge({ config: () => ({ mcpServerName: 'dsh-tools' }), services: () => ({}), logger: {}, rpc: async (m, p) => {
+    calls.push([m, p])
+    if (m === 'mcp.show' && p.name === 'dsh-tools') return { type: 'detail', item: { name: 'dsh-tools', category: 'custom', connection_state: 'connected', tools: [{ name: 'bash' }, { name: 'read' }] } }
+    throw new Error('SkillHub asset not found: x')
+  } })
+  const v = await b.verify()
+  assert.equal(v.registered, true); assert.equal(v.state, 'connected'); assert.deepEqual(v.tools, ['bash', 'read'])
+  assert.deepEqual(calls[0], ['mcp.show', { name: 'dsh-tools' }])
+  const b2 = createMcpBridge({ config: () => ({ mcpServerName: 'x' }), services: () => ({}), logger: {}, rpc: async () => { throw new Error('SkillHub asset not found: x') } })
+  assert.equal((await b2.verify()).registered, false)
+  const { createJiuwenCommand } = await import('../src/commands.js')
+  const cmd = createJiuwenCommand({ sessions: { ensure: () => ({ jiuwenSessionId: 'j' }) }, gateway: () => ({ mcpList: async () => ({ items: [{ name: 'github', connection_state: 'disconnected' }] }) }), config: () => ({ mcpServerName: 'dsh-tools' }), mcpBridge: b })
+  assert.match(await cmd.run('s', 'mcp'), /github \(disconnected\)\ndsh tool passthrough: dsh-tools \(custom, connected, 2 tools\)/)
+})

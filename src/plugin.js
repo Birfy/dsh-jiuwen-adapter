@@ -128,6 +128,8 @@ export function apply(ctx, config = {}) {
   const api = {
     sessions,
     bridge,
+    /** Verify the dsh-tools passthrough registration on the Gateway (mcp.show; never throws). */
+    mcpVerify: () => mcpBridge.verify(),
     config: readConfig,
     provider: cfg.provider,
     /** Subscribe to structured Jiuwen events ({type, name, ...}); returns unsubscribe. */
@@ -265,19 +267,20 @@ export function apply(ctx, config = {}) {
     logger.warn?.(`[dsh-jiuwen] optional bridge setup failed (continuing without it): ${error?.message || error}`)
   }
 
+  let disposedAll = false
+  const disposeAll = () => {
+    if (disposedAll) return
+    disposedAll = true
+    for (const d of disposers) { try { d() } catch { /* ignore */ } }
+    disposers.length = 0
+    try { registration() } catch { /* already disposed */ }
+    mcpBridge.dispose().catch(() => {})
+    listeners.clear?.()
+  }
   if (typeof ctx.effect === 'function') {
-    ctx.effect(function* () {
-      yield () => {
-        for (const d of disposers) { try { d() } catch { /* ignore */ } }
-        try { registration() } catch { /* already disposed */ }
-        mcpBridge.dispose().catch(() => {})
-      }
-    }, 'llm-jiuwen')
+    ctx.effect(function* () { yield disposeAll }, 'llm-jiuwen')
   } else {
-    ctx.on?.('dispose', () => {
-      for (const d of disposers) { try { d() } catch { /* ignore */ } }
-      try { registration() } catch { /* ignore */ }
-    })
+    ctx.on?.('dispose', disposeAll)
   }
 
   logger.info?.(`[dsh-jiuwen] registered provider "${cfg.provider}" brain=${cfg.brainOwnership} mode=${cfg.mode} mapping=${cfg.mappingPath}`)

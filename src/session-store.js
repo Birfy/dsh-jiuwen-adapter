@@ -29,7 +29,34 @@ export class SessionStore {
     this.byDsh = new Map()
     /** @type {Map<string, SessionMapping>} */
     this.byJiuwen = new Map()
+    /** In-flight turns per dsh session (in memory only): Set of settle callbacks' promises. */
+    this.active = new Map()
     this._load()
+  }
+
+  /** Mark a turn in flight; returns `end()` (idempotent). */
+  beginTurn(dshSessionId) {
+    let end
+    const done = new Promise(r => { end = r })
+    const set = this.active.get(dshSessionId) || new Set()
+    set.add(done); this.active.set(dshSessionId, set)
+    let ended = false
+    return () => {
+      if (ended) return
+      ended = true; end()
+      set.delete(done); if (!set.size && this.active.get(dshSessionId) === set) this.active.delete(dshSessionId)
+    }
+  }
+
+  isActive(dshSessionId) { return Boolean(this.active.get(dshSessionId)?.size) }
+
+  /** Resolve when no turn of this session is in flight (or after `timeoutMs`). */
+  async idle(dshSessionId, timeoutMs = 15_000) {
+    const set = this.active.get(dshSessionId)
+    if (!set?.size) return true
+    let t
+    const timeout = new Promise(r => { t = setTimeout(() => r(false), timeoutMs) })
+    try { return await Promise.race([Promise.all([...set]).then(() => true), timeout]) } finally { clearTimeout(t) }
   }
 
   /** @param {string} dshSessionId */

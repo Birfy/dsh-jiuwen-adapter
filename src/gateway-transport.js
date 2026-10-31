@@ -274,7 +274,9 @@ export class GatewayTransport {
       const meta = {}
       await new Promise((resolve, reject) => {
         const timer = setTimeout(() => { cleanup(); records.length ? resolve() : reject(Object.assign(new Error('RPC history.get timed out'), { code: 'TIMEOUT' })) }, timeoutMs)
-        const cleanup = () => { clearTimeout(timer); ws.removeEventListener('message', onMessage) }
+        const onClose = () => { cleanup(); records.length ? resolve() : reject(Object.assign(new Error('RPC history.get: Gateway WebSocket closed'), { code: 'TRANSPORT', dropped: true })) }
+        const cleanup = () => { clearTimeout(timer); ws.removeEventListener('message', onMessage); ws.removeEventListener('close', onClose) }
+        ws.addEventListener('close', onClose)
         const onMessage = (event) => {
           let f
           try { f = JSON.parse(String(event.data)) } catch { return }
@@ -466,16 +468,26 @@ export class GatewayTransport {
       } catch {
         ws = new this.WebSocketImpl(url)
       }
+      // A half-open Gateway (TCP accepted, no WS upgrade) must not hang the turn forever.
+      const connectMs = Math.max(1000, Math.min(15_000, Number(this.requestTimeoutMs) || 15_000))
+      const timer = setTimeout(() => {
+        signal?.removeEventListener('abort', onAbort)
+        try { ws.close() } catch { /* ignore */ }
+        reject(Object.assign(new Error(`Jiuwen Gateway WebSocket connect timed out: ${url}`), { code: 'TRANSPORT' }))
+      }, connectMs)
       const onAbort = () => {
+        clearTimeout(timer)
         try { ws.close() } catch { /* ignore */ }
         reject(Object.assign(new Error('aborted'), { code: 'ABORTED' }))
       }
       signal?.addEventListener('abort', onAbort, { once: true })
       ws.addEventListener('open', () => {
+        clearTimeout(timer)
         signal?.removeEventListener('abort', onAbort)
         resolve(ws)
       })
       ws.addEventListener('error', () => {
+        clearTimeout(timer)
         signal?.removeEventListener('abort', onAbort)
         reject(Object.assign(new Error(`Jiuwen Gateway WebSocket failed: ${url}`), { code: 'TRANSPORT' }))
       })
@@ -498,13 +510,19 @@ export class GatewayTransport {
           resolve()
         }
       }
+      const onClose = () => {
+        cleanup()
+        reject(Object.assign(new Error('Jiuwen Gateway WebSocket closed before connection.ack'), { code: 'TRANSPORT', dropped: true }))
+      }
       const cleanup = () => {
         clearTimeout(timer)
         signal?.removeEventListener('abort', onAbort)
         ws.removeEventListener('message', onMessage)
+        ws.removeEventListener('close', onClose)
       }
       signal?.addEventListener('abort', onAbort, { once: true })
       ws.addEventListener('message', onMessage)
+      ws.addEventListener('close', onClose)
     })
   }
 
@@ -526,11 +544,20 @@ export class GatewayTransport {
         }
         resolve(frame.payload ?? frame.result ?? frame)
       }
+      // A Gateway drop mid-RPC must fail now, not after the full RPC timeout.
+      const onClose = () => {
+        cleanup()
+        reject(Object.assign(new Error(`RPC ${method}: Gateway WebSocket closed`), { code: 'TRANSPORT', dropped: true }))
+      }
       const cleanup = () => {
         clearTimeout(timer)
         ws.removeEventListener('message', onMessage)
+        ws.removeEventListener('close', onClose)
+        ws.removeEventListener('error', onClose)
       }
       ws.addEventListener('message', onMessage)
+      ws.addEventListener('close', onClose)
+      ws.addEventListener('error', onClose)
       ws.send(JSON.stringify({ type: 'req', id, method, params }))
     })
   }
