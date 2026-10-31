@@ -19,6 +19,9 @@ const VARIANTS = [
   ['mock/mixed', ['--jiuwen', `--gateway=ws://127.0.0.1:${MOCK_PORT}/ws`, '--mixed']],
   ['down/after', ['--jiuwen', '--down']], ['down/before', ['--jiuwen', '--down', '--order=before']],
   ['down/two', ['--jiuwen', '--down', '--two']], ['down/mixed', ['--jiuwen', '--down', '--mixed']],
+  // Other dsh provider plugins loaded (pi-ai twin + deepseek-account): compared against a --providers baseline.
+  ['prov/down/after', ['--providers', '--jiuwen', '--down']], ['prov/mock/mixed+before', ['--providers', '--jiuwen', `--gateway=ws://127.0.0.1:${MOCK_PORT}/ws`, '--mixed', '--order=before']],
+  ...(LIVE ? [['prov/live/two+mixed', ['--providers', '--jiuwen', `--gateway=${GW}`, '--two', '--mixed']]] : []),
   ...(LIVE ? [['live/after', ['--jiuwen', `--gateway=${GW}`]], ['live/mixed', ['--jiuwen', `--gateway=${GW}`, '--mixed']], ['live/two+before+mixed', ['--jiuwen', `--gateway=${GW}`, '--two', '--order=before', '--mixed']]] : []),
 ]
 const strip = l => l.filter(x => !/^(jiuwen|jwb)/.test(x))
@@ -47,20 +50,22 @@ const FEATURES = {
   'plugin load failures': r => r.failed,
 }
 const base = run()
+const baseProv = run('--providers')
+const baseOf = name => (name.startsWith('prov/') ? baseProv : base)
 const rows = [], extra = {}
 let ok = true
 const results = []
-for (const [name, args] of VARIANTS) results.push([name, name.startsWith('mock/') ? await runAsync(...args) : run(...args)])
+for (const [name, args] of VARIANTS) results.push([name, /(^|\/)mock\//.test(name) ? await runAsync(...args) : run(...args)])
 for (const [feat, f] of Object.entries(FEATURES)) {
-  const cells = results.map(([, r]) => JSON.stringify(f(r)) === JSON.stringify(f(base)))
+  const cells = results.map(([n, r]) => JSON.stringify(f(r)) === JSON.stringify(f(baseOf(n))))
   if (cells.includes(false)) ok = false
   rows.push([feat, ...cells.map(c => (c ? 'identical' : 'DIFF'))])
 }
 for (const [name, r] of results) extra[name] = { jwOut: r.jwOut, nonNamespaced: r.nonNamespacedFromJiuwen, serviceAfterDispose: r.afterDispose.service }
 const countDiff = (a = {}, b = {}) => Object.fromEntries([...new Set([...Object.keys(a), ...Object.keys(b)])].filter(k => a[k] !== b[k]).map(k => [k, [a[k] ?? 0, b[k] ?? 0]]))
 const diffs = {}
-for (const [name, r] of results) for (const [feat, f] of Object.entries(FEATURES)) if (JSON.stringify(f(r)) !== JSON.stringify(f(base))) (diffs[name] ??= {})[feat] = feat === 'host event counts' ? countDiff(base.hostEventCountsRaw, r.hostEventCountsRaw) : { base: JSON.stringify(f(base)).slice(0, 400), this: JSON.stringify(f(r)).slice(0, 400) }
-const out = { diffs, baseline: { events: base.eventCount, types: base.types.length, deepseek: base.deepseek }, header: ['feature', ...VARIANTS.map(v => v[0])], rows, extra, ok }
+for (const [name, r] of results) for (const [feat, f] of Object.entries(FEATURES)) if (JSON.stringify(f(r)) !== JSON.stringify(f(baseOf(name)))) (diffs[name] ??= {})[feat] = feat === 'host event counts' ? countDiff(baseOf(name).hostEventCountsRaw, r.hostEventCountsRaw) : { base: JSON.stringify(f(baseOf(name))).slice(0, 400), this: JSON.stringify(f(r)).slice(0, 400) }
+const out = { diffs, baseline: { events: base.eventCount, types: base.types.length, deepseek: base.deepseek, providers: baseProv.extraProviders, providerIds: baseProv.afterDispose.providers }, header: ['feature', ...VARIANTS.map(v => v[0])], rows, extra, ok }
 console.log(JSON.stringify(out, null, 1))
 if (process.argv.includes('--diff') && !ok) for (const [name, r] of results) for (const [feat, f] of Object.entries(FEATURES)) if (JSON.stringify(f(r)) !== JSON.stringify(f(base))) console.error(`[${name}] ${feat}\n  base: ${JSON.stringify(f(base)).slice(0, 600)}\n  this: ${JSON.stringify(f(r)).slice(0, 600)}`)
 process.exit(ok ? 0 : 1)

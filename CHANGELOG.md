@@ -6,6 +6,9 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `injectSystem: persona` also forwards plain dsh personas: the `deployment:persona-prefix/suffix` sections (dsh-system-prompt `personaPrefix/Suffix`, dsh-persona rows), observed read-only on the public `system-prompt/assemble` waterfall. FlyBot markers still win; dsh boilerplate is never sent. Off with `hostSync: false` or `injectSystem` ≠ `persona`.
+- `compat-runtime.mjs --sync2` (skills body, permission baseline, fork, delete idle/mid-turn, persona/group reinject, schedule→heartbeat with restore, MCP passthrough; read back from Jiuwen) and `--providers` (pi-ai + deepseek-account in the compat matrix).
+- `test/fuzz-gateway.test.js`: malformed/out-of-order/duplicate frames, unicode in tool args, rapid send/cancel, slow ack, id collisions.
 - **Host → Jiuwen sync** (`hostSync`, default on): forwards dsh/FlyBot frontend changes (skills, MCP, model, plan mode, workDir, title, session delete, goal, pause/resume, safe permission presets, fork remap, schedule→heartbeat, group persona reinject) to Jiuwen for jiuwen-provider sessions only. See `docs/host-sync.md`.
 - dsh goal `resume` → Jiuwen `command.goal resume` (keeps the Jiuwen goal) when we paused it; else `set`.
 - `mcpVerify()` helper and `/jiuwen mcp` line for the dsh-tools passthrough (`mcp.show`; 0.2.7 `mcp.list` omits custom servers).
@@ -18,6 +21,9 @@ All notable changes to this project are documented here. The format follows
 - **Default change:** `injectSystem` now defaults to `persona` (was `off`) and `trajectoryDetail` to `full` (was `summary`). Set `injectSystem: off` / `trajectoryDetail: summary` (or `JIUWEN_INJECT_SYSTEM=off` / `JIUWEN_TRAJECTORY_DETAIL=summary`) to restore the old behavior. Injection remains Jiuwen-session-only and fail-soft.
 
 ### Fixed
+- A malformed or non-object Gateway frame (bad JSON, `null`, a number) no longer ends the turn with an error; it is dropped and reported as a `malformed-frame` raw event. `null` frames in RPC/ack replies no longer throw in the socket listener.
+- `eventDisplay: markers`: a final-only answer after tool markers is no longer dropped.
+- Activity/trajectory truncation never splits a surrogate pair (emoji in tool args).
 - ask_user cards no longer show Jiuwen's synthetic trailing "Other / Custom input" option (the dsh card has its own free-text row).
 - `/jiuwen rename` also sets the dsh title (public `sessionTitle.rename`) so the sidebar updates; no duplicate Jiuwen rename.
 - `/jiuwen fork` says plainly that only Jiuwen was forked and points to the dsh Fork action (which forks and maps both).

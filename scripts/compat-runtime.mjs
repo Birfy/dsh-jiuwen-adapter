@@ -90,6 +90,7 @@ class Scripted extends LlmAdapter {
   providerRetryPolicy() { try { return resolveRetryPolicy?.({ mode: 'normal', maxRetries: 2, backoff: { initialDelayMs: 1, maxDelayMs: 2 } }) } catch { return undefined } }
   async *stream(o) {
     const msgs = o.messages || []
+    if (process.env.COMPAT_SYSDUMP) { const sys = msgs.filter(m => m.role === 'system').map(m => textOf(m) || (typeof m.content === 'string' ? m.content : '')).join('\n<<<MSG>>>\n'); if (sys) (await import('node:fs')).writeFileSync(process.env.COMPAT_SYSDUMP, sys) }
     if (process.env.COMPAT_MSGS) process.stderr.write('[msgs] ' + JSON.stringify(msgs.map(m => [m.role, m.source?.kind, m.type, textOf(m).slice(0, 50)])) + '\n')
     const last = msgs[msgs.length - 1]
     // Realistic usage (~4 chars/token over the whole request) so token pressure is real for the small-window model.
@@ -233,7 +234,21 @@ async function runScenario(sid, script = SCRIPT, model = 'fake-1') {
 
 if (WITH && ORDER === 'before') await loadJiuwen()
 for (const [n, c] of ROWS) await load(n, c)
+if (has('--sync2')) {
+  // Skills from a temp filesystem root (custom skill unknown to Jiuwen), plus permission presets.
+  const sk = join(home, 'skills', 'jw-probe-skill'); mkdirSync(sk, { recursive: true })
+  ;(await import('node:fs')).writeFileSync(join(sk, 'SKILL.md'), '---\nname: jw-probe-skill\ndescription: probe skill for the jiuwen sync test\n---\nMARKSKILLBODY follow the probe.\n')
+  await load('dsh-skill')
+  await load('dsh-skill-filesystem', { dshHome: join(home, 'dsh'), agentsHome: join(home, 'agents'), customSkillDirs: [join(home, 'skills')], bundledSkillDir: join(home, 'bundled') })
+}
 if (!has('--no-deepseek')) await loadDeepseek()
+// --providers: other dsh provider plugins beside deepseek (pi-ai twin, deepseek-account); no keys, never called.
+const extraProviders = {}
+if (has('--providers')) {
+  const one = async (n, cfg) => { try { const m = await imp(n); await Promise.race([Promise.resolve(ctx.plugin(m.default || m, cfg)), tick(1500)]); extraProviders[n] = 'loaded' } catch (e) { extraProviders[n] = `fail: ${String(e?.message || e).slice(0, 80)}` } }
+  await one('dsh-llm-pi-ai', { providers: { 'pi-compat': { api: 'openai-completions', baseURL: 'http://127.0.0.1:9/v1', apiKeyEnv: 'JIUWEN_COMPAT_NO_SUCH_KEY', displayName: 'Pi compat', models: [{ id: 'pi-m1' }] } } })
+  await one('dsh-llm-deepseek-account', {})
+}
 await tick(1500)
 await loadHarnessPlugins()
 if (WITH && ORDER === 'after') await loadJiuwen()
@@ -241,6 +256,7 @@ trace('loaded; failed:', failed)
 if (process.env.COMPAT_SCHEMAS) { for (const t of ctx.tools.schemas()) if (/exit_plan|update_goal|subagent|bash|create_goal/.test(t.name)) console.error('[schema]', t.name, JSON.stringify(t.parameters).slice(0, 700)); console.error('[services]', ['shell', 'shellEnv', 'workingDirectory', 'subagents', 'sandbox', 'subprocess'].map(n => `${n}:${ctx.get(n) !== undefined}`).join(' ')) }
 
 const api = ctx.get('jiuwenAdapter')
+const providersBefore = ctx.llm.listProviders().map(p => p.id).sort()
 let jwSide
 const base = emitted.length
 const scenario = runScenario('nonjw-main')
@@ -336,16 +352,126 @@ if (WITH && has('--sync') && api && !GW.includes(':1/')) syncOut = await (async 
   try { await jh?.dispose() } catch { /* ignore */ }
   return res
 })()
+// --sync2: skills body, permission baseline, fork, delete (idle + mid-turn), persona/group reinject,
+// schedule → heartbeat (global conf restored), MCP passthrough — each read back from Jiuwen / the model input.
+let sync2Out
+if (WITH && has('--sync2') && api && !GW.includes(':1/')) sync2Out = await (async () => {
+  const res = []
+  const ok = (name, pass, detail = '') => res.push(`${pass ? 'PASS' : 'FAIL'} ${name}${detail ? ` — ${String(detail).slice(0, 160)}` : ''}`)
+  const fs = await import('node:fs')
+  const SLOG = process.env.STANDIN_LOG || '/tmp/standin.jsonl'
+  const slog = () => { try { return fs.readFileSync(SLOG, 'utf8').split('\n').filter(Boolean).map(l => { try { return JSON.parse(l) } catch { return {} } }) } catch { return [] } }
+  const byTag = tag => slog().filter(x => x.tag === tag)
+  const wait = async (fn, ms = 8000) => { const t = Date.now() + ms; let v; while (Date.now() < t) { try { v = await fn(); if (v) return v } catch { /* retry */ } await tick(200) } return v }
+  const rows = async () => (await api.gateway.rpc('session.list', { limit: 200 }))?.sessions || []
+  const hasRow = async jwId => (await rows()).some(x => x.session_id === jwId)
+  const mk = async (sid) => { JW_SIDS.add(sid); return ctx.agents.create({ sessionId: sid, agentOptions: { provider: 'jiuwen', model: 'jiuwen-default' } }) }
+  const sayOn = async (agent, text, ms = 60_000) => { agent.followup({ id: `m-${Math.random().toString(36).slice(2)}`, role: 'user', content: [{ type: 'text', text }], source: { kind: 'user' } }); await Promise.race([agent.whenIdle(), tick(ms)]) }
+  const stamp = Date.now().toString(36)
+  const handles = []
+  try {
+    // ── persona (generic fallback) + group reinject ──
+    const sidP = `jw-s2p-${stamp}`; const hp = await mk(sidP); handles.push(hp)
+    await sayOn(hp.agent, `TAG:p1${stamp} hi`)
+    const p1 = byTag(`p1${stamp}`).at(-1)
+    ok('persona: plain dsh personaPrefix forwarded (generic), no boilerplate', p1?.persona && p1?.testAgent && !p1?.boiler, JSON.stringify(p1 || {}).slice(0, 140))
+    await sayOn(hp.agent, `TAG:p2${stamp} again`)
+    const p2 = byTag(`p2${stamp}`).at(-1)
+    ok('persona: not re-sent when unchanged (hash gate)', p2 && !p2.persona, JSON.stringify(p2 || {}).slice(0, 100))
+    try { hp.agent.session.append('group/members', { members: ['a', 'b'] }) } catch (e) { ok('group/members append', false, e.message) }
+    await sayOn(hp.agent, `TAG:p3${stamp} after group change`)
+    const p3 = byTag(`p3${stamp}`).at(-1)
+    ok('group roster change → persona reinjected next turn', p3?.persona && p3?.testAgent, JSON.stringify(p3 || {}).slice(0, 100))
+
+    // ── skills: dsh custom skill unknown to Jiuwen → body soft-injected (no global skills.toggle) ──
+    const skills = ctx.get('skills')
+    if (!skills?.list) ok('skills service loaded', false, 'dsh-skill not available')
+    else {
+      const listed = await skills.list({}).catch(e => `ERR ${e.message}`)
+      const mine = Array.isArray(listed) && listed.find(s => s.name === 'jw-probe-skill')
+      ok('skills: dsh lists the probe skill', !!mine, Array.isArray(listed) ? listed.map(s => s.name).join(',') : listed)
+      ctx.emit('skills/change')
+      await api.flushSync?.()
+      await tick(1500)
+      const m = api.sessions.get(sidP)
+      ok('skills: body queued on mapping (unknown to Jiuwen)', (m?.skillBodies || []).some(b => b.name === 'jw-probe-skill'), JSON.stringify(m?.skillBodies || []).slice(0, 100))
+      await sayOn(hp.agent, `TAG:k1${stamp} use skill`)
+      const k1 = byTag(`k1${stamp}`).at(-1)
+      ok('skills: body reached the model input', (k1?.marks || []).includes('MARKSKILLBODY'), JSON.stringify(k1?.marks || []))
+    }
+
+    // ── permission preset: seeded baseline is recorded, never flips Jiuwen global levels ──
+    const permBefore = JSON.stringify(await api.gateway.rpc('permissions.tools.get', {}).catch(e => `ERR ${e.message}`))
+    try { hp.agent.session.append('permission/preset', { preset: 'workspace-write' }) } catch (e) { ok('permission/preset append', false, e.message) }
+    await api.flushSync?.(); await tick(800)
+    const permAfter = JSON.stringify(await api.gateway.rpc('permissions.tools.get', {}).catch(e => `ERR ${e.message}`))
+    ok('permissions: first preset = baseline, Jiuwen levels unchanged', permBefore === permAfter && api.sessions.get(sidP)?.permissionPreset === 'workspace-write', `${api.sessions.get(sidP)?.permissionPreset} same=${permBefore === permAfter}`)
+
+    // ── fork: dsh sessions.fork → mapped Jiuwen session.fork with parent history ──
+    const parentJw = api.sessions.get(sidP)?.jiuwenSessionId
+    const childId = `jw-s2f-${stamp}`; JW_SIDS.add(childId)
+    let child
+    try { child = ctx.get('sessions').fork(hp.agent.session, undefined, childId) } catch (e) { ok('dsh fork', false, e.message) }
+    if (child) {
+      const fm = await wait(() => { const m = api.sessions.get(childId); return m?.forkedFrom === parentJw && m.jiuwenSessionId !== parentJw && m }, 10_000)
+      ok('fork: child mapped to a new Jiuwen fork of the parent', !!fm, JSON.stringify(api.sessions.get(childId) || {}).slice(0, 140))
+      ok('fork: Jiuwen lists the forked session', fm && await wait(() => hasRow(fm.jiuwenSessionId)), fm?.jiuwenSessionId)
+      if (fm) {
+        const h = await api.gateway.historyMessages?.(childId).catch(e => ({ err: e.message }))
+        ok('fork: forked Jiuwen session holds parent history', (h?.messages || []).filter(m => m.role === 'user').length >= 2, (h?.messages || []).length ?? h?.err)
+        ctx.emit('api-session/removed', childId)
+        ok('fork: deleting the dsh fork deletes only the Jiuwen fork', await wait(async () => !(await hasRow(fm.jiuwenSessionId)) && await hasRow(parentJw), 10_000) && !api.sessions.get(childId))
+      }
+    }
+
+    // ── schedule → heartbeat (Jiuwen global conf; restored exactly) ──
+    const hb0 = await api.gateway.heartbeatConf?.().catch(() => undefined)
+    try {
+      hp.agent.session.append('schedule/change', { version: 1, operation: 'create', schedule: { id: `s-${stamp}`, kind: 'every', title: 'probe', prompt: 'ping', everySeconds: 7200, scheduledAt: Date.now() + 7200_000 } })
+      const hb1 = await wait(async () => { const c = await api.gateway.heartbeatConf(); return Number(c?.every) === 7200 && c })
+      ok('schedule every 7200s → Jiuwen heartbeat every=7200 (was 3600)', !!hb1, JSON.stringify(hb1 || await api.gateway.heartbeatConf().catch(() => null)).slice(0, 120))
+    } catch (e) { ok('schedule/change append', false, e.message) }
+    finally {
+      if (hb0 && typeof hb0 === 'object') {
+        try { await api.gateway.rpc('heartbeat.set_conf', hb0) } catch (e) { res.push(`WARN heartbeat restore ${e.message}`) }
+        const hb2 = await api.gateway.heartbeatConf().catch(() => null)
+        ok('heartbeat conf restored', JSON.stringify(hb2) === JSON.stringify(hb0), `${JSON.stringify(hb0)} → ${JSON.stringify(hb2)}`.slice(0, 160))
+      }
+    }
+
+    // ── MCP passthrough: dsh-tools server registered in Jiuwen + model can call a dsh tool ──
+    const v = await api.mcpVerify?.().catch(e => ({ error: e.message }))
+    ok('mcp: dsh-tools server resolvable via mcp.show', v && !v.error && (v.ok ?? v.found ?? true), JSON.stringify(v).slice(0, 140))
+    const mcpLine = String(await api.command(sidP, 'mcp').catch(e => e.message))
+    ok('/jiuwen mcp shows passthrough line', /dsh-tools/.test(mcpLine), mcpLine.split('\n').find(l => /dsh-tools/.test(l)))
+
+    // ── delete idle + delete during a turn ──
+    const jwP = api.sessions.get(sidP)?.jiuwenSessionId
+    ctx.emit('api-session/removed', sidP)
+    ok('delete (idle): Jiuwen session removed + unmapped', await wait(async () => !(await hasRow(jwP)) && !api.sessions.get(sidP), 10_000), jwP)
+    const sidD = `jw-s2d-${stamp}`; const hd = await mk(sidD); handles.push(hd)
+    hd.agent.followup({ id: `m-d1${stamp}`, role: 'user', content: [{ type: 'text', text: `TAG:d1${stamp} SLOW6000 first turn` }], source: { kind: 'user' } })
+    await wait(() => api.sessions.get(sidD)?.jiuwenSessionId && byTag(`d1${stamp}`).length, 8000)
+    const jwD = api.sessions.get(sidD)?.jiuwenSessionId
+    ctx.emit('api-session/removed', sidD)
+    await Promise.race([hd.agent.whenIdle(), tick(30_000)])
+    ok('delete mid first turn: no orphan Jiuwen session, unmapped', await wait(async () => !(await hasRow(jwD)) && !api.sessions.get(sidD), 20_000), jwD)
+  } catch (e) { ok('sync2 scenario', false, e.stack?.split('\n').slice(0, 2).join(' ')) }
+  for (const h of handles) { try { await h.dispose() } catch { /* ignore */ } }
+  return res
+})()
 // --reload: dispose + re-plugin the adapter 3× in the live runtime (hot update); provider/service/command
 // come back exactly once, a jiuwen turn works after each reload, and process listeners do not grow.
 let reloadOut
 if (WITH && has('--reload') && !GW.includes(':1/')) reloadOut = await (async () => {
   const res = []
   const plugin = await import(pathToFileURL(join(ROOT, 'index.js')).href)
-  const l0 = process.eventNames().map(n => `${String(n)}:${process.listenerCount(n)}`).sort().join()
+  const snapL = () => process.eventNames().map(n => `${String(n)}:${process.listenerCount(n)}`).sort().join()
+  let l0
   for (let i = 1; i <= 3; i++) {
     for (const f of jw.splice(0)) { try { await f.dispose?.() } catch (e) { res.push(`FAIL dispose ${e.message}`) } }
     await tick(300)
+    if (i === 1) l0 = snapL() // baseline: no adapter loaded
     const gone = !ctx.llm.listProviders().some(p => p.id === 'jiuwen') && ctx.get('jiuwenAdapter') === undefined
     jw.push(ctx.plugin(plugin, { gatewayURL: GW, mappingPath: join(home, 'jw-a.json'), requestTimeoutMs: 60_000, mode: 'gateway' }))
     await tick(500)
@@ -362,8 +488,8 @@ if (WITH && has('--reload') && !GW.includes(':1/')) reloadOut = await (async () 
   }
   for (const f of jw.splice(0)) { try { await f.dispose?.() } catch { /* ignore */ } }
   await tick(300)
-  const l1 = process.eventNames().map(n => `${String(n)}:${process.listenerCount(n)}`).sort().join()
-  res.push(`${l0 === l1 ? 'PASS' : 'FAIL'} process listeners back to baseline after reloads + dispose — ${l0} → ${l1}`)
+  const l1 = snapL()
+  res.push(`${l0 === l1 ? 'PASS' : 'FAIL'} process listeners back to the no-adapter baseline after reloads + dispose — ${l0} → ${l1}`)
   return res
 })()
 const scenarioEvents = emitted.slice(base)
@@ -376,7 +502,7 @@ for (const f of jw) { try { f.dispose?.() } catch (e) { failed.push(`dispose ${e
 await tick(500)
 const g1 = snapGlobals()
 const out = {
-  with: WITH, order: ORDER, two: TWO, mixed: MIXED, gateway: GW, deepseek, failed,
+  with: WITH, order: ORDER, two: TWO, mixed: MIXED, gateway: GW, deepseek, failed, extraProviders, providersBefore,
   eventsHash: createHash('sha1').update(JSON.stringify(ev)).digest('hex').slice(0, 16),
   eventCount: rep.events.length, types: [...new Set(rep.types)].sort(),
   scenarios: {
@@ -398,6 +524,7 @@ const out = {
   jwOut,
   ...(syncOut ? { sync: syncOut } : {}),
   ...(reloadOut ? { reload: reloadOut } : {}),
+  ...(sync2Out ? { sync2: sync2Out } : {}),
   afterDispose: { providers: ctx.llm.listProviders().map(p => p.id).sort(), service: ctx.get('jiuwenAdapter') === undefined ? 'gone' : 'present' },
   globals: { added: g1.g.filter(x => !g0.g.includes(x)), envSame: g0.env === g1.env, protoSame: g0.p === g1.p, procListeners: g1.l },
   unhandled,
