@@ -222,7 +222,7 @@ export function createJiuwenAdapter(LlmAdapterBase, deps) {
           // injectSystem (jiuwen sessions only; fail soft). Skipped for aux calls and ask_user answers.
           let systemHash
           if (!aux && cfg.injectSystem !== 'off' && !turnMapping.pendingQuestion) {
-            const inj = applySystemInjection(query, options, turnMapping, cfg.injectSystem)
+            const inj = applySystemInjection(query, options, turnMapping, cfg.injectSystem, deps.personaFor?.(dshSessionId))
             query = inj.query; systemHash = inj.hash
           }
           if (!aux && cfg.syncSkillInstall !== false && turnMapping.skillBodies?.length) {

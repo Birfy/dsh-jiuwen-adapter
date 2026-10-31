@@ -21,6 +21,7 @@ Master switch: `hostSync` (default **on**). `hostSync: false` or `JIUWEN_HOST_SY
 | Permission preset (safe map) | `permissions.tools.update` on `bash`/`write_file`/`edit_file` — never `set-all`. The session's first (seeded default) preset is a baseline and is not forwarded; only later changes are | `syncPermissions` |
 | Session fork (`header.parentSession`) | `session.fork` + remap child (turns/options copied; subagent children are not forked) | `syncFork` |
 | Group member change | Clears `systemHash` so persona reinjects on next turn | `syncGroup` |
+| dsh persona sections | Read-only `system-prompt/assemble` listener remembers `deployment:persona-prefix/suffix` per session for `injectSystem: persona` (plain dsh, no FlyBot markers); returns the assembly untouched | `hostSync` + `injectSystem: persona` |
 | Schedule change (session `schedule/change`, `every`) | `heartbeat.set_conf` merged onto the current conf (global; Jiuwen has no per-session interval) | `syncSchedule` |
 
 Skill and permission syncs are serialized and latest-wins, so rapid toggles cannot land out of order. Skill sync makes no Gateway call when no jiuwen session exists.

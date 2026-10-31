@@ -50,7 +50,8 @@ describe('full agent runtime A/B matrix', { skip: !hasRuntime && 'dsh agent runt
       assert.equal(x.serviceAfterDispose, 'gone', name)
       if (x.jwOut) assert.ok(x.jwOut.includes('jiuwenInAgentView:cmd=true') && !x.jwOut.some(s => s.startsWith('THROW')), `${name}: ${x.jwOut}`)
     }
-    assert.match(String(m.extra['mock/mixed'].jwOut), /agent:gateway-mock: Reply with exactly: mixed-ok/, 'jiuwen agent in the real loop sends the user text')
+    assert.match(String(m.extra['mock/mixed'].jwOut), /agent:gateway-mock: \[System instructions from host\]\nYou are a test agent\.\n\[\/System\]/, 'jiuwen agent sends the dsh persona (generic fallback, no boilerplate) + user text')
+    assert.ok(!String(m.extra['mock/mixed'].jwOut).includes('exit code'), 'no dsh boilerplate forwarded')
     assert.equal(m.ok, true)
   })
   it('baseline scenario covers approval, tools, compaction (manual + automatic), commands, retry, title, plan exit, goal rounds, subagent, bash', () => {

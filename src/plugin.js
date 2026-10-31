@@ -1,4 +1,5 @@
 import { appendFileSync } from 'node:fs'
+import { createPersonaCapture } from './persona-capture.js'
 /**
  * Cordis plugin: registers provider route `jiuwen` on ctx.llm.
  */
@@ -78,7 +79,11 @@ export function apply(ctx, config = {}) {
     services: () => ({ tools: service('tools'), approval: service('approval'), agents: service('agents') }),
     rpc: (method, params, opts) => gatewayFor().rpc(method, params, opts),
   })
+  // Generic persona source (plain dsh personas); observe-only, off with hostSync:false or injectSystem!=persona.
+  const personaCfg = readConfig()
+  const personaCapture = personaCfg.hostSync !== false && personaCfg.injectSystem === 'persona' ? createPersonaCapture(ctx, logger) : { get: () => undefined, dispose: () => {} }
   const AdapterClass = createJiuwenAdapter(LlmAdapter, {
+    personaFor: (id) => personaCapture.get(id),
     interact,
     mcpBridge,
     // `auto` needs a live answerer, not just the service: headless dsh loads ctx.userQuestions but no
@@ -284,6 +289,7 @@ export function apply(ctx, config = {}) {
     try { registration() } catch { /* already disposed */ }
     mcpBridge.dispose().catch(() => {})
     listeners.clear?.()
+    personaCapture.dispose()
   }
   if (typeof ctx.effect === 'function') {
     ctx.effect(function* () { yield disposeAll }, 'llm-jiuwen')

@@ -53,6 +53,13 @@ export function extractPersona(system) {
   return parts.join('\n\n')
 }
 
+/** dsh persona text (from persona-capture), forwarded only when it is literally in the current system prompt. */
+export function genericPersona(system, persona) {
+  const t = typeof persona === 'string' ? persona.trim() : ''
+  if (!t) return ''
+  return t.split(/\n{2,}/).every(p => system.includes(p.trim())) ? t : ''
+}
+
 export function capBytes(text, max = SYSTEM_MAX_BYTES) {
   const buf = Buffer.from(text, 'utf8')
   if (buf.length <= max) return text
@@ -67,12 +74,14 @@ export function systemHash(text) {
  * @returns {{ query: string, hash?: string }} query with the block prefixed when it is new for
  * this mapping (hash differs from mapping.systemHash); otherwise the query unchanged.
  */
-export function applySystemInjection(query, options, mapping, mode) {
+export function applySystemInjection(query, options, mapping, mode, fallbackPersona) {
   try {
     if (mode !== 'persona' && mode !== 'full') return { query }
     const sys = latestSystemText(options)
     if (!sys) return { query }
-    const body = mode === 'full' ? sys : extractPersona(sys)
+    // persona: FlyBot markers first (unchanged); else the dsh persona sections, only if present in this prompt.
+    let body = mode === 'full' ? sys : extractPersona(sys)
+    if (!body && mode === 'persona') body = genericPersona(sys, fallbackPersona)
     if (!body) return { query }
     const capped = capBytes(body)
     const hash = systemHash(`${mapping?.jiuwenSessionId || ''}\n${mode}\n${capped}`)
