@@ -89,10 +89,11 @@ export function createMcpBridge({ config, services, rpc, logger }) {
     try { agent = agents?.get?.(sid) } catch { agent = undefined }
     // Session-scoped tools (e.g. dsh-superagent's orchestrator_*) live on agent.ctx.tools, not the
     // global registry: resolve there first, then fall back to the global service.
+    // dsh ToolService.get(name, scope): scoped tools are only visible when the agent is passed as scope.
     let def
-    try { def = agent?.ctx?.tools?.get?.(name) } catch { def = undefined }
+    try { def = agent ? tools?.get?.(name, agent) ?? agent.ctx?.tools?.get?.(name, agent) : undefined } catch { def = undefined }
     if (!def?.execute) def = tools?.get?.(name)
-    if (!def?.execute) return { isError: true, text: `dsh tool ${name} not found` }
+    if (!def?.execute) return { isError: true, text: `dsh tool ${name} not found (session=${sid})` }
     if (c.toolApproval !== 'none') {
       let outcome = 'unavailable'
       if (approval?.request && agent) {
