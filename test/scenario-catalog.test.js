@@ -43,12 +43,17 @@ export const SCENARIOS = [
   ['fix 6 preset-scoped plan bridge', 'plain-dsh-web', 'plan bridge uses the agent preset'],
   ['fix 7 {{var}} personas', 'persona-generic', 'interpolated {{vars}}'],
   ['fix 8 single session.delete', 'plain-dsh-web', 'single session.delete (no double call)'],
+  ['memory: AGENTS.md (dsh-agent-instructions) + session-reference context reach Jiuwen with the prompt', 'memory-plugins', 'forwarded to Jiuwen with the prompt'],
+  ['memory: no resend of memory context on later Jiuwen turns', 'memory-plugins', 'only the new trailing messages'],
+  ['memory: session-query tools skip the passthrough approval gate (fix)', 'mcp-bridge', 'memory plugins: read-only session-query tools'],
+  ['memory: plugin compat matrix row', 'plugin-compat-matrix', 'memory: agent-instructions, session-reference, session-search'],
+  ['memory: real plain dsh profiles, both load orders, non-jiuwen + jiuwen', 'live-plain-dsh', 'memoryChecks'],
 ]
 
 test('scenario catalog: every scenario points at an existing test', () => {
   const missing = []
   for (const [name, file, needle] of SCENARIOS) {
-    const src = file === 'live' ? readFileSync(new URL('./live/run.mjs', import.meta.url), 'utf8') : readFileSync(new URL(`./${file}.test.js`, import.meta.url), 'utf8')
+    const src = file === 'live' ? readFileSync(new URL('./live/run.mjs', import.meta.url), 'utf8') : file === 'live-plain-dsh' ? readFileSync(new URL('./live/plain-dsh.mjs', import.meta.url), 'utf8') : readFileSync(new URL(`./${file}.test.js`, import.meta.url), 'utf8')
     if (!src.includes(needle)) missing.push(`${name} → ${file}: ${needle}`)
   }
   assert.deepEqual(missing, [])

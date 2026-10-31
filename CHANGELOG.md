@@ -5,6 +5,8 @@ All notable changes to this project are documented here. The format follows
 
 ## Unreleased
 
+- Memory-module plugins (agent-instructions, session-reference, session-search) verified with Jiuwen sessions.
+  - Fix: read-only dsh session-query tools skip the passthrough approval gate (`toolApprovalExempt`); before, they hung Jiuwen turns until approval timed out.
 - Tests:
   - Every scenario from the 2026-10-31 rounds is now automated: deep-pass, plugin-compat-matrix, reload, and scenario-catalog in `npm test`.
   - Added opt-in `npm run test:live` and `npm run test:plain-dsh`, which snapshot and restore Jiuwen exactly, including the dsh-tools MCP registration.

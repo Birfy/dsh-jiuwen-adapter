@@ -64,6 +64,8 @@ const AREAS = {
   'dsh-skill / skill-filesystem': { drive: (r, s) => r.fire('session/event', s, { type: 'request/header', data: { header: s.header } }), expect: async (c, r, id) => { await r.hs.pendingFor(id); assert.deepEqual(r.sessions.get(id).skillBodies?.map(b => b.content), ['MARKSKILLBODY']) } },
   'agent-presets persona': { drive: () => {}, expect: () => {} }, // persona path: test/persona-generic.test.js ({{model}}, minimal); no host event
   'workspace archive / agent dispose': { drive: (r, s) => r.fire('api-session/removed', s.id), expect: (c, r, id) => { assert.ok(!c.some(([m]) => m === 'session.delete')); assert.ok(r.sessions.get(id)) } },
+  // memory plugins act on model messages / tools only (see memory-plugins + mcp-bridge tests); host-sync must stay out of the way
+  'memory: agent-instructions, session-reference, session-search': { drive: (r, s) => { for (const type of ['agent-instructions/change', 'session-reference/resolved', 'session-query/indexed']) r.fire('session/event', s, { type, data: {} }) }, expect: c => assert.equal(c.length, 0) },
   'mcp-resources, subagent, todo, compaction, approval, web tools': { drive: (r, s) => { for (const type of ['todo/change', 'compaction/end', 'approval/policy', 'mcp/resources', 'subagent/spawn']) r.fire('session/event', s, { type, data: {} }) }, expect: c => assert.equal(c.length, 0) },
 }
 

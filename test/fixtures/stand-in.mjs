@@ -21,7 +21,9 @@ http.createServer(async (req, res) => {
   let j = {}; try { j = JSON.parse(body) } catch {}
   const msgs = j.messages || []
   const lastUserIdx = msgs.map(m => m.role).lastIndexOf('user')
-  const last = textOf(msgs[lastUserIdx]?.content).replace(/\\"/g, '"')
+  // the contiguous run of user messages ending at the last one (hosts may append context after the prompt)
+  let runStart = lastUserIdx; while (runStart > 0 && msgs[runStart - 1].role === 'user') runStart--
+  const last = msgs.slice(runStart, lastUserIdx + 1).map(m => textOf(m.content)).join('\n').replace(/\\"/g, '"')
   const after = msgs.slice(lastUserIdx + 1)
   const toolMsgs = after.filter(m => m.role === 'tool')
   const users = msgs.filter(m => m.role === 'user')
@@ -30,7 +32,7 @@ http.createServer(async (req, res) => {
   const m = last.match(/SLOW(\d+)?/); const slowMs = m ? Number(m[1] || 8000) : 0
   const tag = (last.match(/TAG:(\S+)/) || [])[1] || 'x'
   const tm = grab(last, 'TOOL:')
-  log({ ...(/LISTTOOLS/.test(last) ? { tools, schemas: (j.tools||[]).filter(t=>/tool_call|tool_search|ask/.test(t.function?.name)).map(t=>t.function) } : {}), tag, stream: !!j.stream, nTools: tools.length, toolMsgs: toolMsgs.length, users: users.length, sysLen: sys.length, persona: /System instructions from host/.test(last), personaText: (last.match(/Deep Persona \w+/) || [])[0], marks: last.match(/MARK[A-Z0-9_]+/g) || [], testAgent: /You are a test agent/.test(last), boiler: /exit code: N|DeepSeek Harness/.test(last), last: last.slice(0, 160) })
+  log({ ...(/LISTTOOLS/.test(last) ? { tools, schemas: (j.tools||[]).filter(t=>/tool_call|tool_search|ask/.test(t.function?.name)).map(t=>t.function) } : {}), tag, stream: !!j.stream, nTools: tools.length, toolMsgs: toolMsgs.length, users: users.length, sysLen: sys.length, persona: /System instructions from host/.test(last), personaText: (last.match(/Deep Persona \w+/) || [])[0], marks: last.match(/MARK[A-Z0-9_]+/g) || [], allMarks: [...new Set(msgs.flatMap(m => textOf(m.content).match(/MARK[A-Z0-9_]+/g) || []))], toolNames: tools.filter(n => /memory|session_|search/i.test(n)).slice(0, 40), testAgent: /You are a test agent/.test(last), boiler: /exit code: N|DeepSeek Harness/.test(last), last: last.slice(0, 160) })
   if (/ERR500/.test(last)) { res.writeHead(500, { 'content-type': 'application/json' }); return res.end(JSON.stringify({ error: { message: 'stand-in scripted 500', type: 'server_error' } })) }
   let toolCall
   if (tm && toolMsgs.length === 0) {

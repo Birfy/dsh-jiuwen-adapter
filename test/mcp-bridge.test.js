@@ -168,3 +168,25 @@ test('verify: mcp.show resolves the custom passthrough server even when mcp.list
   const cmd = createJiuwenCommand({ sessions: { ensure: () => ({ jiuwenSessionId: 'j' }) }, gateway: () => ({ mcpList: async () => ({ items: [{ name: 'github', connection_state: 'disconnected' }] }) }), config: () => ({ mcpServerName: 'dsh-tools' }), mcpBridge: b })
   assert.match(await cmd.run('s', 'mcp'), /github \(disconnected\)\ndsh tool passthrough: dsh-tools \(custom, connected, 2 tools\)/)
 })
+
+test('memory plugins: read-only session-query tools skip the per-call approval gate (dsh never asks for them); others still gated', async () => {
+  const { resolveConfig } = await import('../src/config.js')
+  const def = resolveConfig({}, { env: {} }).toolApprovalExempt
+  assert.deepEqual(def, ['session_search', 'session_event_search', 'session_event_read', 'session_trace', 'session_event_trace'])
+  assert.deepEqual(resolveConfig({}, { env: { JIUWEN_TOOL_APPROVAL_EXEMPT: '' } }).toolApprovalExempt, [])
+  const agent = { id: 's1' }; let asked = 0
+  const tools = { get: (n) => ({ execute: async (args, exec) => ({ content: [{ type: 'text', text: `ran ${n} agent=${exec.agent?.id}` }] }) }) }
+  const mem = [...schemas, { name: 'session_search', description: 's', parameters: { type: 'object' } }]
+  const b1 = bridge({ tools, agents: { get: () => agent }, approval: { request: async () => { asked++; return 'rejected' } } }, { toolAllowlist: ['*'], toolApprovalExempt: def })
+  await b1.b.prepare(mem, 's1')
+  let r = await b1.b._handle({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'session_search', arguments: { query: 'zebra' } } })
+  assert.equal(r.result.isError, false); assert.equal(r.result.content[0].text, 'ran session_search agent=s1'); assert.equal(asked, 0)
+  r = await b1.b._handle({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'bash', arguments: {} } })
+  assert.equal(r.result.isError, true); assert.equal(asked, 1, 'non-exempt tool still asks')
+  await b1.b.dispose()
+  const b2 = bridge({ tools, agents: { get: () => agent } }, { toolAllowlist: ['*'], toolApprovalExempt: [] })
+  await b2.b.prepare(mem, 's1')
+  r = await b2.b._handle({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'session_search', arguments: {} } })
+  assert.equal(r.result.isError, true, 'empty exempt list restores the old gate')
+  await b2.b.dispose()
+})

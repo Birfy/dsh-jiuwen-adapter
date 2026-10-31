@@ -128,6 +128,7 @@ export interface JiuwenAdapterConfig {
   titleMode?: string
   toolAllowlist?: string[]
   toolApproval?: string
+  toolApprovalExempt?: string[]
   toolCallTimeoutMs?: number
   toolPassthrough?: boolean
   traceFile?: string

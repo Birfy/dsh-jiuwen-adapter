@@ -157,6 +157,10 @@ export function resolveConfig(raw = {}, opts = {}) {
         : ((raw.hostSync === false || env.JIUWEN_HOST_SYNC === '0' || String(env.JIUWEN_TOOL_PASSTHROUGH || raw.toolPassthrough || '').toLowerCase() === 'off') ? [] : ['*'])),
     /** 'dsh' (default): every passthrough call needs ctx.approval allowed-once (deny when unavailable) | 'none'. */
     toolApproval: pickEnum(env.JIUWEN_TOOL_APPROVAL || raw.toolApproval, ['dsh', 'none'], 'dsh'),
+    /** Passthrough tools that skip the per-call approval gate: read-only dsh memory/session-query tools (dsh itself never asks for them). */
+    toolApprovalExempt: Array.isArray(raw.toolApprovalExempt) ? raw.toolApprovalExempt.map(String)
+      : env.JIUWEN_TOOL_APPROVAL_EXEMPT !== undefined ? String(env.JIUWEN_TOOL_APPROVAL_EXEMPT).split(',').map(x => x.trim()).filter(Boolean)
+        : ['session_search', 'session_event_search', 'session_event_read', 'session_trace', 'session_event_trace'],
     toolCallTimeoutMs: Number(raw.toolCallTimeoutMs ?? env.JIUWEN_TOOL_CALL_TIMEOUT_MS ?? 120_000),
     mcpServerName: String(raw.mcpServerName || env.JIUWEN_MCP_SERVER_NAME || 'dsh-tools'),
     /** Shared dir for the stable MCP proxy (schemas.json + ep-<pid>.json). Default ~/.cache/dsh-jiuwen/mcp/<mcpServerName>. */

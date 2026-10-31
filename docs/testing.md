@@ -20,6 +20,7 @@ test/live/lib.mjs         guards, stand-in launcher, Jiuwen snapshot + exact res
 | File | Covers |
 |---|---|
 | deep-pass | A 12-turn history · B reasoning · C tool calls · D 200 KB answer · E model 500 · F mid-stream drop · G cancel · J persona once/resend/full · K 6 concurrent · M bad port/URL/switches · L 200-turn leak · reload 3× |
+| memory-plugins | AGENTS.md and session-reference context forwarded with the prompt, not resent; runtime/time context still stripped |
 | plugin-compat-matrix | 12 plain-dsh plugin areas × 2 load orders: non-jiuwen untouched, Jiuwen read-back, listeners released |
 | plain-dsh-web | the 8 bb9df82 fixes (dispose keep, scoped skills, cwd seed, schedule list, fork wait, scoped plan, single delete); `{{model}}` persona is in persona-generic |
 | drop-recovery, gateway-drop-rpc | drop/reconnect, fast-fail RPCs |
@@ -46,7 +47,7 @@ npm run test:live
 | live-deep (A–M, L, MCP tool_search invocation, ask_user card) | `JW_USE_STANDIN_CMD`/`JW_RESTORE_CMD` |
 | compat-runtime `--sync --sync2 --reload` | + `DSH_NM` |
 | live-drop-recovery | + `GW_KILL`/`GW_START` |
-| plain-dsh profile matrix | + `DSH_BIN` (also standalone: `npm run test:plain-dsh`) |
+| plain-dsh profile matrix + memory-module plugins (`PLAIN_DSH_ONLY=plain\|mem`) | + `DSH_BIN` (also standalone: `npm run test:plain-dsh`) |
 
 The stand-in (`test/fixtures/stand-in.mjs`) is started on `STANDIN_PORT` (18999) unless a server is already listening there. It logs to `STANDIN_LOG`.
 

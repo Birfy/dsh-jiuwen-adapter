@@ -45,6 +45,7 @@ Precedence: **environment variable > Cordis plugin config > default** (`provider
 | `toolPassthrough` | `JIUWEN_TOOL_PASSTHROUGH` | `mcp` when `hostSync` on, else `off` | `mcp`: expose allowlisted dsh tools to Jiuwen as a local MCP server |
 | `toolAllowlist` | `JIUWEN_TOOL_ALLOWLIST` (comma) | `["*"]` when `hostSync` on, else `[]` | Tool names / `prefix*` / `*` |
 | `toolApproval` | `JIUWEN_TOOL_APPROVAL` | `dsh` | Gate each passthrough call with `ctx.approval` (deny when unavailable); `none` |
+| `toolApprovalExempt` | `JIUWEN_TOOL_APPROVAL_EXEMPT` | session-query tools | Passthrough tools that skip the gate (dsh never asks for them): `session_search`, `session_event_search`, `session_event_read`, `session_trace`, `session_event_trace`. `*` suffix = prefix |
 | `toolCallTimeoutMs` | `JIUWEN_TOOL_CALL_TIMEOUT_MS` | `120000` | Abort a passthrough dsh tool call |
 | `mcpServerName` | `JIUWEN_MCP_SERVER_NAME` | `dsh-tools` | Name of the stable stdio MCP proxy registered once in Jiuwen (experimental) |
 | `mcpStateDir` | `JIUWEN_MCP_STATE_DIR` | `~/.cache/dsh-jiuwen/mcp/<name>` | Shared dir: `schemas.json` + `ep-<pid>.json` read by the proxy |

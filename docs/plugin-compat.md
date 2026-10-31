@@ -21,4 +21,18 @@ Tested with dsh 0.2.1-rc.5, a plain web profile (`dsh-base` + `dsh-web-app`, no 
 | workspace archive / agent dispose | ✓ | Jiuwen session kept while dsh still stores it | PASS |
 | mcp-resources, subagent, todo, compaction, approval, web tools | ✓ | not mirrored; unchanged | PASS (graceful) |
 
+## Memory-module plugins
+
+dsh has no plugin literally named "memory". Its memory and recall layer is three plugins. Each was tested in real profiles in both load orders with the stand-in model (`npm run test:plain-dsh`).
+
+| Plugin | Non-jiuwen | Jiuwen sessions | Verdict |
+|---|---|---|---|
+| dsh-agent-instructions (AGENTS.md / CLAUDE.md, in dsh-base) | unchanged | the AGENTS.md reminder is forwarded with the first prompt, and Jiuwen keeps it in history (not resent) | works |
+| dsh-session-reference (`dsh-session:<id>` mentions, in dsh-web-app) | unchanged | the referenced-session snapshot is forwarded with the citing prompt; later turns are not resent | works |
+| dsh-experimental-session-search (+ session-query-sqlite, tool-session-query; opt-in) | unchanged | the `session_*` tools reach Jiuwen as `mcp_dsh-tools_session_*` and return dsh's session index | works (after the fix below) |
+
+- **Jiuwen's own memory:** no conflict. Jiuwen keeps its `coding_memory_*` tools and its history. dsh tools are prefixed, and dsh context is sent once per turn, never duplicated.
+- **Fix:** the passthrough asked for dsh approval on every call. dsh never asks for the read-only session-query tools, so a Jiuwen session would hang until approval timed out (300 s). These tools are now in `toolApprovalExempt` (see the configuration docs). All other tools are still gated.
+- **Limit:** Jiuwen-side memory is not mirrored into dsh's session index. `session_search` sees the dsh transcripts of Jiuwen sessions, not Jiuwen's internal memory.
+
 **Gaps:** opt-in and experimental plugins outside `dsh-base`/`dsh-web-app` were not loaded: mcp-client, time-context, session-search, ralph, terminal, worktree, auto-review. dsh has no session delete, so the Jiuwen session is deleted only after dsh has dropped it.

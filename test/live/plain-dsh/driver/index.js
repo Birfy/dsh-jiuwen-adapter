@@ -79,6 +79,36 @@ export function apply(ctx) {
       r.hash = createHash('sha1').update(JSON.stringify(r.events)).digest('hex').slice(0, 16)
       return r
     }
+    // Memory-module plugins (MODE=mem): dsh-agent-instructions (AGENTS.md), dsh-session-reference (dsh-session:<id>),
+    // dsh-experimental-session-search (session_search tool), checked for a non-jiuwen and a jiuwen session.
+    if (MODE === 'mem') {
+      const api = g('jiuwenAdapter')
+      const sl = () => { try { return require_fs().readFileSync((process.env.STANDIN_LOG || '/tmp/standin.jsonl'), 'utf8').split('\n').filter(Boolean).map(l => { try { return JSON.parse(l) } catch { return {} } }) } catch { return [] } }
+      const last = tag => sl().filter(x => x.tag === tag && !/Generate the session title/.test(x.last || '')).at(-1)
+      out.mem = {}
+      const diag = id => evs(id).filter(e => /error|tool\/(call|result)|turn\/end|step\/end/.test(e.type)).slice(-6).map(e => `${e.type}:${JSON.stringify(e.data).slice(0, 220)}`)
+      const routes = [['p', { provider: 'standin', model: 'standin-m1' }], ...(api ? [['j', { provider: 'jiuwen', model: 'jiuwen-default' }]] : [])]
+      try {
+        for (const [k, model] of routes) {
+          const r = out.mem[k] = {}
+          const mk = async () => { const { sessionId } = await sc.create({ cwd: SANDBOX }, new AbortController().signal); await sc.selectModel({ sessionId, ...model }, new AbortController().signal); return sessionId }
+          const src = await mk(); await prompt(src, `TAG:${k}src remember MARKREFSRC${k.toUpperCase()} zebra-${k}`)
+          r.src = { reply: lastReply(src), agentsMd: (last(`${k}src`)?.allMarks || []).includes('MARKAGENTSMD') }
+          const ref = await mk(); await prompt(ref, `TAG:${k}ref what did dsh-session:${Buffer.from(JSON.stringify(src), 'utf8').toString('base64url')} say?`)
+          const t = last(`${k}ref`); r.ref = { reply: lastReply(ref), marks: t?.marks, allMarks: t?.allMarks, diag: diag(ref) }
+          await prompt(ref, `TAG:${k}ref2 and now?`)
+          const t2 = last(`${k}ref2`); r.ref2 = { marks: t2?.marks, allMarks: t2?.allMarks }
+          const jev = []; const offEv = api?.onEvent?.(e => { if (/tool/.test(e.type)) jev.push(`${e.type}:${String(e.name || '')}:${JSON.stringify(e.result ?? e.output ?? e.text ?? e.content ?? '').slice(0, 300)}`) })
+          const t0 = Date.now()
+          const ss = await mk(); await prompt(ss, `TAG:${k}ss ${k === 'j' ? 'MCP' : 'TOOL'}:session_search:{"query":"zebra-${k}"}`)
+          offEv?.()
+          const t3 = last(`${k}ss`); r.search = { reply: lastReply(ss).slice(0, 400), toolNames: (sl().filter(x => x.tag === `${k}ss` && x.toolNames?.length).at(-1) || {}).toolNames, picked: sl().filter(x => x.tag === `${k}ss` && x.picked).at(-1)?.picked, missing: sl().filter(x => x.tag === `${k}ss` && x.missingTool).at(-1)?.missingTool, diag: diag(ss), jiuwenToolEvents: jev, ms: Date.now() - t0 }
+          if (k === 'j') r.jwIds = [src, ref, ss].map(id => api.sessions.get(id)?.jiuwenSessionId)
+        }
+      } catch (e) { err('mem', e.stack || e) }
+      out.listeners1 = L(); out.unhandled = unhandled
+      writeFileSync(OUT, JSON.stringify(out, null, 1)); return
+    }
     try {
       // (a) non-jiuwen session on the pi-ai stand-in route: must be identical with / without the adapter.
       out.plain = await scenario('plain', { provider: 'standin', model: 'standin-m1' })
