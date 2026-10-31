@@ -99,3 +99,14 @@ test('/jiuwen rename and goal set strip one pair of surrounding quotes; plan-sta
   assert.deepEqual(calls, [['rename', 'My title'], ['goal', 'finish it'], ['rename', 'say "hi" there']])
   assert.match(await cmd.run('d', 'plan-status'), /no Jiuwen session yet/)
 })
+
+test('dsh-time-context snapshot is not forwarded to Jiuwen nor used in the local title', async () => {
+  const { localTitle, buildQuery } = await import('../src/adapter.js')
+  const { resolveConfig } = await import('../src/config.js')
+  const cfg = resolveConfig({})
+  const tc = 'Time sampled while preparing turn 4, step 1: 2026-10-31T17:28:24+08:00[Asia/Shanghai]\nBrowser time zone for this request: Asia/Shanghai.\nElapsed since the preceding model-visible message: 3s.'
+  const messages = [{ role: 'user', content: 'Hi! Who are you' }, { role: 'user', content: [{ type: 'text', text: tc }], source: { kind: 'time-context' } }]
+  assert.equal(buildQuery({ messages }, { turns: 1 }, cfg, {}), 'Hi! Who are you')
+  assert.equal(buildQuery({ messages: [{ role: 'user', content: `Hi! Who are you\n\n${tc}` }] }, { turns: 1 }, cfg, {}), 'Hi! Who are you')
+  assert.equal(localTitle({ messages: [{ role: 'user', content: `Hi! Who are you\n\n${tc}` }] }, cfg.ignoreMessagePatterns), 'Hi! Who are you')
+})

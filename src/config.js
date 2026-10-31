@@ -196,8 +196,8 @@ export function resolveConfig(raw = {}, opts = {}) {
      * command.compact to the mapped Jiuwen session) | 'jiuwen' (legacy: full Jiuwen turn in a throwaway session).
      */
     compactionMode: pickEnum(env.JIUWEN_COMPACTION_MODE || raw.compactionMode, ['local', 'local+jiuwen', 'jiuwen'], 'local'),
-    /** User-message blocks matching these regexes are not forwarded (default: DSH runtime-context snapshot; Jiuwen has its own runtime). */
-    ignoreMessagePatterns: (Array.isArray(raw.ignoreMessagePatterns) ? raw.ignoreMessagePatterns : ['^Current runtime context\\.'])
+    /** User-message blocks matching these regexes are not forwarded (default: DSH runtime-context and dsh-time-context snapshots; Jiuwen stamps its own time/runtime). */
+    ignoreMessagePatterns: (Array.isArray(raw.ignoreMessagePatterns) ? raw.ignoreMessagePatterns : ['^Current runtime context\\.', '^Time sampled while preparing turn \\d+'])
       .map(p => { try { return new RegExp(String(p), 'm') } catch { return null } }).filter(Boolean),
     /** Forward the host system prompt to Jiuwen once per session (hash-gated): off (default) | persona | full. */
     injectSystem: pickEnum(env.JIUWEN_INJECT_SYSTEM || raw.injectSystem, ['off', 'persona', 'full'], 'persona'),
