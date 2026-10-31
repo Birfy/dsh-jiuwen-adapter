@@ -23,7 +23,7 @@ import { JIUWEN_EVENT, JIUWEN_TYPED_EVENTS } from './typed-events.js'
 import { typedEventFor, installSessionSync, createPlanBridge, createModelDiscovery } from './bridges.js'
 import { installHostSync } from './host-sync.js'
 export { JIUWEN_EVENT, JIUWEN_TYPED_EVENTS }
-export const inject = ['llm']
+export const inject = ['llm', 'agents', 'tools', 'approval']
 
 export { createJiuwenAdapter as JiuwenLlmAdapter }
 
