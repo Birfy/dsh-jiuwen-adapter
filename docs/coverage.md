@@ -65,7 +65,7 @@ Earlier live probe (ws://127.0.0.1:19000/ws, empty params, read-only): routed ok
 
 - DSH tools → Jiuwen: only opt-in MCP passthrough (`toolPassthrough: mcp`, experimental); no native Cordis tool-registry bridge.
 - Jiuwen events without a DSH surface: `todo.updated`, `team.task/member/message`, `security.alert`, `context.usage` (only logged/streamed as text; with `typedEvents` they are re-emitted as `jiuwen/swarm` / `jiuwen/plan`). `plan.approval_required` → ctx.approval; SwarmFlow human turns → ctx.approval + `chat.swarmflow_reply`.
-- DSH host hooks: `llm.registerAdapter`, `commands.register`, `ctx.effect`/dispose, `ctx.provide`; opt-in `llm.registerModelDiscovery` (modelDiscovery), `session/created|disposed` (sessionSync, mapping upkeep only — no Jiuwen create/delete), `planMode.set` (planBridge). Goal service not bridged (Jiuwen goal stays behind `/jiuwen goal`); DSH permission prompts are not mirrored to Jiuwen permissions; DSH attachments beyond multimodal `media.persist` (documents → `document.persist`) not bridged; no voice (tts/asr).
+- DSH host hooks: `llm.registerAdapter`, `commands.register`, `ctx.effect`/dispose, `ctx.provide`; opt-in `llm.registerModelDiscovery` (modelDiscovery); default-on `hostSync` (skills/MCP/model/plan/workDir/title/delete/goal/pause/permissions/fork/schedule — see host-sync.md), `sessionSync`, `planBridge`. Hard gaps: memory write-through, schedule.* on 0.2.7, arbitrary skill install, plugins catalog mismatch. Attachments beyond multimodal/`document.persist` not bridged; no voice (tts/asr).
 
 ## TUI-only methods
 

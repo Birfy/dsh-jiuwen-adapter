@@ -1,7 +1,7 @@
 /**
  * Compat: the Jiuwen adapter loaded next to a fake default `deepseek` adapter, built-in-style commands
  * (compact / plan / schedule) and a non-jiuwen session. No duplicate errors, non-jiuwen behaviour is
- * unchanged, all flags off == previous behaviour, a duplicate /jiuwen command name does not crash.
+ * unchanged, hostSync/sessionSync/planBridge off == previous behaviour, a duplicate /jiuwen command name does not crash.
  */
 import { test, before, after, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -41,16 +41,17 @@ function cordisLikeHost() {
   return { ctx, adapters, commands, services, listeners, errors, emitted, deepseek }
 }
 
-test('compat: coexists with deepseek + built-in commands; flags off changes nothing else', async () => {
+test('compat: coexists with deepseek + built-in commands; hostSync off changes nothing else', async () => {
   const h = cordisLikeHost()
   const snapshot = { providers: [...h.adapters.keys()], cmds: [...h.commands.keys()], dm: { ...h.ctx.llm.defaultModel } }
-  plugin.apply(h.ctx, { gatewayURL: mock.url, mappingPath: join(mock.dir, 'compat.json') })
+  // Explicitly disable host sync + sessionSync so this case matches the old "flags off" contract.
+  plugin.apply(h.ctx, { gatewayURL: mock.url, mappingPath: join(mock.dir, 'compat.json'), hostSync: false, sessionSync: false, planBridge: false })
   assert.deepEqual([...h.adapters.keys()], [...snapshot.providers, 'jiuwen'])
   assert.deepEqual([...h.commands.keys()], [...snapshot.cmds, 'jiuwen'])
   assert.deepEqual(h.ctx.llm.defaultModel, snapshot.dm) // never sets default model
   for (const n of ['compact', 'plan', 'schedule', 'goal']) assert.equal((await h.commands.get(n).handler({})).text, `builtin ${n}`)
   assert.deepEqual(h.errors, [])
-  assert.deepEqual(Object.keys(h.listeners).filter(n => n !== 'dispose'), []) // no global listeners with flags off (own dispose only)
+  assert.deepEqual(Object.keys(h.listeners).filter(n => n !== 'dispose'), []) // no global listeners with sync off
   // non-jiuwen session: deepseek adapter untouched, no jiuwen mapping or event
   const out = []
   for await (const c of h.adapters.get('deepseek').stream({ provider: 'deepseek', model: 'deepseek-chat', sessionId: 'ds-1', messages: [] })) out.push(c)

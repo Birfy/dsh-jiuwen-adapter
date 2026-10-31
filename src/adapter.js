@@ -15,6 +15,7 @@ import { prepareBrainRequest, callKind } from './agent-brain.js'
 import { appendFileSync } from 'node:fs'
 import { failureFromError, emitTextReply } from './stream-emit.js'
 import { applySystemInjection } from './system-inject.js'
+import { applySkillBodyInjection } from './host-sync.js'
 import { toGatewayQuery, contentToText, withInferredRoles } from './messages.js'
 import { fileBlocksFromHandles } from './multimodal.js'
 
@@ -207,6 +208,10 @@ export function createJiuwenAdapter(LlmAdapterBase, deps) {
             if (!req.agentTemplateName && !catalog?.agentTemplateName && mapping.agentTemplateName) {
               overrides.agentTemplateName = mapping.agentTemplateName
             }
+            if (!req.projectDir && mapping.projectDir) overrides.projectDir = mapping.projectDir
+            if (!req.mcp && Array.isArray(mapping.mcpNames) && mapping.mcpNames.length) {
+              overrides.mcp = [...(overrides.mcp || []), ...mapping.mcpNames]
+            }
           }
           if (overrides.supportsUserInteraction === 'auto') overrides.supportsUserInteraction = Boolean(deps.hasUserQuestions?.())
           // Auxiliary calls (compaction, jiuwen titles) use a throwaway Jiuwen session + full transcript.
@@ -219,6 +224,9 @@ export function createJiuwenAdapter(LlmAdapterBase, deps) {
           if (!aux && cfg.injectSystem !== 'off' && !turnMapping.pendingQuestion) {
             const inj = applySystemInjection(query, options, turnMapping, cfg.injectSystem)
             query = inj.query; systemHash = inj.hash
+          }
+          if (!aux && cfg.syncSkillInstall !== false && turnMapping.skillBodies?.length) {
+            query = applySkillBodyInjection(query, turnMapping)
           }
           const trace = makeTrace(cfg.traceFile)
           if (!aux && cfg.toolPassthrough === 'mcp' && deps.mcpBridge && options.tools?.length) {

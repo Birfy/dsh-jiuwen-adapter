@@ -53,7 +53,8 @@ Step-by-step guide for Mac and Linux: **[docs/quickstart.md](./docs/quickstart.m
 | 🪪 **System prompt → Jiuwen** | `injectSystem: persona\|full` sends the host persona (or whole system prompt) once per Jiuwen session, resent only on change | default `persona` (`off` to disable) |
 | 🪜 **Full trajectory** | `trajectoryDetail: full` renders Jiuwen tool calls, results, subtasks and plan steps as Markdown steps in the reasoning block | default `full` (`summary` to disable) |
 | 🔌 **dsh tools → Jiuwen** | Allowlisted dsh tools exposed to Jiuwen over MCP, each call gated by an approval | opt-in |
-| 🧭 **Bridges** | Model discovery, session sync, plan bridge, typed events | opt-in |
+| 🧭 **Bridges** | Model discovery, typed events | opt-in |
+| 🔄 **Host → Jiuwen sync** | Skills, MCP, model, plan, workDir, title, delete, goal, pause, permissions, fork, schedules ([docs](./docs/host-sync.md)) | on |
 | 🩺 **Config validation** | Unknown keys get a "did you mean" hint and deprecated keys get a warning. Never throws | on |
 
 ## Compatibility
@@ -73,7 +74,7 @@ The adapter also works in any Cordis app that has an `llm` service ([usage](./do
 
 - [Quickstart](./docs/quickstart.md), [Configuration](./docs/configuration.md), [Troubleshooting](./docs/troubleshooting.md)
 - [Using it from code and Gateway features](./docs/usage.md), [Gateway RPC coverage](./docs/coverage.md)
-- [dsh integration](./docs/dsh-integration.md), [Testing](./docs/testing.md), [Known issues and test logs](./docs/known-issues.md)
+- [dsh integration](./docs/dsh-integration.md), [Host → Jiuwen sync](./docs/host-sync.md), [Testing](./docs/testing.md), [Known issues and test logs](./docs/known-issues.md)
 - [Publishing to a dsh plugin market](./docs/marketplace.md), [Architecture](./ARCHITECTURE.md)
 
 ## Development

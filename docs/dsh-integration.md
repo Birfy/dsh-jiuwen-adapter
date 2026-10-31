@@ -145,12 +145,13 @@ Registration fails soft: the `commands.register` call runs inside a try/catch **
 | Flag | DSH side | Jiuwen side | Scope |
 |---|---|---|---|
 | `modelDiscovery` | `listModels` + `llm.registerModelDiscovery('jiuwen')` | `models.list` → ids `jiuwen-model:<model_name>` (routed as `model_name`) | own provider only |
-| `sessionSync` | `session/created`, `session/disposed` | local mapping upkeep (no Gateway create/delete) | sessions whose header provider is `jiuwen` or that already have a mapping |
-| `planBridge` | `ctx.planMode.set(agent, active)` | `session.plan_status.in_plan` after turn completion / plan events | jiuwen sessions with a live agent |
+| `sessionSync` (default on) | `session/created`, `session/disposed` | local mapping upkeep (no Gateway create/delete) | sessions whose header provider is `jiuwen` or that already have a mapping |
+| `planBridge` (default on) | `ctx.planMode.set(agent, active)` | `session.plan_status.in_plan` after turn completion / plan events | jiuwen sessions with a live agent |
+| `hostSync` (default on) | skills, title, workDir, plan, model, goal, delete, fork, pause, … | full host→Jiuwen forward ([host-sync.md](./host-sync.md)) | jiuwen sessions only |
 | `typedEvents` | `jiuwen/tool`, `jiuwen/plan`, `jiuwen/approval`, `jiuwen/swarm` | derived from `jiuwen/event` | jiuwen turns only |
 | `documentPersist` | file blocks / `attachments` | `document.persist` before `chat.send` | jiuwen turns only |
 
-The DSH goal service is not bridged (Jiuwen goals stay behind `/jiuwen goal`): creating DSH goals would drive DSH's own goal rounds.
+Goal sync (`syncGoal`, default on): host `goal/changed` → Jiuwen `command.goal` for jiuwen sessions. DSH goal *rounds* still run on the host; Jiuwen gets the objective/pause/clear. See [host-sync.md](./host-sync.md).
 
 ## 6. `jiuwen/event` (declared Cordis event)
 

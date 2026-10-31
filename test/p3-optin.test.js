@@ -9,9 +9,15 @@ before(async () => { mock = await startMock() })
 after(() => mock?.stop())
 const user = t => [{ role: 'user', content: t }]
 
-test('P3 flags default OFF', () => {
+test('P3/hostSync defaults: sync ON, discovery/typed/document still opt-in', () => {
   const c = resolveConfig({}, { env: {} })
-  assert.deepEqual([c.modelDiscovery, c.sessionSync, c.planBridge, c.typedEvents, c.documentPersist], [false, false, false, false, false])
+  assert.equal(c.hostSync, true)
+  assert.equal(c.sessionSync, true)
+  assert.equal(c.planBridge, true)
+  assert.deepEqual([c.modelDiscovery, c.typedEvents, c.documentPersist], [false, false, false])
+  const off = resolveConfig({ hostSync: false }, { env: {} })
+  assert.equal(off.sessionSync, false)
+  assert.equal(off.planBridge, false)
 })
 
 test('typedEventFor classifies into namespaced events', () => {
@@ -67,7 +73,7 @@ test('sessionSync: only jiuwen sessions; created → mapping, disposed → runti
   assert.doesNotThrow(() => { for (const fn of listeners['session/created']) fn(null) })
   // flag off → no listeners
   const l2 = {}
-  makeHost(mock, {}, { listeners: l2 })
+  makeHost(mock, { sessionSync: false, hostSync: false }, { listeners: l2 })
   assert.equal(l2['session/created'], undefined)
   assert.equal(sessionUsesProvider({ id: 'x' }, 'jiuwen', { get: () => undefined }), false)
 })
@@ -77,7 +83,7 @@ test('planBridge: Jiuwen in_plan → ctx.planMode.set for jiuwen sessions; off �
   const agent = { id: 'pb' }
   const planMode = { get: () => ({ active: false }), set: (a, v) => { calls.push([a.id, v]); return 'committed' } }
   const services = { planMode, agents: { get: id => (id === 'pb' ? agent : undefined) } }
-  const off = makeHost(mock, {}, { services })
+  const off = makeHost(mock, { planBridge: false, hostSync: false }, { services })
   await off.run({ sessionId: 'pb', messages: user('plan-on please') })
   await new Promise(r => setTimeout(r, 400))
   assert.equal(calls.length, 0)

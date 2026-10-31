@@ -81,6 +81,9 @@ export function resolveConfig(raw = {}, opts = {}) {
   const allowDshAgentLoop = env.JIUWEN_ALLOW_DSH_AGENT_LOOP === '1'
     || raw.allowDshAgentLoop === true
 
+  const hostSync = raw.hostSync !== false && env.JIUWEN_HOST_SYNC !== '0'
+  const syncBit = (k, e) => hostSync && raw[k] !== false && env[e] !== '0'
+
   return {
     provider: String(raw.provider || 'jiuwen'),
     displayName: String(raw.displayName || 'JiuwenSwarm'),
@@ -145,10 +148,13 @@ export function resolveConfig(raw = {}, opts = {}) {
     questionTimeoutMs: Number(raw.questionTimeoutMs ?? env.JIUWEN_QUESTION_TIMEOUT_MS ?? 600_000),
     /** Max wait for a dsh approval decision before denying (ms). */
     approvalTimeoutMs: Number(raw.approvalTimeoutMs ?? env.JIUWEN_APPROVAL_TIMEOUT_MS ?? 300_000),
-    /** dsh tools → Jiuwen: 'off' (default; Jiuwen uses only its own tools) | 'mcp' (serve allowlisted dsh tools as an MCP server registered in Jiuwen). */
-    toolPassthrough: pickEnum(env.JIUWEN_TOOL_PASSTHROUGH || raw.toolPassthrough, ['off', 'mcp'], 'off'),
+    /** dsh tools → Jiuwen: 'mcp' (default when hostSync on; allowlisted dsh tools as MCP) | 'off'. */
+    toolPassthrough: pickEnum(env.JIUWEN_TOOL_PASSTHROUGH || raw.toolPassthrough, ['off', 'mcp'],
+      (raw.hostSync === false || env.JIUWEN_HOST_SYNC === '0') ? 'off' : 'mcp'),
     /** Tool names (exact, prefix*, or '*') exposed when toolPassthrough=mcp. Empty = none. */
-    toolAllowlist: Array.isArray(raw.toolAllowlist) ? raw.toolAllowlist.map(String) : (env.JIUWEN_TOOL_ALLOWLIST ? env.JIUWEN_TOOL_ALLOWLIST.split(',').map(x => x.trim()).filter(Boolean) : []),
+    toolAllowlist: Array.isArray(raw.toolAllowlist) ? raw.toolAllowlist.map(String)
+      : (env.JIUWEN_TOOL_ALLOWLIST ? env.JIUWEN_TOOL_ALLOWLIST.split(',').map(x => x.trim()).filter(Boolean)
+        : ((raw.hostSync === false || env.JIUWEN_HOST_SYNC === '0' || String(env.JIUWEN_TOOL_PASSTHROUGH || raw.toolPassthrough || '').toLowerCase() === 'off') ? [] : ['*'])),
     /** 'dsh' (default): every passthrough call needs ctx.approval allowed-once (deny when unavailable) | 'none'. */
     toolApproval: pickEnum(env.JIUWEN_TOOL_APPROVAL || raw.toolApproval, ['dsh', 'none'], 'dsh'),
     toolCallTimeoutMs: Number(raw.toolCallTimeoutMs ?? env.JIUWEN_TOOL_CALL_TIMEOUT_MS ?? 120_000),
@@ -158,15 +164,15 @@ export function resolveConfig(raw = {}, opts = {}) {
     mcpRpcTimeoutMs: Number(raw.mcpRpcTimeoutMs ?? env.JIUWEN_MCP_RPC_TIMEOUT_MS ?? 30_000),
     /** Register the `/jiuwen` slash command on ctx.commands when available. */
     registerCommands: raw.registerCommands !== false && env.JIUWEN_REGISTER_COMMANDS !== '0',
-    // ── P3 opt-in bridges (default OFF = previous behaviour) ──
+    // ── Bridges (sessionSync/planBridge default ON with hostSync; modelDiscovery/typedEvents still opt-in) ──
     /** Advertise Jiuwen models.list in this provider's catalog as `<discoveryPrefix><model_name>` (+ llm.registerModelDiscovery). */
     modelDiscovery: raw.modelDiscovery === true || env.JIUWEN_MODEL_DISCOVERY === '1',
     discoveryNamespace: String(raw.discoveryNamespace || 'jiuwen'),
     discoveryPrefix: String(raw.discoveryPrefix || 'jiuwen-model:'),
     /** DSH session/created|disposed → local Jiuwen mapping upkeep (jiuwen sessions only). */
-    sessionSync: raw.sessionSync === true || env.JIUWEN_SESSION_SYNC === '1',
+    sessionSync: raw.sessionSync !== undefined || env.JIUWEN_SESSION_SYNC ? (raw.sessionSync !== false && env.JIUWEN_SESSION_SYNC !== '0') : hostSync,
     /** Jiuwen session.plan_status → ctx.planMode (jiuwen sessions only). */
-    planBridge: raw.planBridge === true || env.JIUWEN_PLAN_BRIDGE === '1',
+    planBridge: raw.planBridge !== undefined || env.JIUWEN_PLAN_BRIDGE ? (raw.planBridge !== false && env.JIUWEN_PLAN_BRIDGE !== '0') : hostSync,
     /** Also emit typed jiuwen/tool | jiuwen/plan | jiuwen/approval | jiuwen/swarm events. */
     typedEvents: raw.typedEvents === true || env.JIUWEN_TYPED_EVENTS === '1',
     /** Slash command name (default 'jiuwen'); change it if another plugin already owns /jiuwen. */
@@ -203,6 +209,24 @@ export function resolveConfig(raw = {}, opts = {}) {
     injectSystem: pickEnum(env.JIUWEN_INJECT_SYSTEM || raw.injectSystem, ['off', 'persona', 'full'], 'persona'),
     /** Jiuwen steps in the reasoning block: summary (one line each, default) | full (structured Markdown). */
     trajectoryDetail: pickEnum(env.JIUWEN_TRAJECTORY_DETAIL || raw.trajectoryDetail, ['summary', 'full'], 'full'),
+    // ── Host → Jiuwen sync (defaults ON; hostSync:false / JIUWEN_HOST_SYNC=0 disables all) ──
+    hostSync,
+    syncSkills: syncBit('syncSkills', 'JIUWEN_SYNC_SKILLS'),
+    syncMcp: syncBit('syncMcp', 'JIUWEN_SYNC_MCP'),
+    syncModel: syncBit('syncModel', 'JIUWEN_SYNC_MODEL'),
+    syncPlanMode: syncBit('syncPlanMode', 'JIUWEN_SYNC_PLAN'),
+    syncWorkDir: syncBit('syncWorkDir', 'JIUWEN_SYNC_WORKDIR'),
+    syncTitle: syncBit('syncTitle', 'JIUWEN_SYNC_TITLE'),
+    syncDelete: syncBit('syncDelete', 'JIUWEN_SYNC_DELETE'),
+    syncGoal: syncBit('syncGoal', 'JIUWEN_SYNC_GOAL'),
+    syncPause: syncBit('syncPause', 'JIUWEN_SYNC_PAUSE'),
+    syncPermissions: syncBit('syncPermissions', 'JIUWEN_SYNC_PERMISSIONS'),
+    syncFork: syncBit('syncFork', 'JIUWEN_SYNC_FORK'),
+    syncGroup: syncBit('syncGroup', 'JIUWEN_SYNC_GROUP'),
+    syncSchedule: syncBit('syncSchedule', 'JIUWEN_SYNC_SCHEDULE'),
+    syncMemory: syncBit('syncMemory', 'JIUWEN_SYNC_MEMORY'),
+    syncPlugins: syncBit('syncPlugins', 'JIUWEN_SYNC_PLUGINS'),
+    syncSkillInstall: syncBit('syncSkillInstall', 'JIUWEN_SYNC_SKILL_INSTALL'),
     /** Append JSONL trace of turns/events here (debugging). */
     traceFile: firstNonEmpty(env.JIUWEN_TRACE_FILE, typeof raw.traceFile === 'string' ? raw.traceFile : undefined),
     llmAdapterModule: firstNonEmpty(env.JIUWEN_LLM_ADAPTER_MODULE, typeof raw.llmAdapterModule === 'string' ? raw.llmAdapterModule : undefined),

@@ -157,6 +157,10 @@ export class SessionStore {
           ...(entry.title ? { title: String(entry.title) } : {}),
           ...(entry.systemHash ? { systemHash: String(entry.systemHash) } : {}),
           ...(entry.swarmRunId ? { swarmRunId: String(entry.swarmRunId) } : {}),
+          ...(entry.projectDir ? { projectDir: String(entry.projectDir) } : {}),
+          ...(Array.isArray(entry.mcpNames) ? { mcpNames: entry.mcpNames.map(String) } : {}),
+          ...(Array.isArray(entry.skillBodies) ? { skillBodies: entry.skillBodies } : {}),
+          ...(entry.memoryBridge ? { memoryBridge: String(entry.memoryBridge) } : {}),
           updatedAt: String(entry.updatedAt || new Date().toISOString()),
         })
       }

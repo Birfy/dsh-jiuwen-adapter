@@ -42,8 +42,8 @@ Precedence: **environment variable > Cordis plugin config > default** (`provider
 | `supportsUserInteraction` | `JIUWEN_SUPPORTS_USER_INTERACTION=1\|0` | `auto` | `auto`: tell Jiuwen it may ask when the host has `ctx.userQuestions` and a live answerer (not headless); questions are answered via dsh user-questions (see [dsh-integration.md](./dsh-integration.md)) |
 | `questionTimeoutMs` | `JIUWEN_QUESTION_TIMEOUT_MS` | `600000` | Max wait for a dsh answer, then `noUiAnswer` |
 | `approvalTimeoutMs` | `JIUWEN_APPROVAL_TIMEOUT_MS` | `300000` | Max wait for a dsh approval decision on Jiuwen permission / plan approval, then **deny** |
-| `toolPassthrough` | `JIUWEN_TOOL_PASSTHROUGH` | `off` | `mcp`: expose allowlisted dsh tools to Jiuwen as a local MCP server ([dsh-integration.md](./dsh-integration.md#3-dsh-tools--jiuwen-opt-in-mcp-passthrough)) |
-| `toolAllowlist` | `JIUWEN_TOOL_ALLOWLIST` (comma) | `[]` | Tool names / `prefix*` / `*` |
+| `toolPassthrough` | `JIUWEN_TOOL_PASSTHROUGH` | `mcp` when `hostSync` on, else `off` | `mcp`: expose allowlisted dsh tools to Jiuwen as a local MCP server |
+| `toolAllowlist` | `JIUWEN_TOOL_ALLOWLIST` (comma) | `["*"]` when `hostSync` on, else `[]` | Tool names / `prefix*` / `*` |
 | `toolApproval` | `JIUWEN_TOOL_APPROVAL` | `dsh` | Gate each passthrough call with `ctx.approval` (deny when unavailable); `none` |
 | `toolCallTimeoutMs` | `JIUWEN_TOOL_CALL_TIMEOUT_MS` | `120000` | Abort a passthrough dsh tool call |
 | `mcpServerName` | `JIUWEN_MCP_SERVER_NAME` | `dsh-tools` | Name of the stable stdio MCP proxy registered once in Jiuwen (experimental) |
@@ -66,8 +66,8 @@ Precedence: **environment variable > Cordis plugin config > default** (`provider
 | `recoverOnDrop` | `JIUWEN_RECOVER_ON_DROP=0` disables | `true` | If the Gateway socket drops mid-turn, poll `history.get` and return the reply, with the visible mark `[Recovered from Jiuwen history after the Gateway connection dropped]`. If nothing is recovered, the original error is kept |
 | `recoverWindowMs` | `JIUWEN_RECOVER_WINDOW_MS` | `15000` | How long to poll history for the dropped reply |
 | `discoveryPrefix` | — | `jiuwen-model:` | Id prefix for discovered models (keeps them distinct from `jiuwen-default` / other providers) |
-| `sessionSync` | `JIUWEN_SESSION_SYNC=1` | `false` | **Opt-in.** `session/created` → ensure the local Jiuwen mapping; `session/disposed` → clear pending question / SwarmFlow run (mapping kept). Jiuwen sessions only (header provider or existing mapping); no Gateway create/delete |
-| `planBridge` | `JIUWEN_PLAN_BRIDGE=1` | `false` | **Opt-in.** After a Jiuwen turn completes or a plan event arrives, read `session.plan_status` and mirror `in_plan` onto `ctx.planMode.set(agent, …)`. Jiuwen sessions with a live agent only |
+| `sessionSync` | `JIUWEN_SESSION_SYNC=0` disables | `true` (with `hostSync`) | `session/created` → ensure mapping; `session/disposed` → clear pending question / SwarmFlow run (mapping kept). Jiuwen sessions only |
+| `planBridge` | `JIUWEN_PLAN_BRIDGE=0` disables | `true` (with `hostSync`) | After a Jiuwen turn / plan event, mirror `session.plan_status.in_plan` onto `ctx.planMode`. Jiuwen sessions with a live agent only |
 | `typedEvents` | `JIUWEN_TYPED_EVENTS=1` | `false` | **Opt-in.** Also emit `jiuwen/tool`, `jiuwen/plan`, `jiuwen/approval`, `jiuwen/swarm` (declared in `index.d.ts`). `jiuwen/event` is always emitted |
 | `traceFile` | `JIUWEN_TRACE_FILE` | — | Append JSONL trace of turns/events |
 | `serviceName` | — | `jiuwenAdapter` | ctx service name for the helper API (unique per instance). Exposed only via `ctx.provide`; a host without it (or a name clash) logs a warning instead of writing `ctx[serviceName]` |
@@ -129,7 +129,7 @@ Precedence: request > catalog model entry > plugin config.
 
 ## Compatibility guarantees
 
-All flags off (the default) behave exactly like the pre-P3 adapter: no global listeners besides the plugin's own dispose, no host service is written except `ctx.provide(serviceName)`, no default model / permission preset / built-in command / tool is touched, and only namespaced names are used (`/jiuwen`, `jiuwen/*` events, `jiuwen_*` tools, `jiuwenAdapter`). Gateway methods are feature-detected (an `unknown method` answer is cached per Gateway URL; the subcommand soft-fails and disappears from `/jiuwen help`). Covered by `test/compat.test.js`.
+With `hostSync: false` (and `sessionSync`/`planBridge` off) behaviour matches the pre-sync adapter: no global listeners besides the plugin's own dispose, no host service is written except `ctx.provide(serviceName)`, no default model / permission preset / built-in command / tool is touched, and only namespaced names are used (`/jiuwen`, `jiuwen/*` events, `jiuwen_*` tools, `jiuwenAdapter`). Gateway methods are feature-detected (an `unknown method` answer is cached per Gateway URL; the subcommand soft-fails and disappears from `/jiuwen help`). Covered by `test/compat.test.js`.
 
 
 ## Validation

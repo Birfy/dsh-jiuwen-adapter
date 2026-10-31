@@ -91,6 +91,23 @@ export interface JiuwenAdapterConfig {
   models?: Array<{ id: string; name?: string; contextWindow?: number; maxTokens?: number; chatMode?: string }>
   noUiAnswer?: boolean
   planBridge?: boolean
+  hostSync?: boolean
+  syncSkills?: boolean
+  syncMcp?: boolean
+  syncModel?: boolean
+  syncPlanMode?: boolean
+  syncWorkDir?: boolean
+  syncTitle?: boolean
+  syncDelete?: boolean
+  syncGoal?: boolean
+  syncPause?: boolean
+  syncPermissions?: boolean
+  syncFork?: boolean
+  syncGroup?: boolean
+  syncSchedule?: boolean
+  syncMemory?: boolean
+  syncPlugins?: boolean
+  syncSkillInstall?: boolean
   postCancelSettleMs?: number
   projectDir?: string
   provider?: string

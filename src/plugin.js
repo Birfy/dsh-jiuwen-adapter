@@ -20,6 +20,7 @@ export const name = 'llm-jiuwen'
 /** Cordis event carrying structured Jiuwen activity (see index.d.ts / docs/dsh-integration.md). */
 import { JIUWEN_EVENT, JIUWEN_TYPED_EVENTS } from './typed-events.js'
 import { typedEventFor, installSessionSync, createPlanBridge, createModelDiscovery } from './bridges.js'
+import { installHostSync } from './host-sync.js'
 export { JIUWEN_EVENT, JIUWEN_TYPED_EVENTS }
 export const inject = ['llm']
 
@@ -229,7 +230,7 @@ export function apply(ctx, config = {}) {
     }
   }
 
-  // ── P3 opt-in bridges (all default OFF) ──
+  // ── Bridges + host→Jiuwen sync (hostSync defaults ON) ──
   const disposers = []
   try {
     if (cfg.planBridge) {
@@ -245,6 +246,20 @@ export function apply(ctx, config = {}) {
         return (await modelDiscovery.list()).map(m => ({ id: m.id, name: m.name, ...(m.contextWindow ? { contextWindow: m.contextWindow } : {}) }))
       })
       if (typeof off === 'function') disposers.push(off)
+    }
+    if (cfg.hostSync !== false) {
+      disposers.push(installHostSync({
+        ctx, config: readConfig, sessions, gateway: gatewayFor, logger, mcpBridge,
+        services: () => ({
+          skills: service('skills'),
+          planMode: service('planMode'),
+          agents: service('agents'),
+          tools: service('tools'),
+          workingDirectory: service('workingDirectory'),
+          schedule: service('schedule'),
+          goals: service('goals'),
+        }),
+      }))
     }
   } catch (error) {
     logger.warn?.(`[dsh-jiuwen] optional bridge setup failed (continuing without it): ${error?.message || error}`)
