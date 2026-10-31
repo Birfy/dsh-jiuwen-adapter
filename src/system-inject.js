@@ -57,7 +57,16 @@ export function extractPersona(system) {
 export function genericPersona(system, persona) {
   const t = typeof persona === 'string' ? persona.trim() : ''
   if (!t) return ''
-  return t.split(/\n{2,}/).every(p => system.includes(p.trim())) ? t : ''
+  const out = []
+  for (const para of t.split(/\n{2,}/).map(p => p.trim()).filter(Boolean)) {
+    if (!/\{\{[^}]+\}\}/.test(para)) { if (!system.includes(para)) return ''; out.push(para); continue }
+    // dsh interpolates section variables ({{model}}, …): forward the rendered text from the prompt.
+    const parts = para.split(/\{\{[^}]+\}\}/).map(x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    const m = new RegExp(parts.join('([^\\n]{0,200}?)')).exec(system)
+    if (!m) return ''
+    out.push(m[0])
+  }
+  return out.join('\n\n')
 }
 
 export function capBytes(text, max = SYSTEM_MAX_BYTES) {

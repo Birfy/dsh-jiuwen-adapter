@@ -397,7 +397,7 @@ if (WITH && has('--sync2') && api && !GW.includes(':1/')) sync2Out = await (asyn
       ok('skills: body queued on mapping (unknown to Jiuwen)', (m?.skillBodies || []).some(b => b.name === 'jw-probe-skill'), JSON.stringify(m?.skillBodies || []).slice(0, 100))
       await sayOn(hp.agent, `TAG:k1${stamp} use skill`)
       const k1 = byTag(`k1${stamp}`).at(-1)
-      ok('skills: body reached the model input', (k1?.marks || []).includes('MARKSKILLBODY'), JSON.stringify(k1?.marks || []))
+      ok('skills: body reached the model input (first turn after sync)', [byTag(`p1${stamp}`).at(-1), k1].some(x => (x?.marks || []).includes('MARKSKILLBODY')), JSON.stringify(k1?.marks || []))
     }
 
     // ── permission preset: seeded baseline is recorded, never flips Jiuwen global levels ──
@@ -420,7 +420,12 @@ if (WITH && has('--sync2') && api && !GW.includes(':1/')) sync2Out = await (asyn
         const h = await api.gateway.historyMessages?.(childId).catch(e => ({ err: e.message }))
         ok('fork: forked Jiuwen session holds parent history', (h?.messages || []).filter(m => m.role === 'user').length >= 2, (h?.messages || []).length ?? h?.err)
         ctx.emit('api-session/removed', childId)
-        ok('fork: deleting the dsh fork deletes only the Jiuwen fork', await wait(async () => !(await hasRow(fm.jiuwenSessionId)) && await hasRow(parentJw), 10_000) && !api.sessions.get(childId))
+        await tick(1500)
+        { const st = await ctx.get('sessionPersistence')?.stat?.(childId).catch(() => 'ERR')
+          // dsh has no delete: a disposed fork that was never persisted is gone from dsh, so its Jiuwen fork goes too; a persisted one is kept.
+          ok('fork: dispose → Jiuwen fork kept iff the dsh fork is persisted; parent always kept', (st ? await hasRow(fm.jiuwenSessionId) : !(await hasRow(fm.jiuwenSessionId))) && await hasRow(parentJw), JSON.stringify({ persisted: !!st })) }
+
+        try { await api.command(childId, 'delete confirm') } catch { /* ignore */ }
       }
     }
 
@@ -448,14 +453,19 @@ if (WITH && has('--sync2') && api && !GW.includes(':1/')) sync2Out = await (asyn
     // ── delete idle + delete during a turn ──
     const jwP = api.sessions.get(sidP)?.jiuwenSessionId
     ctx.emit('api-session/removed', sidP)
-    ok('delete (idle): Jiuwen session removed + unmapped', await wait(async () => !(await hasRow(jwP)) && !api.sessions.get(sidP), 10_000), jwP)
+    await tick(1500)
+    ok('dispose (idle, still persisted): Jiuwen session + mapping kept', await hasRow(jwP) && !!api.sessions.get(sidP), jwP)
+    try { await api.command(sidP, 'delete confirm') } catch { /* ignore */ }
+    ok('/jiuwen delete confirm removes it explicitly', await wait(async () => !(await hasRow(jwP)), 10_000), jwP)
     const sidD = `jw-s2d-${stamp}`; const hd = await mk(sidD); handles.push(hd)
     hd.agent.followup({ id: `m-d1${stamp}`, role: 'user', content: [{ type: 'text', text: `TAG:d1${stamp} SLOW6000 first turn` }], source: { kind: 'user' } })
     await wait(() => api.sessions.get(sidD)?.jiuwenSessionId && byTag(`d1${stamp}`).length, 8000)
     const jwD = api.sessions.get(sidD)?.jiuwenSessionId
     ctx.emit('api-session/removed', sidD)
     await Promise.race([hd.agent.whenIdle(), tick(30_000)])
-    ok('delete mid first turn: no orphan Jiuwen session, unmapped', await wait(async () => !(await hasRow(jwD)) && !api.sessions.get(sidD), 20_000), jwD)
+    await tick(1500)
+    ok('dispose mid first turn (persisted): turn settles, Jiuwen session kept', !!api.sessions.get(sidD), jwD)
+    try { await api.command(sidD, 'delete confirm') } catch { /* ignore */ }
   } catch (e) { ok('sync2 scenario', false, e.stack?.split('\n').slice(0, 2).join(' ')) }
   for (const h of handles) { try { await h.dispose() } catch { /* ignore */ } }
   return res

@@ -70,13 +70,15 @@ export function installSessionSync({ ctx, config, sessions, logger }) {
 export function createPlanBridge({ services, gateway, sessions, logger, debounceMs = 200 }) {
   const timers = new Map()
   const sync = async (dshSessionId) => {
-    const { planMode, agents } = services()
-    if (!planMode?.set || !planMode?.get) return
+    const svc = services()
     const mapping = sessions.get?.(dshSessionId)
     if (!mapping) return // not a jiuwen session
     let agent
-    try { agent = agents?.get?.(dshSessionId) } catch { agent = undefined }
+    try { agent = svc.agents?.get?.(dshSessionId) } catch { agent = undefined }
     if (!agent) return
+    // dsh web mounts plan mode inside the agent preset (isolated): resolve the agent's own service first.
+    const planMode = scopedService(svc, agent, 'planMode')
+    if (!planMode?.set || !planMode?.get) return
     const r = await gateway().planStatus(mapping.jiuwenSessionId)
     const inPlan = r?.in_plan ?? r?.plan_mode
     if (typeof inPlan !== 'boolean') return
@@ -120,4 +122,16 @@ export function createModelDiscovery({ gateway, config, ttlMs = 60_000 }) {
     return models
   }
   return { list: () => fetchModels().catch(() => cache.models), reset() { cache = { at: 0, models: [] } } }
+}
+
+/**
+ * The service an agent actually uses: its agent preset's scoped instance (dsh web mounts skills,
+ * plan mode, … inside presets) via the public `agentPresets.serviceFor`, else the global one.
+ */
+export function scopedService(svc, agent, name) {
+  try {
+    const own = agent && svc?.agentPresets?.serviceFor?.(agent, name)
+    if (own) return own
+  } catch { /* fall back to global */ }
+  return svc?.[name]
 }

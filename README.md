@@ -22,6 +22,8 @@ flowchart LR
   D["dsh + your plugins"] -->|ctx.llm · provider=jiuwen| A["jiuwen adapter"] -->|"WS chat.send"| G["JiuwenSwarm Gateway :19000"]
 ```
 
+- Plugin compatibility: [docs/plugin-compat.md](docs/plugin-compat.md)
+
 ## 30-second quickstart
 
 ```bash

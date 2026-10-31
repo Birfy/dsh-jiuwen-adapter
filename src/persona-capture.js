@@ -6,6 +6,8 @@
  */
 export const PERSONA_SECTIONS = Object.freeze(['deployment:persona-prefix', 'deployment:persona-suffix'])
 const MAX_ENTRIES = 512
+/** Personas shipped as dsh bundle defaults (dsh-web-app): boilerplate, never forwarded. */
+export const SHIPPED_DEFAULT_PERSONAS = Object.freeze(['You are a coding agent powered by the {{model}} model.'])
 
 export function personaFromAssembly(assembly) {
   const sections = Array.isArray(assembly?.sections) ? assembly.sections : []
@@ -13,7 +15,7 @@ export function personaFromAssembly(assembly) {
   for (const name of PERSONA_SECTIONS) {
     const s = sections.find(x => x?.name === name)
     const t = typeof s?.text === 'string' ? s.text.trim() : ''
-    if (t) parts.push(t)
+    if (t && !SHIPPED_DEFAULT_PERSONAS.includes(t)) parts.push(t)
   }
   return parts.join('\n\n')
 }

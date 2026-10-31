@@ -80,10 +80,19 @@ export function apply(ctx, config = {}) {
     rpc: (method, params, opts) => gatewayFor().rpc(method, params, opts),
   })
   // Generic persona source (plain dsh personas); observe-only, off with hostSync:false or injectSystem!=persona.
+  let hostSync
   const personaCfg = readConfig()
   const personaCapture = personaCfg.hostSync !== false && personaCfg.injectSystem === 'persona' ? createPersonaCapture(ctx, logger) : { get: () => undefined, dispose: () => {} }
   const AdapterClass = createJiuwenAdapter(LlmAdapter, {
     personaFor: (id) => personaCapture.get(id),
+    // Wait (bounded) for host→Jiuwen work a turn depends on: a fork remap, the first skill sync.
+    awaitHostSync: async (id) => {
+      const p = hostSync?.pendingFor?.(id)
+      if (!p) return
+      let t
+      await Promise.race([p, new Promise(r => { t = setTimeout(r, 5000) })])
+      clearTimeout(t)
+    },
     interact,
     mcpBridge,
     // `auto` needs a live answerer, not just the service: headless dsh loads ctx.userQuestions but no
@@ -250,7 +259,7 @@ export function apply(ctx, config = {}) {
   try {
     if (cfg.planBridge) {
       planBridge = createPlanBridge({
-        services: () => ({ planMode: service('planMode'), agents: service('agents') }),
+        services: () => ({ planMode: service('planMode'), agents: service('agents'), agentPresets: service('agentPresets') }),
         gateway: () => gatewayFor(), sessions, logger,
       })
     }
@@ -263,7 +272,7 @@ export function apply(ctx, config = {}) {
       if (typeof off === 'function') disposers.push(off)
     }
     if (cfg.hostSync !== false) {
-      disposers.push(installHostSync({
+      disposers.push(hostSync = installHostSync({
         ctx, config: readConfig, sessions, gateway: gatewayFor, logger, mcpBridge,
         services: () => ({
           skills: service('skills'),
@@ -273,6 +282,8 @@ export function apply(ctx, config = {}) {
           workingDirectory: service('workingDirectory'),
           schedule: service('schedule'),
           goals: service('goals'),
+          agentPresets: service('agentPresets'),
+          sessionPersistence: service('sessionPersistence'),
         }),
       }))
     }

@@ -3,6 +3,18 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [SemVer](https://semver.org/).
 
+## Unreleased
+
+- Plain dsh web profile fixes (see docs/plugin-compat.md):
+  - Dispose/archive no longer deletes Jiuwen sessions that dsh still persists.
+  - Skill sync uses the preset-scoped registry and runs on the first jiuwen turn.
+  - Workdir is seeded from the first request header.
+  - Payload-less `schedule/changed` is mirrored via `schedule.list`.
+  - A fork turn waits for the fork remap.
+  - The plan bridge is preset-scoped.
+  - `{{var}}` personas are matched; the shipped default persona is skipped.
+  - Fixed a double `session.delete`.
+
 ## [Unreleased]
 
 ### Added

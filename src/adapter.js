@@ -157,6 +157,7 @@ export function createJiuwenAdapter(LlmAdapterBase, deps) {
       const cfg = this._cfg()
       const dshSessionId = String(options.sessionId || 'anonymous')
       const reqSession = options?.providerOptions?.jiuwen?.sessionId || options?.metadata?.jiuwen?.sessionId || options?.jiuwen?.sessionId
+      try { await deps.awaitHostSync?.(dshSessionId) } catch { /* never blocks a turn */ }
       const mapping = deps.sessions.ensure(dshSessionId, reqSession ? { preferredJiuwenId: String(reqSession) } : {})
       const bridge = createToolBridge(cfg, { fetchImpl: deps.fetchImpl })
       let request = prepareBrainRequest(options, cfg, bridge, deps.logger)
@@ -221,7 +222,7 @@ export function createJiuwenAdapter(LlmAdapterBase, deps) {
           let query = buildQuery(options, turnMapping, cfg, overrides)
           // injectSystem (jiuwen sessions only; fail soft). Skipped for aux calls and ask_user answers.
           let systemHash
-          if (!aux && cfg.injectSystem !== 'off' && !turnMapping.pendingQuestion) {
+      if (!aux && cfg.injectSystem !== 'off' && !turnMapping.pendingQuestion) {
             const inj = applySystemInjection(query, options, turnMapping, cfg.injectSystem, deps.personaFor?.(dshSessionId))
             query = inj.query; systemHash = inj.hash
           }

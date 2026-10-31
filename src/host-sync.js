@@ -2,7 +2,7 @@
  * Host → Jiuwen sync for jiuwen-provider sessions only.
  * Namespaced, fail-soft, feature-detected Gateway methods. Defaults ON via hostSync.
  */
-import { sessionUsesProvider } from './bridges.js'
+import { sessionUsesProvider, scopedService } from './bridges.js'
 
 const PLAN_CHAT = 'agent.plan'
 /** Jiuwen tools a permission preset touches (never permissions.tools.set). */
@@ -128,6 +128,14 @@ export function installHostSync(deps) {
 
   // Fork remaps are async; a title (or other rename) for the child must target the forked session.
   const forkPending = new Map()
+  /** Host→Jiuwen work a turn should wait for (fork remap, first skill sync), per dsh session. */
+  const pendingWork = new Map()
+  const track = (id, p) => {
+    const all = Promise.allSettled([pendingWork.get(id), p])
+    pendingWork.set(id, all)
+    all.finally(() => { if (pendingWork.get(id) === all) pendingWork.delete(id) })
+    return p
+  }
   // Renames are serialized per session and latest-wins (a deferred fallback title must not land
   // after a newer user title).
   const renameQueue = new Map()
@@ -166,23 +174,32 @@ export function installHostSync(deps) {
   async function syncSkillsNow(session) {
     const f = resolveHostSyncFlags(config())
     if (!f.syncSkills) return
-    const { skills } = services()
-    if (!skills?.list) return
-    let hostSkills = []
-    try { hostSkills = await skills.list(session ? { cwd: session.header?.cwd } : {}) } catch { return }
-    const enabled = []
-    for (const s of hostSkills || []) {
-      const name = s?.name
-      if (!name) continue
-      const onModel = s.invocation?.modelInvocable !== false
-      if (onModel) enabled.push(String(name))
-    }
-    // Apply to all mapped jiuwen sessions (skills are host-global; session filter when provided).
+    const svc = services()
+    // Apply to all mapped jiuwen sessions (session filter when provided).
     const targets = session
       ? (() => { const j = jiuwenSession(session); return j ? [j] : [] })()
       : sessions.list().map(m => ({ id: m.dshSessionId, mapping: m, cfg: config() }))
         .filter(t => sessionUsesProvider({ id: t.id }, t.cfg.provider, sessions))
     if (!targets.length) return // no jiuwen session: never touch the Gateway
+    // Each target lists from its own registry: dsh web mounts skills inside the agent preset
+    // (agentPresets.serviceFor), plain hosts mount one global registry.
+    const perTarget = []
+    for (const t of targets) {
+      let agent
+      try { agent = svc.agents?.get?.(t.id) } catch { agent = undefined }
+      const reg = scopedService(svc, agent, 'skills')
+      if (!reg?.list) continue
+      const cwd = session?.header?.cwd ?? agent?.session?.header?.cwd ?? t.mapping?.projectDir
+      const opts = { ...(cwd ? { cwd } : {}), ...(agent ? { scope: agent } : {}) }
+      let hostSkills
+      try { hostSkills = await reg.list(opts) } catch { continue }
+      const enabled = []
+      for (const s of hostSkills || []) {
+        if (s?.name && s.invocation?.modelInvocable !== false) enabled.push(String(s.name))
+      }
+      perTarget.push({ t, reg, opts, enabled })
+    }
+    if (!perTarget.length) return
 
     let jwNames = new Set()
     try {
@@ -200,20 +217,20 @@ export function installHostSync(deps) {
       }
     } catch { /* optional */ }
 
-    // chat.send `skills` is Jiuwen's per-turn "skills_to_use" hint: only names Jiuwen knows.
-    const known = enabled.filter(n => jwNames.has(n))
-    // dsh skills.list() returns summaries without bodies: load bodies of unknown skills via skills.get().
-    let unknown = []
-    if (f.syncSkillInstall) {
-      for (const name of enabled.filter(n => !jwNames.has(n)).slice(0, 20)) {
-        try {
-          const full = typeof skills.get === 'function' ? await skills.get(name, session ? { cwd: session.header?.cwd } : {}) : undefined
-          const content = full?.content
-          if (typeof content === 'string' && content.trim()) unknown.push({ name, content: content.slice(0, 4000) })
-        } catch (e) { soft(logger, 'skills.get', e) }
+    for (const { t, reg, opts, enabled } of perTarget) {
+      // chat.send `skills` is Jiuwen's per-turn "skills_to_use" hint: only names Jiuwen knows.
+      const known = enabled.filter(n => jwNames.has(n))
+      // skills.list() returns summaries without bodies: load bodies of unknown skills via get().
+      const unknown = []
+      if (f.syncSkillInstall) {
+        for (const name of enabled.filter(n => !jwNames.has(n)).slice(0, 20)) {
+          try {
+            const full = typeof reg.get === 'function' ? await reg.get(name, opts) : undefined
+            const content = full?.content
+            if (typeof content === 'string' && content.trim()) unknown.push({ name, content: content.slice(0, 4000) })
+          } catch (e) { soft(logger, 'skills.get', e) }
+        }
       }
-    }
-    for (const t of targets) {
       // Snapshot what we synced last time BEFORE updating (update mutates the mapping in place).
       const prevKnown = Array.isArray(t.mapping?.skills) ? [...t.mapping.skills] : []
       const prevBodies = JSON.stringify(t.mapping?.skillBodies || [])
@@ -396,6 +413,14 @@ export function installHostSync(deps) {
     if (!m) return
     // Confirm rule: only delete when mapping had at least one turn (Jiuwen session exists remotely).
     const run = async () => {
+      // dsh emits api-session/removed on session/disposed (unload, shutdown, archive): dsh has no
+      // delete. With durable sessions, only a session that is gone from persistence is deleted.
+      const persistence = services().sessionPersistence
+      if (typeof persistence?.stat === 'function') {
+        let stored
+        try { stored = await persistence.stat(id) } catch (e) { soft(logger, 'delete.stat', e); return }
+        if (stored !== undefined && stored !== null) return // still stored: keep Jiuwen session + mapping
+      }
       // Deleted while a turn is in flight: interrupt it and wait for it to settle, so the Jiuwen
       // session the turn creates is deleted too (not orphaned) and the mapping is not re-recorded.
       if (sessions.isActive?.(id)) {
@@ -405,8 +430,8 @@ export function installHostSync(deps) {
       }
       try {
         if ((m.turns || 0) > 0) {
-          await gateway().sessionDelete?.(m.jiuwenSessionId)
-            ?? gateway().rpc?.('session.delete', { session_id: m.jiuwenSessionId })
+          const g = gateway()
+          await (typeof g.sessionDelete === 'function' ? g.sessionDelete(m.jiuwenSessionId) : g.rpc?.('session.delete', { session_id: m.jiuwenSessionId }))
         }
       } catch (e) { soft(logger, 'session.delete', e) }
       try { sessions.remove(id) } catch (e) { soft(logger, 'unmap', e) }
@@ -456,10 +481,11 @@ export function installHostSync(deps) {
             .catch(e => soft(logger, 'session.fork', e))
             .finally(() => { if (forkPending.get(j.id) === pending) forkPending.delete(j.id) })
           forkPending.set(j.id, pending)
+          track(j.id, pending)
         }
       }
     }
-    if (f.syncSkills) queueSkills(session).catch(() => {})
+    if (f.syncSkills) track(j.id, queueSkills(session).catch(() => {}))
     if (f.syncMcp) syncMcpForSession(j).catch(e => soft(logger, 'mcp.onCreate', e))
   })
 
@@ -503,7 +529,20 @@ export function installHostSync(deps) {
     const f = resolveHostSyncFlags(config())
     if (!f.syncSchedule) return
     const rec = payload?.record || payload?.schedule || payload
-    if (rec?.everySeconds || rec?.interval_seconds || rec?.every) mirrorSchedule(rec).catch(e => soft(logger, 'schedule', e))
+    if (rec?.everySeconds || rec?.interval_seconds || rec?.every) { mirrorSchedule(rec).catch(e => soft(logger, 'schedule', e)); return }
+    // dsh-schedule 0.2.x emits schedule/changed without a payload and keeps records in its own
+    // store: read the jiuwen sessions' schedules through its public list().
+    const sched = services().schedule
+    if (typeof sched?.list !== 'function') return
+    Promise.resolve().then(async () => {
+      for (const m of sessions.list()) {
+        if (!sessionUsesProvider({ id: m.dshSessionId }, config().provider, sessions)) continue
+        let list
+        try { list = await sched.list({ sessionId: m.dshSessionId }) } catch { continue }
+        const every = (Array.isArray(list) ? list : list?.schedules || list?.items || []).find(x => x?.kind === 'every' && x.everySeconds)
+        if (every) { await mirrorSchedule(every); return }
+      }
+    }).catch(e => soft(logger, 'schedule', e))
   })
 
   // ── memory bridge: probe once per mapping, document gap via mapping flag ──
@@ -529,6 +568,14 @@ export function installHostSync(deps) {
     const j = jiuwenSession(session)
     if (!j) return
     probeMemory(j)
+    // A session that became jiuwen after session/created (model picked later): seed cwd and skills now.
+    if (!j.mapping.hostSeeded) {
+      try { sessions.update(j.id, { hostSeeded: true }) } catch { /* ignore */ }
+      const f = resolveHostSyncFlags(j.cfg)
+      const cwd = session?.header?.cwd
+      if (f.syncWorkDir && cwd && !j.mapping.projectDir) { try { sessions.update(j.id, { projectDir: String(cwd) }) } catch { /* ignore */ } }
+      if (f.syncSkills) track(j.id, queueSkills(session).catch(() => {}))
+    }
     if (j.mapping.mcpNames === undefined && !j.mapping.mcpSynced && resolveHostSyncFlags(j.cfg).syncMcp) {
       try { sessions.update(j.id, { mcpSynced: true }) } catch { /* ignore */ }
       syncMcpForSession(j).catch(e => soft(logger, 'mcp.onHeader', e))
@@ -577,6 +624,8 @@ export function installHostSync(deps) {
     goalSent.clear(); goalLast.clear(); wantedTitle.clear(); forkPending.clear(); renameQueue.clear(); probing.clear()
   }
   /** Test/diagnostic hook: settle queued skills/permission syncs. */
+  /** Settles when host→Jiuwen work for this dsh session (fork remap, first skill sync) is done. */
+  dispose.pendingFor = (id) => pendingWork.get(String(id))
   dispose.idle = () => Promise.all([skillsTail, permTail]).then(() => {})
   return dispose
 }

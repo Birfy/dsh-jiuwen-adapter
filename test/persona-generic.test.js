@@ -55,3 +55,11 @@ test('persona capture: observe-only waterfall, per session, bounded, disposable'
   assert.equal(personaFromAssembly({ sections: [{ name: 'deployment:persona-prefix', text: () => 'fn' }] }), '')
   assert.doesNotThrow(() => createPersonaCapture({}).dispose())
 })
+
+test('generic persona: interpolated {{vars}} forwarded as rendered; shipped web default skipped', () => {
+  const sys = 'You are an AI agent powered by DeepSeek Harness.\n\nYou are Ada, powered by jiuwen-default.\n\nboiler'
+  assert.equal(genericPersona(sys, 'You are Ada, powered by {{model}}.'), 'You are Ada, powered by jiuwen-default.')
+  assert.equal(genericPersona(sys, 'You are Bob, {{model}}.'), '')
+  assert.equal(personaFromAssembly({ sections: [{ name: 'deployment:persona-prefix', text: 'You are a coding agent powered by the {{model}} model.' }] }), '')
+  assert.equal(personaFromAssembly({ sections: [{ name: 'deployment:persona-prefix', text: 'You are a coding agent powered by the {{model}} model. Be terse.' }] }), 'You are a coding agent powered by the {{model}} model. Be terse.')
+})
