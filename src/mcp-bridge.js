@@ -63,6 +63,15 @@ export function createMcpBridge({ config, services, rpc, logger }) {
   /** name → schema, refreshed from every turn. */
   const schemas = new Map()
   let currentSessionId
+  /** sessionId → Set(tool names) offered on that session's latest turn (newest last). */
+  const sessionTools = new Map()
+  /** Pick the dsh session that owns `name`: the last-prepared one if it offers it, else the newest that does. */
+  const ownerOf = (name) => {
+    if (sessionTools.get(currentSessionId)?.has(name)) return currentSessionId
+    let pick
+    for (const [sid, names] of sessionTools) if (names.has(name)) pick = sid
+    return pick ?? currentSessionId
+  }
 
   const cfg = () => config()
   const toText = (v) => {
@@ -75,11 +84,16 @@ export function createMcpBridge({ config, services, rpc, logger }) {
     const c = cfg()
     if (!schemas.has(name) || !matchesAllowlist(name, c.toolAllowlist)) return { isError: true, text: `tool ${name} is not exposed by dsh` }
     const { tools, approval, agents } = services()
-    const def = tools?.get?.(name)
-    if (!def?.execute) return { isError: true, text: `dsh tool ${name} not found` }
+    const sid = ownerOf(name)
     let agent
-    try { agent = agents?.get?.(currentSessionId) } catch { agent = undefined }
-    if (c.toolApproval !== 'none' && !matchesAllowlist(name, c.toolApprovalExempt || [])) {
+    try { agent = agents?.get?.(sid) } catch { agent = undefined }
+    // Session-scoped tools (e.g. dsh-superagent's orchestrator_*) live on agent.ctx.tools, not the
+    // global registry: resolve there first, then fall back to the global service.
+    let def
+    try { def = agent?.ctx?.tools?.get?.(name) } catch { def = undefined }
+    if (!def?.execute) def = tools?.get?.(name)
+    if (!def?.execute) return { isError: true, text: `dsh tool ${name} not found` }
+    if (c.toolApproval !== 'none') {
       let outcome = 'unavailable'
       if (approval?.request && agent) {
         let timer
@@ -210,10 +224,26 @@ export function createMcpBridge({ config, services, rpc, logger }) {
     /** Refresh exposed schemas from this turn; start + register on first use. */
     async prepare(tools, sessionId) {
       currentSessionId = sessionId
+      sessionTools.delete(sessionId)
+      sessionTools.set(sessionId, new Set((tools || []).map(t => t?.name).filter(Boolean)))
       for (const t of tools || []) if (t?.name && matchesAllowlist(t.name, cfg().toolAllowlist)) schemas.set(t.name, t)
       if (!schemas.size) return null
       if (!ready) return start()
-      const r = await ready
+      let r = await ready
+      // A failed first registration (Gateway down / restarting) used to be cached forever: every
+      // later turn got the same {error}, the adapter never added `mcp` to chat.send, and Jiuwen
+      // sessions never saw the passthrough tools. Retry the registration on every later turn
+      // until it succeeds (the local endpoint itself is still alive).
+      if (r?.error && url && epFile) {
+        try {
+          writeAtomic(epFile, JSON.stringify({ pid: process.pid, url, token, ts: Date.now(), tools: [...schemas.keys()] }))
+          const out = { url, retried: true, ...(await ensureRegistered(publishSchemas())) }
+          ready = Promise.resolve(out)
+          logger?.info?.(`[dsh-jiuwen] MCP passthrough registration recovered after earlier failure`)
+          return out
+        } catch (error) { return { url, error: String(error?.message || error) } }
+      }
+      if (r?.error && !url) { ready = undefined; return start() } // listen() itself failed: rebuild
       if (needsRegister && epFile) {
         // After `/jiuwen mcp-reset` in this process: restore the identical stdio-proxy registration.
         try {
