@@ -1,6 +1,6 @@
 # Plugin compatibility (plain dsh)
 
-Tested with dsh 0.2.1-rc.5, a plain web profile (`dsh-base` + `dsh-web-app`, no FlyBot), with and without `dsh-llm-jiuwen`, and with the adapter loaded first or last. A small driver plugin (`scripts/plain-dsh/driver.js`) runs the scenario through host services (`sessionController`, `schedule`, …).
+Tested with dsh 0.2.1-rc.5, a plain web profile (`dsh-base` + `dsh-web-app`, no FlyBot), with and without `dsh-llm-jiuwen`, and with the adapter loaded first or last. A small driver plugin (`test/live/plain-dsh/driver`, run by `npm run test:plain-dsh`; in-process: `test/plugin-compat-matrix.test.js`) runs the scenario through host services (`sessionController`, `schedule`, …).
 
 - **Non-jiuwen:** the normalized event stream, fork events, schedules, skills and preset are the same with and without the adapter.
 - **Jiuwen:** what the plugin does reaches Jiuwen (checked by reading it back), or the adapter leaves the session unchanged without errors.

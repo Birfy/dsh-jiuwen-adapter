@@ -1,6 +1,6 @@
 // Test driver for a real plain dsh web profile: drives the Host services the web API uses
 // (sessionController, schedule, permissionPresets, workspaceController, skills, goals, planMode)
-// and writes normalized results to $DRIVER_OUT. Not shipped; lives outside the adapter repo.
+// and writes normalized results to $DRIVER_OUT. Test-only (test/live/plain-dsh.mjs), not part of the plugin.
 import { writeFileSync, mkdirSync } from 'node:fs'
 import * as FS from 'node:fs'
 const require_fs = () => FS
@@ -118,7 +118,7 @@ export function apply(ctx) {
         if (perm0) for (const [tool, v] of Object.entries(perm0.tools || perm0)) { const level = typeof v === 'string' ? v : v?.level; if (level && ['bash', 'write_file', 'edit_file'].includes(tool)) await api.gateway.rpc('permissions.tools.update', { tool, level }).catch(e => err('perm restore', e)) }
         ok('heartbeat restored', JSON.stringify(await api.gateway.heartbeatConf().catch(() => null)) === JSON.stringify(hb0))
         ok('permissions restored', JSON.stringify(await api.gateway.rpc('permissions.tools.get', {}).catch(() => null)) === JSON.stringify(perm0))
-        const sl = (() => { try { return require_fs().readFileSync('/tmp/standin.jsonl', 'utf8').split('\n').filter(Boolean).map(l => { try { return JSON.parse(l) } catch { return {} } }) } catch { return [] } })()
+        const sl = (() => { try { return require_fs().readFileSync((process.env.STANDIN_LOG || '/tmp/standin.jsonl'), 'utf8').split('\n').filter(Boolean).map(l => { try { return JSON.parse(l) } catch { return {} } }) } catch { return [] } })()
         const t1 = sl.filter(x => x.tag === 'jw1').at(-1), t2 = sl.filter(x => x.tag === 'jw2').at(-1), tf = sl.filter(x => x.tag === 'jwf').at(-1)
                 ok('agent-preset skill body (dsh-skill-filesystem) reaches Jiuwen', [t1, t2].some(t => (t?.marks || []).includes('MARKSKILLBODY')), JSON.stringify([t1?.marks, t2?.marks]))
         ok('fork turn continues the Jiuwen fork (not a transcript resend)', tf && !/user: /.test(tf.last || '') && tf.users > 2, JSON.stringify({ users: tf?.users, last: (tf?.last || '').slice(-80) }))
@@ -126,7 +126,7 @@ export function apply(ctx) {
           const { sessionId: mid } = await sc.create({ cwd: SANDBOX, agentPreset: 'minimal' }, new AbortController().signal)
           await sc.selectModel({ sessionId: mid, provider: 'jiuwen', model: 'jiuwen-default' }, new AbortController().signal)
           await prompt(mid, 'TAG:jwm1 hi'); await prompt(mid, 'TAG:jwm2 again')
-          const sl2 = require_fs().readFileSync('/tmp/standin.jsonl', 'utf8').split('\n').filter(Boolean).map(l => { try { return JSON.parse(l) } catch { return {} } })
+          const sl2 = require_fs().readFileSync((process.env.STANDIN_LOG || '/tmp/standin.jsonl'), 'utf8').split('\n').filter(Boolean).map(l => { try { return JSON.parse(l) } catch { return {} } })
           const m1 = sl2.filter(x => x.tag === 'jwm1').at(-1), m2 = sl2.filter(x => x.tag === 'jwm2').at(-1)
           ok('dsh-persona preset (minimal, complete prompt) → forwarded once; web default persona not forwarded', m1?.persona && !m2?.persona && !t1?.persona, JSON.stringify({ m1: m1?.persona, m2: m2?.persona, def: t1?.persona }))
           out.minimalId = api.sessions.get(mid)?.jiuwenSessionId

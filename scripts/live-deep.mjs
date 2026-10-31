@@ -11,6 +11,7 @@ import { join } from 'node:path'
 import * as plugin from '../index.js'
 
 const url = new URL(process.env.JIUWEN_GATEWAY_URL || 'ws://127.0.0.1:19000/ws')
+delete process.env.JIUWEN_GATEWAY_URL // env would override the per-host gatewayURL (section M)
 const up = await new Promise(r => { const s = connect(Number(url.port), url.hostname, () => { s.end(); r(true) }); s.on('error', () => r(false)) })
 if (!up) { console.log('SKIP gateway offline'); process.exit(0) }
 const LOG = process.env.STANDIN_LOG || '/tmp/standin.jsonl'

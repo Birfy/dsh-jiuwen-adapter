@@ -38,7 +38,7 @@ test('api-session/removed (= session/disposed in dsh) never deletes a session st
   assert.equal(e.calls.length, 0, 'stat error: fail safe, keep'); assert.ok(e.sessions.get('s'))
   const n = rig({}) // no persistence (ephemeral host): previous behaviour
   n.sessions.ensure('s'); n.sessions.update('s', { turns: 1 }); n.fire('api-session/removed', 's'); await tick(60)
-  assert.equal(n.calls.filter(c => c[0] === 'session.delete').length, 1)
+  assert.equal(n.calls.filter(c => c[0] === 'session.delete').length, 1, 'single session.delete (no double call)')
 })
 
 test('agent-preset scoped skills: serviceFor(agent, "skills") with scope; global registry fallback', async () => {

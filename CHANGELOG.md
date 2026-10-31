@@ -5,6 +5,10 @@ All notable changes to this project are documented here. The format follows
 
 ## Unreleased
 
+- Tests:
+  - Every scenario from the 2026-10-31 rounds is now automated: deep-pass, plugin-compat-matrix, reload, and scenario-catalog in `npm test`.
+  - Added opt-in `npm run test:live` and `npm run test:plain-dsh`, which snapshot and restore Jiuwen exactly, including the dsh-tools MCP registration.
+  - mock-gateway emulates the stand-in model; the stand-in fixture now lives in the repo.
 - Plain dsh web profile fixes (see docs/plugin-compat.md):
   - Dispose/archive no longer deletes Jiuwen sessions that dsh still persists.
   - Skill sync uses the preset-scoped registry and runs on the first jiuwen turn.

@@ -63,7 +63,9 @@
     "bench:hard": "node scripts/bench-hard.mjs",
     "compat": "node scripts/compat-matrix.mjs --diff",
     "compat:live": "node scripts/compat-matrix.mjs --live --diff",
-    "market:index": "node scripts/market-index.mjs"
+    "market:index": "node scripts/market-index.mjs",
+    "test:live": "node test/live/run.mjs",
+    "test:plain-dsh": "node test/live/plain-dsh.mjs"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.5",

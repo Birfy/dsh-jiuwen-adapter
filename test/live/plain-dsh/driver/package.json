@@ -1,0 +1,2 @@
+{ "name": "@plain/driver", "version": "0.0.1", "type": "module", "main": "index.js",
+  "dsh": { "manifestVersion": 1, "bundle": { "patch": "./cordis.patch.yml" } } }

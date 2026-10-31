@@ -82,6 +82,8 @@ wss.on('connection', (ws, req) => {
       // accepted but never runs. Emulated so the adapter's post-cancel settle stays covered.
       if (Date.now() - (CANCEL_AT.get(sessionId) || 0) < Number(process.env.MOCK_CANCEL_RACE_MS ?? 300)) return
 
+      // Stand-in emulation (Jiuwen in front of test/fixtures/stand-in.mjs): TAG:x SLOW<ms> REASON HUGE<kb> ERR500 ERRMID TOOL:bash:{"command":"echo …"}
+      if (!answered && /TAG:\S+/.test(query)) return standinTurn({ query, sessionId, prior: prior + 1, ev, turns, ws })
       if (!answered && /need permission/i.test(query)) {
         ev('chat.ask_user_question', { event_type: 'chat.ask_user_question', request_id: 'perm-1', source: 'permission_interrupt', questions: [{ question: 'Allow bash rm?', tool_name: 'bash', card_id: 'card-1', options: [{ value: 'allow_once', label: '本次允许' }, { value: 'reject', label: '拒绝' }] }] })
         return
@@ -559,4 +561,34 @@ function chunkText(text, size) {
   const out = []
   for (let i = 0; i < text.length; i += size) out.push(text.slice(i, i + size))
   return out.length ? out : ['']
+}
+
+function standinTurn({ query, sessionId, prior, ev, turns, ws }) {
+  const tag = query.match(/TAG:(\S+)/)[1]
+  const slowMs = Number((query.match(/SLOW(\d+)/) || [])[1] || 0)
+  const status = () => ev('chat.processing_status', { event_type: 'chat.processing_status', is_processing: false, is_complete: true })
+  if (/ERR500/.test(query)) { ev('chat.error', { content: 'model provider returned 500 (stand-in scripted 500)' }); return status() }
+  if (/REASON/.test(query)) ev('chat.reasoning', { content: `thinking about ${tag} step one. step two.` })
+  let reply = `stand-in reply ${tag} n=${prior}`
+  const tm = query.match(/TOOL:bash:(\{.*\})/)
+  if (tm) {
+    let cmd = ''; try { cmd = JSON.parse(tm[1]).command || '' } catch {}
+    const out = cmd.replace(/^echo\s+/, '').replace(/\$\(\((\d+)\*(\d+)\)\)/g, (_, a, b) => String(a * b))
+    ev('chat.tool_call', { event_type: 'chat.tool_call', tool_call: { name: 'bash', arguments: tm[1], tool_call_id: 'call_s1' } })
+    ev('chat.tool_result', { event_type: 'chat.tool_result', tool_name: 'bash', tool_call_id: 'call_s1', success: true, rendered_result: out, result: out })
+    reply = `stand-in tool-result ${tag}: ${out}`
+  }
+  const hm = query.match(/HUGE(\d+)/)
+  if (hm) reply += ' ' + Array.from({ length: Math.ceil(Number(hm[1]) * 1024 / 12) }, (_, k) => `w${(k * 7919) % 1000003}`).join(' ') + ' END-HUGE'
+  turns[turns.length - 1].content = reply
+  const parts = reply.match(/[\s\S]{1,4000}/g)
+  let i = 0
+  const step = () => {
+    if (CANCELLED.has(sessionId)) { CANCELLED.delete(sessionId); return ev('chat.interrupt_result', { event_type: 'chat.interrupt_result', intent: 'cancel' }) }
+    if (/ERRMID/.test(query) && i === Math.floor(parts.length / 2)) { turns.pop(); ev('chat.error', { content: 'model stream dropped mid-response' }); return status() }
+    if (i >= parts.length) { ev('chat.final', { content: reply, final_mode: 'patch_segment' }); ev('chat.final', { content: '' }); return status() }
+    ev('chat.delta', { content: parts[i++] })
+    if (slowMs) setTimeout(step, Math.max(20, slowMs / Math.max(parts.length, 10))); else setImmediate(step)
+  }
+  step()
 }
