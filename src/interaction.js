@@ -90,8 +90,8 @@ export function createInteractor(deps) {
       id: String(q.id || q.question_id || `q${i + 1}`),
       question: String(q.question || q.text || q.header || 'Input needed'),
       ...(q.header ? { header: String(q.header).slice(0, 60) } : {}),
-      ...(Array.isArray(q.options) && q.options.length ? {
-        options: q.options.map(o => typeof o === 'string' ? { label: o } : { label: String(o.label || o.value || '?'), ...(o.description ? { description: String(o.description) } : {}) }),
+      ...(cardOptions(q.options).length ? {
+        options: cardOptions(q.options).map(o => typeof o === 'string' ? { label: o } : { label: String(o.label || o.value || '?'), ...(o.description ? { description: String(o.description) } : {}) }),
       } : {}),
       ...((q.multi_select ?? q.multiSelect) ? { multiSelect: true } : {}),
     }))
@@ -145,6 +145,18 @@ export function approvalAnswers(questions, allow, planActions) {
     const selected = String(hit?.value ?? hit?.label ?? (allow ? 'allow_once' : 'reject'))
     return { selected_options: [selected], custom_input: allow ? '' : 'Denied by dsh host', ...(q.card_id ? { card_id: q.card_id } : {}) }
   })
+}
+
+/**
+ * Options for the dsh card. Jiuwen appends a synthetic `{label:'Other', description:'Custom input'}`
+ * to every option list; the dsh card has its own free-text row, so drop that one (typed text is
+ * sent as custom_input either way).
+ */
+export function cardOptions(options) {
+  const opts = Array.isArray(options) ? options : []
+  const last = opts.at(-1)
+  if (opts.length > 1 && last && typeof last === 'object' && last.label === 'Other' && last.description === 'Custom input') return opts.slice(0, -1)
+  return opts
 }
 
 export function questionAnswers(questions, items, answers) {

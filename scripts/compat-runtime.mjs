@@ -268,6 +268,104 @@ const rep = await scenario
 const small = await runScenario('nonjw-small', SMALL, 'fake-small')
 rep.events = [...rep.events, ...small.events]; rep.types = [...rep.types, ...small.types]; rep.results = [...rep.results, ...small.results.map(r => `small:${r}`)]
 const jwOut = await jwSide
+// --sync: real dsh services drive host→Jiuwen sync on a live jiuwen agent; every path is read back from Jiuwen.
+let syncOut
+if (WITH && has('--sync') && api && !GW.includes(':1/')) syncOut = await (async () => {
+  const res = []
+  const ok = (name, pass, detail = '') => res.push(`${pass ? 'PASS' : 'FAIL'} ${name}${detail ? ` — ${String(detail).slice(0, 160)}` : ''}`)
+  const sid = `jw-sync-${Date.now().toString(36)}`
+  JW_SIDS.add(sid)
+  const wait = async (fn, ms = 8000) => { const t = Date.now() + ms; let v; while (Date.now() < t) { try { v = await fn(); if (v) return v } catch { /* retry */ } await tick(200) } return v }
+  const jwRow = async () => (await api.gateway.rpc('session.list', { limit: 500 }))?.sessions?.find(x => x.session_id === api.sessions.get(sid)?.jiuwenSessionId)
+  const goalOf = async () => (await api.gateway.rpc('command.goal', { session_id: api.sessions.get(sid).jiuwenSessionId, action: 'get' }))?.goal
+  let jh
+  try {
+    jh = await ctx.agents.create({ sessionId: sid, agentOptions: { provider: 'jiuwen', model: 'jiuwen-default' } })
+    const agent = jh.agent
+    const say = async (text) => { agent.followup({ content: [{ type: 'text', text }], source: { kind: 'user' } }); await Promise.race([agent.whenIdle(), tick(60_000)]) }
+    const lastReply = () => agent.session.snapshotEvents().filter(e => e.type === 'assistant/message').map(e => textOf(e.data.message)).at(-1) || ''
+    await say('TAG:sync1 hello')
+    ok('turn 1 via dsh-agent-loop', /stand-in reply sync1/.test(lastReply()), lastReply())
+    ok('mapping created on first header', (api.sessions.get(sid)?.turns || 0) >= 1, JSON.stringify(api.sessions.get(sid)).slice(0, 120))
+    // title: dsh sessionTitle.rename → Jiuwen session.rename
+    ctx.get('sessionTitle').rename(agent.session, '同步 Title ✓')
+    const t1 = await wait(async () => (await jwRow())?.title === '同步 Title ✓')
+    ok('title: dsh rename → Jiuwen title', t1, (await jwRow())?.title)
+    // /jiuwen rename → Jiuwen + dsh title, no echo loop
+    const r = await api.command(sid, 'rename From Jiuwen Cmd')
+    const t2 = await wait(async () => (await jwRow())?.title === 'From Jiuwen Cmd')
+    ok('/jiuwen rename → Jiuwen title', t2, r)
+    ok('/jiuwen rename → dsh title', ctx.get('sessionTitle').get(agent.session)?.title === 'From Jiuwen Cmd', JSON.stringify(ctx.get('sessionTitle').get(agent.session)))
+    // plan mode
+    ctx.get('planMode').set(agent, true); await tick(300)
+    ok('plan mode on → chatMode agent.plan', api.sessions.get(sid)?.chatMode === 'agent.plan', api.sessions.get(sid)?.chatMode)
+    ctx.get('planMode').set(agent, false); await tick(300)
+    ok('plan mode off → chatMode cleared', api.sessions.get(sid)?.chatMode !== 'agent.plan', api.sessions.get(sid)?.chatMode)
+    // working directory
+    const wd = join(SANDBOX, 'wd-sync'); (await import('node:fs')).mkdirSync(wd, { recursive: true })
+    try { await ctx.get('workingDirectory').set(agent, wd) } catch (e) { ok('workdir set', false, e.message) }
+    const pd = await wait(() => api.sessions.get(sid)?.projectDir === wd, 3000)
+    ok('workdir → mapping.projectDir', pd, api.sessions.get(sid)?.projectDir)
+    // goal lifecycle (read back from Jiuwen command.goal get)
+    const goals = ctx.get('goals')
+    const created = goals.create(agent, { objective: 'sync goal objective', maxGoalRounds: 5 })
+    const g1 = await wait(async () => (await goalOf())?.objective === 'sync goal objective' && (await goalOf()))
+    ok('goal create → Jiuwen goal set', !!g1, JSON.stringify(g1)?.slice(0, 120))
+    await tick(300)
+    let snap = created
+    const ref = () => { const g = snap?.goal ?? snap; return { id: g.id, revision: g.revision } }
+    try { snap = goals.pause(agent, ref()) } catch (e) { ok('goal pause (dsh)', false, e.message) }
+    const g2 = await wait(async () => (await goalOf())?.status === 'paused')
+    ok('goal pause → Jiuwen paused', g2, (await goalOf())?.status)
+    const before = (await goalOf())?.goal_id
+    try { snap = goals.resume(agent, ref()) } catch (e) { ok('goal resume (dsh)', false, e.message) }
+    const g3 = await wait(async () => (await goalOf())?.status === 'active')
+    ok('goal resume → Jiuwen active, same goal', g3 && (await goalOf())?.goal_id === before, `${(await goalOf())?.status} ${(await goalOf())?.goal_id}/${before}`)
+    try { goals.clear(agent, ref()) } catch (e) { ok('goal clear (dsh)', false, e.message) }
+    const g4 = await wait(async () => !(await goalOf()))
+    ok('goal clear → Jiuwen no goal', g4)
+    await Promise.race([agent.whenIdle(), tick(30_000)])
+    // persona change → reinjected; second turn still on the same Jiuwen session
+    const jw1 = api.sessions.get(sid)?.jiuwenSessionId
+    await say('TAG:sync2 again')
+    ok('turn 2 same Jiuwen session', api.sessions.get(sid)?.jiuwenSessionId === jw1 && /stand-in reply sync2/.test(lastReply()), lastReply())
+    const hist = await api.gateway.historyMessages?.(sid).catch(() => undefined)
+    ok('history read-back has both user turns', !hist || (hist.messages || []).filter(m => m.role === 'user').length >= 2, (hist?.messages || []).length)
+  } catch (e) { ok('sync scenario', false, e.stack?.split('\n').slice(0, 2).join(' ')) }
+  try { await api.command(sid, 'delete confirm') } catch { /* ignore */ }
+  try { await jh?.dispose() } catch { /* ignore */ }
+  return res
+})()
+// --reload: dispose + re-plugin the adapter 3× in the live runtime (hot update); provider/service/command
+// come back exactly once, a jiuwen turn works after each reload, and process listeners do not grow.
+let reloadOut
+if (WITH && has('--reload') && !GW.includes(':1/')) reloadOut = await (async () => {
+  const res = []
+  const plugin = await import(pathToFileURL(join(ROOT, 'index.js')).href)
+  const l0 = process.eventNames().map(n => `${String(n)}:${process.listenerCount(n)}`).sort().join()
+  for (let i = 1; i <= 3; i++) {
+    for (const f of jw.splice(0)) { try { await f.dispose?.() } catch (e) { res.push(`FAIL dispose ${e.message}`) } }
+    await tick(300)
+    const gone = !ctx.llm.listProviders().some(p => p.id === 'jiuwen') && ctx.get('jiuwenAdapter') === undefined
+    jw.push(ctx.plugin(plugin, { gatewayURL: GW, mappingPath: join(home, 'jw-a.json'), requestTimeoutMs: 60_000, mode: 'gateway' }))
+    await tick(500)
+    const back = ctx.llm.listProviders().filter(p => p.id === 'jiuwen').length === 1 && ctx.get('jiuwenAdapter') !== undefined
+    const sid = `jw-reload-${i}-${Date.now().toString(36)}`; JW_SIDS.add(sid)
+    const jh = await ctx.agents.create({ sessionId: sid, agentOptions: { provider: 'jiuwen', model: 'jiuwen-default' } })
+    const cmds = ctx.commands.list(jh.agent).filter(c => c.name === 'jiuwen').length
+    jh.agent.followup({ content: [{ type: 'text', text: `TAG:reload${i} hi` }], source: { kind: 'user' } })
+    await Promise.race([jh.agent.whenIdle(), tick(60_000)])
+    const reply = jh.agent.session.snapshotEvents().filter(e => e.type === 'assistant/message').map(e => textOf(e.data.message)).join('|')
+    res.push(`${gone && back && cmds === 1 && new RegExp(`stand-in reply reload${i}`).test(reply) ? 'PASS' : 'FAIL'} reload ${i}: gone=${gone} back=${back} commands=${cmds} reply=${reply.slice(0, 40)}`)
+    try { await ctx.get('jiuwenAdapter').command(sid, 'delete confirm') } catch { /* ignore */ }
+    await jh.dispose()
+  }
+  for (const f of jw.splice(0)) { try { await f.dispose?.() } catch { /* ignore */ } }
+  await tick(300)
+  const l1 = process.eventNames().map(n => `${String(n)}:${process.listenerCount(n)}`).sort().join()
+  res.push(`${l0 === l1 ? 'PASS' : 'FAIL'} process listeners back to baseline after reloads + dispose — ${l0} → ${l1}`)
+  return res
+})()
 const scenarioEvents = emitted.slice(base)
 // Durability checkpoints: dsh-session also flushes on goal-round-driver idle timers, so their
 // count depends on scheduling, not on the plugins loaded. Presence is still compared.
@@ -298,6 +396,8 @@ const out = {
   flushCheckpoints: scenarioEvents.filter(n => n === 'session/flush').length > 0,
   nonNamespacedFromJiuwen: [...new Set(scenarioEvents.filter(n => /jiuwen/i.test(n) && !n.startsWith('jiuwen/')))],
   jwOut,
+  ...(syncOut ? { sync: syncOut } : {}),
+  ...(reloadOut ? { reload: reloadOut } : {}),
   afterDispose: { providers: ctx.llm.listProviders().map(p => p.id).sort(), service: ctx.get('jiuwenAdapter') === undefined ? 'gone' : 'present' },
   globals: { added: g1.g.filter(x => !g0.g.includes(x)), envSame: g0.env === g1.env, protoSame: g0.p === g1.p, procListeners: g1.l },
   unhandled,

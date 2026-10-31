@@ -188,3 +188,13 @@ test('/jiuwen rename mirrors the dsh title via sessionTitle.rename (no double Ji
   const h2 = makeHost(mock)
   assert.doesNotMatch((await h2.cmd('rename plain')).text, /dsh title/, 'hosts without sessionTitle: Jiuwen rename only')
 })
+
+test('ask_user card: Jiuwen\'s synthetic trailing "Other / Custom input" option is dropped (dsh card has its own free-text row)', async () => {
+  const { cardOptions, questionAnswers } = await import('../src/interaction.js')
+  const opts = [{ label: 'red' }, { label: 'blue' }, { label: 'Other', description: 'Custom input' }]
+  assert.deepEqual(cardOptions(opts).map(o => o.label), ['red', 'blue'])
+  assert.deepEqual(cardOptions([{ label: 'Other', description: 'Custom input' }]).length, 1, 'a lone option is kept')
+  assert.deepEqual(cardOptions([{ label: 'Other' }, { label: 'x' }]).map(o => o.label), ['Other', 'x'], 'a real "Other" is kept')
+  const q = [{ question: 'Color?', options: opts }]
+  assert.deepEqual(questionAnswers(q, [{ id: 'q1' }], [{ id: 'q1', selected: [], custom: 'green' }]), [{ selected_options: [], custom_input: 'green' }])
+})

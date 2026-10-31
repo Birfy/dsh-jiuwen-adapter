@@ -9,6 +9,7 @@ All notable changes to this project are documented here. The format follows
 - **Host → Jiuwen sync** (`hostSync`, default on): forwards dsh/FlyBot frontend changes (skills, MCP, model, plan mode, workDir, title, session delete, goal, pause/resume, safe permission presets, fork remap, schedule→heartbeat, group persona reinject) to Jiuwen for jiuwen-provider sessions only. See `docs/host-sync.md`.
 - dsh goal `resume` → Jiuwen `command.goal resume` (keeps the Jiuwen goal) when we paused it; else `set`.
 - `mcpVerify()` helper and `/jiuwen mcp` line for the dsh-tools passthrough (`mcp.show`; 0.2.7 `mcp.list` omits custom servers).
+- `scripts/live-deep.mjs` and `compat-runtime.mjs --sync/--reload` (live deep + real-runtime sync read-back).
 - `scripts/live-drop-recovery.mjs`: live Gateway kill/restart check.
 - Per-path `sync*` flags; skill body soft-inject when Jiuwen cannot install the equivalent (`syncSkillInstall`).
 
@@ -17,6 +18,7 @@ All notable changes to this project are documented here. The format follows
 - **Default change:** `injectSystem` now defaults to `persona` (was `off`) and `trajectoryDetail` to `full` (was `summary`). Set `injectSystem: off` / `trajectoryDetail: summary` (or `JIUWEN_INJECT_SYSTEM=off` / `JIUWEN_TRAJECTORY_DETAIL=summary`) to restore the old behavior. Injection remains Jiuwen-session-only and fail-soft.
 
 ### Fixed
+- ask_user cards no longer show Jiuwen's synthetic trailing "Other / Custom input" option (the dsh card has its own free-text row).
 - `/jiuwen rename` also sets the dsh title (public `sessionTitle.rename`) so the sidebar updates; no duplicate Jiuwen rename.
 - `/jiuwen fork` says plainly that only Jiuwen was forked and points to the dsh Fork action (which forks and maps both).
 - Gateway drop mid-RPC / before `connection.ack` now fails at once (was: waited the full RPC timeout); WebSocket connect has a timeout (half-open Gateway no longer hangs a turn); a dropped RPC is not cached by feature detection.
