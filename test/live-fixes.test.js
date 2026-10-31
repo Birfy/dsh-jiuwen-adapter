@@ -83,3 +83,19 @@ test('planBridge syncs on turn_end (turns end before processing_status{is_comple
   await new Promise(r => setTimeout(r, 50))
   assert.deepEqual(sets, [['a', true]])
 })
+
+test('/jiuwen rename and goal set strip one pair of surrounding quotes; plan-status before first turn is fail-soft', async () => {
+  const { createJiuwenCommand } = await import('../src/commands.js')
+  const calls = []
+  const g = {
+    sessionRename: async (sid, title) => { calls.push(['rename', title]); return { title } },
+    goal: async (sid, p) => { calls.push(['goal', p.objective]); return { action: p.action } },
+    planStatus: async () => { throw new Error('session not found') },
+  }
+  const cmd = createJiuwenCommand({ sessions: { ensure: () => ({ jiuwenSessionId: 'j1' }) }, gateway: () => g, config: () => ({}) })
+  assert.match(await cmd.run('d', 'rename "My title"'), /→ "My title"\./)
+  await cmd.run('d', "goal set 'finish it'")
+  await cmd.run('d', 'rename say "hi" there')
+  assert.deepEqual(calls, [['rename', 'My title'], ['goal', 'finish it'], ['rename', 'say "hi" there']])
+  assert.match(await cmd.run('d', 'plan-status'), /no Jiuwen session yet/)
+})

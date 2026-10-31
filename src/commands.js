@@ -36,7 +36,9 @@ export function createJiuwenCommand(deps) {
   const short = (s, n = 120) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n)
   async function run(sessionId, rawInput) {
     const [sub = 'status', ...rest] = String(rawInput || '').trim().split(/\s+/).filter(Boolean)
-    const arg = rest.join(' ')
+    // Free-text args (rename/goal/btw/supplement): one pair of surrounding quotes is syntax, not content.
+    const unquote = (v) => { const m = String(v).trim().match(/^(["'])([\s\S]*)\1$/); return m ? m[2] : v }
+    const arg = unquote(rest.join(' '))
     const g = deps.gateway()
     const dshId = String(sessionId)
     const mapping = deps.sessions.ensure(dshId)
@@ -190,7 +192,7 @@ export function createJiuwenCommand(deps) {
         if (!['get', 'set', 'pause', 'resume', 'clear'].includes(action)) {
           return 'Usage: /jiuwen goal [get|set <text>|pause|resume|clear]'
         }
-        const objective = action === 'set' ? rest.slice(1).join(' ') : undefined
+        const objective = action === 'set' ? unquote(rest.slice(1).join(' ')) : undefined
         if (action === 'set' && !objective) return 'Usage: /jiuwen goal set <text>'
         const r = await g.goal(sid, { action, ...(objective !== undefined ? { objective } : {}) })
         const bits = [`goal ${action} on ${sid}`]
@@ -278,7 +280,12 @@ export function createJiuwenCommand(deps) {
         return `Skill ${r?.name || name} ${r?.enabled ?? enabled ? 'enabled' : 'disabled'}.`
       }
       case 'plan-status': {
-        const r = await g.planStatus(sid)
+        let r
+        try { r = await g.planStatus(sid) } catch (error) {
+          // A dsh session that has not sent a turn yet has no Jiuwen session: not an error for the user.
+          if (/session not found|SESSION_NOT_FOUND/i.test(String(error?.message || error))) return `plan-status for ${sid}: no Jiuwen session yet (send a message first).`
+          throw error
+        }
         const bits = [`plan-status for ${sid}`]
         if (r?.in_plan !== undefined) bits.push(`in_plan=${r.in_plan}`)
         if (r?.plan_mode !== undefined) bits.push(`plan_mode=${r.plan_mode}`)
