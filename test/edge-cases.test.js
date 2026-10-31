@@ -161,3 +161,18 @@ test('coexistence: non-jiuwen sessions get no Jiuwen RPCs for title/preset/delet
   assert.equal(r.sessions.get('ds1'), undefined)
   assert.deepEqual(r.calls, [])
 })
+
+test('resume: dsh goal resume → Jiuwen command.goal resume after our pause; set when Jiuwen goal was not paused by us', async () => {
+  const r = rig()
+  const s = jw('g1'); const m = r.sessions.ensure('g1')
+  const goal = (operation, phase) => r.fire('session/event', s, { type: 'goal/change', data: { kind: 'goal/change', operation, goal: { objective: 'ship it', phase } } })
+  goal('create', 'active'); await tick(5)
+  goal('pause', 'paused'); await tick(5)
+  goal('resume', 'active'); await tick(5)
+  const acts = r.calls.filter(c => c[0] === 'command.goal').map(c => c[1].action)
+  assert.deepEqual(acts, ['set', 'pause', 'resume'])
+  assert.ok(r.calls.every(c => c[1].session_id === m.jiuwenSessionId))
+  const r2 = rig(); const s2 = jw('g2'); r2.sessions.ensure('g2')
+  r2.fire('session/event', s2, { type: 'goal/change', data: { operation: 'resume', goal: { objective: 'o', phase: 'active' } } }); await tick(5)
+  assert.deepEqual(r2.calls.map(c => [c[0], c[1].action]), [['command.goal', 'set']])
+})

@@ -106,11 +106,15 @@ export function installHostSync(deps) {
   }
   // goal/change (session log) and goal/changed (agent event) both fire for one change: dedupe.
   const goalSent = new Map()
+  /** Last goal action we sent per Jiuwen session: dsh `resume` maps to Jiuwen `resume` only after our `pause`. */
+  const goalLast = new Map()
+  const resumeOrSet = (jwSid, objective) => goalLast.get(jwSid) === 'pause' ? 'resume' : (objective ? 'set' : 'resume')
   const sendGoal = (params, label) => {
     const key = JSON.stringify(params)
     const now = Date.now()
     if (goalSent.get(params.session_id)?.key === key && now - goalSent.get(params.session_id).at < 2000) return
     goalSent.set(params.session_id, { key, at: now })
+    goalLast.set(params.session_id, params.action)
     return rpcOk(gateway, 'command.goal', params, logger, label)
   }
   const on = (name, fn) => {
@@ -314,11 +318,15 @@ export function installHostSync(deps) {
       const goal = data?.goal
       const phase = goal?.phase
       const objective = goal?.objective
-      const action = !goal || phase === 'complete' ? 'clear'
+      const op = data?.operation
+      const action = !goal || phase === 'complete' || op === 'clear' ? 'clear'
         : phase === 'paused' ? 'pause'
+        : op === 'resume' && phase === 'active' ? resumeOrSet(j.mapping.jiuwenSessionId, objective)
         : phase === 'active' && objective ? 'set'
         : null
-      if (action === 'set') {
+      if (action === 'resume') {
+        sendGoal({ session_id: j.mapping.jiuwenSessionId, action: 'resume' }, 'goal.resume')
+      } else if (action === 'set') {
         sendGoal({ session_id: j.mapping.jiuwenSessionId, action: 'set', objective: String(objective) }, 'goal.set')
       } else if (action === 'pause') {
         sendGoal({ session_id: j.mapping.jiuwenSessionId, action: 'pause' }, 'goal.pause')
@@ -344,7 +352,8 @@ export function installHostSync(deps) {
     let action
     if (op === 'clear' || !goal) action = 'clear'
     else if (op === 'pause' || phase === 'paused') action = 'pause'
-    else if (op === 'resume' || phase === 'active') action = objective ? 'set' : 'resume'
+    else if (op === 'resume') action = resumeOrSet(j.mapping.jiuwenSessionId, objective)
+    else if (phase === 'active') action = objective ? 'set' : 'resume'
     else if (objective) action = 'set'
     if (!action) return
     const params = { session_id: j.mapping.jiuwenSessionId, action }
@@ -565,7 +574,7 @@ export function installHostSync(deps) {
     disposed = true
     for (const off of offs) { try { off() } catch { /* ignore */ } }
     offs.length = 0
-    goalSent.clear(); wantedTitle.clear(); forkPending.clear(); renameQueue.clear(); probing.clear()
+    goalSent.clear(); goalLast.clear(); wantedTitle.clear(); forkPending.clear(); renameQueue.clear(); probing.clear()
   }
   /** Test/diagnostic hook: settle queued skills/permission syncs. */
   dispose.idle = () => Promise.all([skillsTail, permTail]).then(() => {})
