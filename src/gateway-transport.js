@@ -47,7 +47,7 @@ export function formatGatewayError(err, depth = 0) {
     }
     try {
       const j = JSON.stringify(err)
-      if (j && j !== '{}' && j !== 'null') return j.length > 500 ? `${j.slice(0, 500)}…` : j
+      if (j && j !== '{}' && j !== 'null') return j.length > 500 ? `${cut(j, 500)}…` : j
     } catch { /* ignore */ }
   }
   const s = String(err)
@@ -280,6 +280,7 @@ export class GatewayTransport {
         const onMessage = (event) => {
           let f
           try { f = JSON.parse(String(event.data)) } catch { return }
+          if (!f || typeof f !== 'object') return
           if (f.type === 'res' && f.id === id) {
             if (f.ok === false) { cleanup(); reject(Object.assign(new Error(formatGatewayError(f.error || f.payload || f)), { code: 'TRANSPORT' })) }
             return
@@ -504,6 +505,7 @@ export class GatewayTransport {
       const onMessage = (event) => {
         let frame
         try { frame = JSON.parse(String(event.data)) } catch { return }
+        if (!frame || typeof frame !== 'object') return
         const name = normalizeEventName(frame.event || frame.payload?.event_type)
         if (frame.type === 'event' && name === EVENTS.CONNECTION_ACK) {
           cleanup()
@@ -536,6 +538,7 @@ export class GatewayTransport {
       const onMessage = (event) => {
         let frame
         try { frame = JSON.parse(String(event.data)) } catch { return }
+        if (!frame || typeof frame !== 'object') return
         if (frame.type !== 'res' || frame.id !== id) return
         cleanup()
         if (frame.ok === false) {
@@ -617,6 +620,8 @@ export class GatewayTransport {
     let segStart = 0
     let replay = null
     const answeredIds = new Set()
+    /** Model answer text (delta/final) seen this turn, as opposed to activity markers in the text block. */
+    let answerSeen = false
     const queue = []
     let wake
     const push = (item) => { queue.push(item); wake?.() }
@@ -624,9 +629,12 @@ export class GatewayTransport {
       try { ctx.onEvent?.({ requestId, sessionId: ctx.mapping?.jiuwenSessionId, ...e }) } catch { /* ignore */ }
     }
 
+    // A malformed or non-object frame is dropped (and reported), never fatal to the turn.
     const onMessage = (event) => {
-      try { push({ ok: true, frame: JSON.parse(String(event.data)) }) }
-      catch (error) { push({ ok: false, error }) }
+      let frame
+      try { frame = JSON.parse(String(event.data)) } catch { emitEvent({ type: 'raw', event: 'malformed-frame', bytes: String(event.data ?? '').length }); return }
+      if (!frame || typeof frame !== 'object' || Array.isArray(frame)) { emitEvent({ type: 'raw', event: 'malformed-frame', kind: Array.isArray(frame) ? 'array' : typeof frame }); return }
+      push({ ok: true, frame })
     }
     const onClose = () => push({ ok: false, drop: true, error: Object.assign(new Error('Gateway WebSocket closed mid-turn — in-flight answer lost; send your next message to reconnect'), { code: 'TRANSPORT' }) })
     const onError = () => push({ ok: false, drop: true, error: Object.assign(new Error('Gateway WebSocket error mid-turn — in-flight answer lost; send your next message to reconnect'), { code: 'TRANSPORT' }) })
@@ -772,6 +780,7 @@ export class GatewayTransport {
             if (typeof content === 'string') {
               if (replay && content && replay.base.startsWith(content, replay.pos)) { replay.pos += content.length; continue }
               replay = null
+              if (content) answerSeen = true
               yield *textDelta(content)
             }
             continue
@@ -917,7 +926,9 @@ export class GatewayTransport {
             // Segment finals may repeat streamed text; only append an unseen tail.
             if (typeof content === 'string' && content) {
               const seg = text.body.slice(segStart)
-              if (!text.body) yield *textDelta(content)
+              if (!text.body) { answerSeen = true; yield *textDelta(content) }
+              // eventDisplay=markers: the body may hold only tool markers; a final-only answer must still show.
+              else if (!answerSeen && segStart === 0) { answerSeen = true; yield *textDelta(`${text.body.endsWith('\n') ? '' : '\n'}${content}`) }
               else if (content.startsWith(text.body) && content.length > text.body.length) yield *textDelta(content.slice(text.body.length))
               else if (segStart > 0 && seg && content.startsWith(seg) && content.length > seg.length) yield *textDelta(content.slice(seg.length))
               else if (segStart > 0 && !seg.trim() && !text.body.includes(content.trim())) yield *textDelta(`\n\n${content}`)
@@ -953,13 +964,18 @@ export class GatewayTransport {
 
 function truncate(s, n) {
   const v = String(s ?? '')
-  return v.length > n ? `${v.slice(0, n)}…` : v
+  if (v.length <= n) return v
+  // Never cut a surrogate pair in half (emoji / astral chars in tool args).
+  const end = /[\ud800-\udbff]/.test(v[n - 1] || '') ? n - 1 : n
+  return `${v.slice(0, end)}…`
 }
 
 const ITEM_MAX = 4096
+/** slice(0, n) that never splits a surrogate pair. */
+function cut(v, n) { return v.length > n && /[\ud800-\udbff]/.test(v[n - 1] || '') ? v.slice(0, n - 1) : v.slice(0, n) }
 function capItem(s) {
   const v = String(s ?? '')
-  return v.length > ITEM_MAX ? `${v.slice(0, ITEM_MAX)}\n…[truncated ${v.length - ITEM_MAX} chars]` : v
+  return v.length > ITEM_MAX ? `${cut(v, ITEM_MAX)}\n…[truncated ${v.length - ITEM_MAX} chars]` : v
 }
 function prettyJson(s) {
   const v = String(s ?? '')
@@ -977,7 +993,7 @@ function fenced(s, lang = '') {
   const fence = '`'.repeat(run + 1)
   return `${fence}${lang}\n${body}\n${fence}`
 }
-function mdInline(s) { return String(s ?? '').replace(/[`\n]/g, ' ').slice(0, 120) }
+function mdInline(s) { return cut(String(s ?? '').replace(/[`\n]/g, ' '), 120) }
 function stepLabel(eventType) {
   const t = String(eventType || '').replace(/^chat\./, '')
   const icon = /todo|plan/i.test(t) ? '📋' : /subtask|subagent|team/i.test(t) ? '🧩' : /trace/i.test(t) ? '🧭' : '•'
@@ -986,7 +1002,7 @@ function stepLabel(eventType) {
 
 function summarize(payload) {
   const { runtime_event, output_order, ...rest } = payload || {}
-  return JSON.stringify(rest).slice(0, 300)
+  return cut(JSON.stringify(rest), 300)
 }
 
 export { CHAT, HISTORY, MEMORY, MODELS, MCP, FILES, MEDIA, SESSION, SWARM, SKILLS, AGENTS, TEAM, COMMANDS, SYSTEM, EVENTS }

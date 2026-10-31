@@ -88,6 +88,7 @@ class MiniWs extends EventEmitter {
       header[1] = 127
       header.writeBigUInt64BE(BigInt(len), 2)
     }
+    if (this.socket.destroyed || this.socket.writableEnded) return
     this.socket.write(Buffer.concat([header, payload]))
   }
 
@@ -99,6 +100,7 @@ class MiniWs extends EventEmitter {
     this._buffer = Buffer.concat([this._buffer, chunk])
     while (true) {
       if (this._buffer.length < 2) return
+      this._frameOp = this._buffer[0] & 0x0f
       const second = this._buffer[1]
       const masked = (second & 0x80) !== 0
       let len = second & 0x7f
@@ -120,6 +122,11 @@ class MiniWs extends EventEmitter {
         payload = Buffer.from(payload.map((b, i) => b ^ mask[i % 4]))
       }
       this._buffer = this._buffer.subarray(offset + maskLen + len)
+      if (this._frameOp === 0x8) { // close: echo the close frame, then end (clients otherwise wait for a timeout)
+        try { this.socket.write(Buffer.from([0x88, 0x00])); this.socket.end() } catch { /* ignore */ }
+        return
+      }
+      if (this._frameOp === 0x9 || this._frameOp === 0xa) continue // ping/pong
       this.emit('message', payload)
     }
   }
