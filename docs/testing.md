@@ -5,6 +5,7 @@
 | `npm test` | Unit + generic host + gateway features (112 tests as of Round 3). Includes plain chat, streaming, gateway tools, openai `tool_calls`, reasoning/structured events/usage/`processing_status` filtering, markers compat, session continuity, cancel → `chat.interrupt`, agent/mode/skills/model selection, multimodal `base64Data`/`attachments`, ask_user, local titles, runtime-context filtering, extended RPCs, Round 1–3 live-fix regressions | Node ≥ 22 |
 | `npm run smoke` | mock-openai + mock-gateway end-to-end; session mapping persistence | none |
 | `npm run smoke:cordis` | Real Cordis `Context` + `LlmRuntime` loads the plugin and streams (openai mock + gateway mock; checks LlmRuntime stream grammar) | global npm dsh install (or `DSH_NODE_MODULES` / `DSH_LLM_PATH` / `DSH_CORDIS_PATH`) |
+| `GW_KILL=… GW_START=… node scripts/live-drop-recovery.mjs` | Kills/restarts a real Gateway mid-turn and idle; checks soft failure, reconnect, mapping and conversation continuity. Use a scripted stand-in model (query `SLOW<ms>` streams slowly) | controllable JiuwenSwarm |
 | `npm run smoke:live` | Minimal generic host against a real Gateway (default `:19000`; `SKIP` if offline): single turn, multi-turn memory, tool-call events, usage, no `processing_status` leak, cancel, session/skills/team/models RPCs | running JiuwenSwarm |
 | `npm run bare-dsh` | Install npm dsh and wire headless/web profiles — see [bare-dsh.md](./bare-dsh.md) | npm network |
 | `npm run mock:gateway` / `mock:openai` | Standalone mocks (`JIUWEN_GATEWAY_MOCK_PORT`, default 19000) | none |

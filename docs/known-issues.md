@@ -190,7 +190,7 @@ Same real Cordis host (`Context` + `dsh-llm` + `dsh-commands`), JiuwenSwarm 0.2.
 
 - Lookups of non-existent ids/names (`cron get`, `heartbeat job`, `skill-info`, `agent`, `mcp show`, `template/group show`, `projects sessions`) surface Jiuwen's own message (often Chinese, e.g. `未找到 skill`); `fork`/`continue-queued` on a session with no turns → `source session not found` / `Session was not found` (the Jiuwen session is created lazily on the first turn).
 - `media discard /etc/passwd confirm` → `path is outside session uploads` (Gateway guard).
-- Gateway restart mid-stream ends the turn with `TRANSPORT`; the in-flight answer is lost (Jiuwen does not resume a turn on a new socket); the next command/turn reconnects transparently.
+- Gateway restart mid-stream ends the turn with `TRANSPORT`; the in-flight answer is lost (Jiuwen does not resume a turn on a new socket); the next command/turn reconnects transparently. Verified live 2026-10-31 (`scripts/live-drop-recovery.mjs` 9/9).
 - `/jiuwen rename` accepts very long titles (5000 chars) — Jiuwen stores them as is.
 
 ## 11. Round 3 live hunt + fixes (2026-10-30, UTC+8)

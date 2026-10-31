@@ -7,6 +7,9 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 - **Host → Jiuwen sync** (`hostSync`, default on): forwards dsh/FlyBot frontend changes (skills, MCP, model, plan mode, workDir, title, session delete, goal, pause/resume, safe permission presets, fork remap, schedule→heartbeat, group persona reinject) to Jiuwen for jiuwen-provider sessions only. See `docs/host-sync.md`.
+- dsh goal `resume` → Jiuwen `command.goal resume` (keeps the Jiuwen goal) when we paused it; else `set`.
+- `mcpVerify()` helper and `/jiuwen mcp` line for the dsh-tools passthrough (`mcp.show`; 0.2.7 `mcp.list` omits custom servers).
+- `scripts/live-drop-recovery.mjs`: live Gateway kill/restart check.
 - Per-path `sync*` flags; skill body soft-inject when Jiuwen cannot install the equivalent (`syncSkillInstall`).
 
 ### Changed
@@ -14,6 +17,11 @@ All notable changes to this project are documented here. The format follows
 - **Default change:** `injectSystem` now defaults to `persona` (was `off`) and `trajectoryDetail` to `full` (was `summary`). Set `injectSystem: off` / `trajectoryDetail: summary` (or `JIUWEN_INJECT_SYSTEM=off` / `JIUWEN_TRAJECTORY_DETAIL=summary`) to restore the old behavior. Injection remains Jiuwen-session-only and fail-soft.
 
 ### Fixed
+- Gateway drop mid-RPC / before `connection.ack` now fails at once (was: waited the full RPC timeout); WebSocket connect has a timeout (half-open Gateway no longer hangs a turn); a dropped RPC is not cached by feature detection.
+- Rapid skill / permission-preset toggles are serialized (latest wins); concurrent RPCs could land out of order.
+- Session delete during an active turn interrupts the turn, waits for it, then deletes the Jiuwen session (the first turn's session was orphaned).
+- Plugin dispose (both Cordis `effect` and `dispose` paths) releases host-sync queues, MCP bridge and event listeners; idempotent.
+- Skill sync makes no Gateway call when no jiuwen session exists.
 - Card answer text no longer doubles when Jiuwen re-streams the pre-question text after an `ask_user` resume; a resumed final with no deltas is no longer dropped.
 
 
