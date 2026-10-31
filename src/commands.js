@@ -157,7 +157,7 @@ export function createJiuwenCommand(deps) {
         const newId = r?.session_id || r?.new_session_id || r?.forked_session_id
         if (newId && newId !== sid) {
           // Report clearly; do not overwrite the current dsh→jiuwen mapping.
-          return `Forked Jiuwen session ${sid} → ${newId} (Jiuwen only: no dsh session was created and this chat stays on ${sid}). To get a dsh chat for a fork, use the dsh Fork action instead — it forks both sides and maps them.`
+          return `Forked Jiuwen session ${sid} → new session_id=${newId} (Jiuwen only: no dsh session was created and this chat stays on ${sid}). To get a dsh chat for a fork, use the dsh Fork action instead — it forks both sides and maps them.`
         }
         return `Forked Jiuwen session ${sid}: ${JSON.stringify(r).slice(0, 300)}`
       }
