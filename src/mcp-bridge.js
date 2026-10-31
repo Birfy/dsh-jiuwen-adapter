@@ -151,8 +151,10 @@ export function createMcpBridge({ config, services, rpc, logger }) {
     const prev = readJson(f, [])
     // Keep only names still served by a live dsh process: a dead process's tools would otherwise
     // stay listed forever (and resurface after an mcp-reset reconnect).
-    const live = liveToolNames(stateDir())
-    const byName = new Map(prev.filter(t => live.has(t.name)).map(t => [t.name, t]))
+    // Keep every name ever served (stale names just error on call). Pruning made the union shrink and
+    // regrow, and each regrowth forced mcp.disconnect/connect, which drops the server from every live
+    // Jiuwen session (they never re-register: "Ability not found in resource_mgr").
+    const byName = new Map(prev.map(t => [t.name, t]))
     const before = new Set(prev.map(t => t.name))
     let added = false
     for (const sch of schemas.values()) {
