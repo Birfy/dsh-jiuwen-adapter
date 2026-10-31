@@ -113,7 +113,7 @@ export function createMcpBridge({ config, services, rpc, logger }) {
     try { def = agent ? tools?.get?.(name, agent) ?? agent.ctx?.tools?.get?.(name, agent) : undefined } catch { def = undefined }
     if (!def?.execute) def = tools?.get?.(name)
     if (!def?.execute) return { isError: true, text: `dsh tool ${name} not found (session=${sessionId})` }
-    if (c.toolApproval !== 'none') {
+    if (c.toolApproval !== 'none' && !matchesAllowlist(name, c.toolApprovalExempt || [])) {
       let outcome = 'unavailable'
       if (approval?.request && agent) {
         let timer
